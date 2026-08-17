@@ -123,11 +123,11 @@ code starts, per the workflow in [`CLAUDE.md`](CLAUDE.md).
 
 ```mermaid
 flowchart LR
-    S1["Stage 1<br/>Mock Provider<br/>~1h"] --> S2["Stage 2<br/>Ingestion + Transform<br/>~2h"]
-    S2 --> S3["Stage 3<br/>Data Quality +<br/>Reconciliation<br/>~1.5h"]
-    S3 --> S4["Stage 4<br/>Dashboard<br/>~2h"]
-    S4 --> S5["Stage 5<br/>RAG + Agent<br/>~3h"]
-    S5 --> S6["Stage 6<br/>Evals<br/>~1.5h"]
+    S1["Stage 1<br/>Mock Provider"] --> S2["Stage 2<br/>Ingestion + Transform"]
+    S2 --> S3["Stage 3<br/>Data Quality +<br/>Reconciliation"]
+    S3 --> S4["Stage 4<br/>Dashboard"]
+    S4 --> S5["Stage 5<br/>RAG + Agent"]
+    S5 --> S6["Stage 6<br/>Evals"]
     S6 -.optional.-> S7["Stage 7<br/>Stretch<br/>Modal · 2nd tenant · secrets/PII docs"]
 
     classDef required fill:#1f3a5f,stroke:#5b9bd5,color:#eee;

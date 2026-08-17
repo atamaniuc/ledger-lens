@@ -2,11 +2,21 @@
 # Append (or replace) a "## <feature>" section in .claude/PRD.md per CLAUDE.md
 # Phase 0.
 #
+# See also: .omc/skills/prd/SKILL.md — this script only scaffolds the
+# section shape below; the skill is what teaches how to write good content
+# into it (real North Star/proxy/counter metrics, honestly prioritized
+# P0/P1/P2 stories with binary acceptance criteria, an Out of Scope that
+# actually bounds the work). Skeleton and skill are kept in sync
+# deliberately — if you change one, change the other.
+#
 # Two modes:
-#   - Interactive/no stdin: writes an empty Problem/User/Success criteria/
-#     Non-goals skeleton for you to fill in by hand.
+#   - Interactive/no stdin: writes an empty skeleton matching the prd
+#     skill's structure (Metadata / Context & Business Value / Success
+#     Metrics / Functional Requirements / Non-Functional Requirements &
+#     Constraints / User Flow & Design / Out of Scope) for you to fill in
+#     by hand.
 #   - Piped stdin: writes whatever you pipe in as the section body verbatim
-#     (e.g. `planner`/`analyst` agent output, or a heredoc). Useful for
+#     (e.g. the `prd` skill's own output, or a heredoc). Useful for
 #     scripted/agent-driven PRD generation instead of hand-editing.
 #
 # By default refuses to duplicate a section that already exists. Pass
@@ -69,13 +79,37 @@ if [ -t 0 ]; then
   {
     echo "$HEADING"
     echo
+    echo "**Status:** Draft"
+    echo "**Participants:**"
+    echo "**Timeline:**"
+    echo
+    echo "### Context & Business Value"
+    echo
     echo "**Problem:**"
     echo
-    echo "**User:**"
+    echo "**Business goal:**"
     echo
-    echo "**Success criteria:**"
+    echo "**Target audience:**"
     echo
-    echo "**Non-goals:**"
+    echo "### Success Metrics"
+    echo
+    echo "**North Star metric:**"
+    echo
+    echo "**Proxy metrics:**"
+    echo
+    echo "**Counter-metrics:**"
+    echo
+    echo "### Functional Requirements"
+    echo
+    echo "| ID | User Story | Priority | Acceptance Criteria |"
+    echo "|---|---|---|---|"
+    echo "| | | | |"
+    echo
+    echo "### Non-Functional Requirements & Constraints"
+    echo
+    echo "### User Flow & Design"
+    echo
+    echo "### Out of Scope"
     echo
   } >> "$PRD"
 else

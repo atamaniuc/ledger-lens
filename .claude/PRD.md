@@ -1,173 +1,444 @@
 # LedgerLens — Product Requirements
 
-## Mock Provider
-
-**Problem:**
-Without an upstream system that actually misbehaves, "idempotent ingestion" and "handles schema drift" are just vocabulary — there's nothing to demonstrate and nothing to test against. Этап 1 in `07_Пет_проект.md` builds the adversary the rest of the pipeline has to survive.
-
-**User:**
-Downstream: the ingestion job (Этап 2) and its tests. Narratively: stands in for the real third-party accounting/payments API the JD's integrations work would target.
-
-**Success criteria:**
-- `GET /api/mock-provider/invoices` returns cursor-paginated invoice pages.
-- Seven chaos flags, independently toggleable (env var or query param), each verifiably triggers its failure:
-  - `duplicates` — a measurable ~5% repeat rate across a run.
-  - `schemaDrift` — `amount` flips from `number` to a numeric string after a configured date/cursor point.
-  - `nullFields` — `customer` is `null` on some fraction of records.
-  - `rateLimit` — every 10th request returns `429` with a `Retry-After` header.
-  - `serverError` — every 25th request returns `500`.
-  - `expiredToken` — `401` after N requests on the same token.
-  - `futureDates` — some `issued_at` values are in the future.
-- Deterministic under a fixed seed — same seed reproduces the same failure sequence, so it's usable as a regression fixture, not just a demo toy.
-- `GET /api/mock-provider/summary` exists and returns the provider's own aggregate total, independent of `/invoices` — this is what Этап 3's reconciliation check compares against.
-
-**Non-goals:**
-- Real persistence — in-memory/seeded dataset is enough, no need for its own database.
-- Auth on the mock endpoint beyond the `expiredToken` chaos flag itself.
-- Modeling more than one upstream provider.
-
-## Ingestion & Transform
-
-**Problem:**
-Raw data from an adversarial provider has to become trustworthy rows without losing information or double-counting — and it has to survive being run twice, run out of order, or interrupted mid-page. This is the JD's "reliable data pipelines with validation" requirement made concrete.
-
-**User:**
-The transform stage (Этап 3 quality checks) and the dashboard (Этап 4) both depend on `invoices`/`quarantine` being trustworthy. Also stands in for whoever operates the pipeline day-to-day (would be a data/platform engineer in a real org).
-
-**Success criteria:**
-- Cursor stored in `pipeline_runs.cursor_to`; a re-run picks up from the last successful cursor, not from scratch.
-- Retry logic: exponential backoff with jitter, honors the mock provider's `Retry-After` header, circuit breaker opens after 5 consecutive failures and records the reason on `pipeline_runs.error`.
-- Idempotency: running ingestion twice against an identical mock-provider output yields zero net new rows in `raw_events` (`unique(source, external_id, event_version)` + `ON CONFLICT DO NOTHING` holds).
-- Zod schema validation on transform: valid records land in `invoices`; invalid land in `quarantine` with a populated `reason` and the original payload preserved via `raw_event_id` — nothing is silently dropped.
-- `pipeline_runs` accurately counts `rows_read` / `rows_written` / `rows_quarantined` per run.
-- Webhook path (Deno Edge Function, `supabase functions deploy provider-webhook`) accepts a pushed event and reuses the same transform code and the same idempotency guarantee as the polling path — this is what makes "event-driven" real rather than just a queue.
-
-**Non-goals:**
-- Exactly-once delivery guarantees beyond idempotent upsert (at-least-once + dedup is the actual contract).
-- A generic multi-provider adapter abstraction — one provider is enough for this project's scope.
-
-## Data Quality & Reconciliation
-
-**Problem:**
-A pipeline that ingests without checking itself is exactly the "AI on top of bad data" trap the whole project exists to avoid. This stage is the project's actual differentiator — the thing that turns "I built a pipeline" into "I built a pipeline that knows when it's lying to you."
-
-**User:**
-The dashboard's Data Health panel (Этап 4) and the README's before/after artifact (the project's single strongest interview talking point) both depend on this stage's output.
-
-**Success criteria:**
-- Four checks run every pipeline run and write to `data_quality_results`:
-  - **Freshness** — `now() - max(ingested_at) < 2 hours`.
-  - **Volume** — row count within ±50% of the trailing 7-day average.
-  - **Uniqueness** — no duplicates on `(org_id, external_id)`.
-  - **Reconciliation** — our summed `amount_cents` matches `/api/mock-provider/summary` within a defined tolerance (target: exact match once idempotency is applied).
-- A reproducible before/after artifact: with the `duplicates` chaos flag on and idempotency not yet applied, reconciliation shows a measurable overstatement (recorded as a real percentage in the README); after the idempotency fix in the Ingestion stage, drift is 0. This pairing is mandatory — it's the project's centerpiece.
-- Each check's `status` (`pass`/`warn`/`fail`) is queryable per `run_id`, not just as a global flag — this is what powers per-run drill-down in the dashboard.
-
-**Non-goals:**
-- Automated external alerting/paging (email, Slack, PagerDuty) — a dashboard badge is the v1 notification surface.
-- Configurable thresholds via UI — hardcoded constants are fine for this scope.
-
-## Dashboard
-
-**Problem:**
-The pipeline and quality checks are invisible unless something surfaces them to a human — and per the JD, that surface has to demonstrate real frontend chops (Next.js/TS/Tailwind/TanStack Query/shadcn), auth, and real-time updates, not just a data table.
-
-**User:**
-The in-fiction investment firm's ops team, checking whether this month's numbers can be trusted before closing the books. Also the interviewer, since this is the screen they'll actually look at.
-
-**Success criteria:**
-- Supabase Auth (magic link) gates the dashboard; `memberships.role` determines which org's data is visible — verified by the RLS non-owner test in Definition of Done.
-- Revenue/invoices/average-invoice tiles render from `invoices`.
-- Freshness badge changes state (fresh/stale) crossing the 2-hour threshold — testable by manipulating `ingested_at` in a seeded run.
-- Data Health panel shows all 4 checks from the Data Quality stage with their latest pass/warn/fail status.
-- Invoices table with cursor pagination.
-- Lineage drill-down: clicking a number shows the contributing `raw_events`, `run_id`, source, and timestamp, down to the raw payload.
-- Realtime: a new `pipeline_runs` row appears in the UI without a manual refresh (Supabase Realtime subscription) — verifiable with two concurrent sessions.
-- Chat panel round-trips at least one query to the agent (depends on the RAG & Agent stage) and renders an answer with visible citations.
-- New components ship with a co-located `*.stories.tsx` per CLAUDE.md's Frontend rules (default/loading/empty/error states).
-
-**Non-goals:**
-- Full visual polish/animation — Tailwind + shadcn, three components, no custom motion work (explicitly not where interview conversation-per-hour is highest).
-- Mobile-responsive layout or i18n.
-
-## RAG & Agent
-
-**Problem:**
-This is where the JD's core anxiety lives: an AI feature that can act (not just answer) has to be safe by construction, not by a prompt asking it to behave. "I trust the model" is not an acceptable design; "the model has no tool capable of the bad outcome" is.
-
-**User:**
-The dashboard's chat panel (consumer of this stage) and the interviewer evaluating the JD's "safe agentic workflows, scoped tools, evals" requirements directly.
-
-**Success criteria:**
-- Hybrid retrieval (vector + full-text, combined via Reciprocal Rank Fusion) returns sensible top-5 results for a fixed evaluation query set — verified quantitatively in the Evals stage, not just eyeballed.
-- Exactly 4 tools: `get_revenue_summary`, `list_invoices`, `search_documents` (all read, auto-execute), and `draft_customer_email` (draft only — no send capability exists anywhere in the system, so the one write-adjacent tool cannot cause real-world side effects even in principle).
-- Every tool call executes under the calling user's JWT, so Postgres RLS applies to the agent exactly as it applies to the dashboard — verified by a test: a user from org A cannot retrieve org B's chunks or invoices through the agent, even indirectly.
-- Responses must cite `chunk_id`/`invoice_id`; a deterministic check confirms cited ids were actually present in the retrieved context, flagging the response as unverified otherwise.
-- Max 6 tool-call steps, 30s timeout, token ceiling enforced.
-- A poisoned document (prompt-injection payload) lives in the corpus; the agent must be unable to cause harm because no tool exists that could — the attempt itself must still be recorded in `audit_log`.
-- Every step writes to both `llm_calls` (model, tokens, cost, latency, tool_name/args) and `audit_log` (`actor_type='agent'`, `on_behalf_of=user_id`).
-- Empty retrieval → the model must answer "I don't have data on that," never a hallucinated guess.
-
-**Non-goals:**
-- Cross-session long-term memory.
-- More than 4 tools, or any tool with real external side effects (no actual email sending, no actual write-outside-DB action).
-- Token-by-token streaming UI (nice-to-have, not required for v1).
-
-## Evals
-
-**Problem:**
-"I tested it manually and it seemed fine" is not evidence, and it's the specific gap the JD calls out with "AI evals & observability." An agent feature that ships without a regression gate is a feature nobody can safely change later.
-
-**User:**
-CI (blocks merges on regression), and future-me changing prompts/retrieval logic without a way to know if I made things worse.
-
-**Success criteria:**
-- `evals/dataset.jsonl` has at least 20 cases spanning `metric`, `lookup`, `retrieval`, `unanswerable`, and `injection` types.
-- `evals/run.py` computes: recall@5 (retrieval cases), JSON-schema validity rate, citation-validity rate (deterministic, cheap, and convincing — per `question-banks.md`'s guidance on what carries interview weight), abstention rate on `should_refuse` cases, LLM-as-judge groundedness score, total cost, and p95 latency.
-- Thresholds are explicit and versioned in the repo (initial targets: recall@5 ≥ 0.8, citation validity ≥ 0.95, 100% correct abstention on `should_refuse`/injection cases) — the run exits non-zero when any is breached.
-- `make evals` runs the identical command CI runs — no drift between local and CI results.
-- Wired into GitHub Actions so a regression blocks the merge, not just a local warning.
-
-**Non-goals:**
-- Continuous online eval monitoring against live production traffic.
-- A human-labeling pipeline for growing the dataset beyond the initial hand-written cases.
-
 ## LedgerLens (Overview)
 
+**Status:** Draft
+**Participants:** Solo project — PO/Engineering/Design/QA responsibilities collapsed to one person
+**Timeline:** No fixed release date — paced against the interview timeline (tracked locally, not in this repo)
+
+### Context & Business Value
+
 **Problem:**
-The JD demands three things at once — product full-stack ability, reliable data pipelines, and safe AI features — and most portfolio projects only demonstrate the third (a "chat with your PDF" wrapper). Interviewers see dozens of those. An LLM layered on unvalidated data doesn't fix bad data, it makes wrong numbers sound more convincing — which is the exact failure mode a fintech/data-product employer is afraid of.
+The target role demands three things at once — product full-stack ability, reliable data pipelines, and safe AI features — and most portfolio projects only demonstrate the third (a "chat with your PDF" wrapper). Interviewers see dozens of those. An LLM layered on unvalidated data doesn't fix bad data, it makes wrong numbers sound more convincing — which is the exact failure mode a fintech/data-product employer is afraid of.
 
-**User:**
-Primary: the interviewer/hiring panel from `JD-for-outsourced-devs.md`, evaluating engineering judgment under the JD's specific anxieties (schema drift, duplicate events, unsafe agentic workflows, reconciliation). Secondary (in-fiction): a small investment firm's ops team using the dashboard to trust their numbers.
+**Business goal:**
+Demonstrate senior engineering judgment across all three axes at once — product full-stack delivery, reliable data pipelines, and safe agentic AI — the exact combination most portfolio projects fail to cover together.
 
-**Success criteria:**
-- Every major capability implied by the target role — full-stack product work, reliable data pipelines with validation, safe agentic AI, RLS/RBAC/audit — has a named, working feature behind it, not just a mention. (The detailed line-by-line coverage table against the actual job posting is personal reference material, kept locally in the gitignored `interview-preps/` notes, not part of this repo.)
-- The project can be pitched end-to-end (problem → architecture → the reconciliation before/after → the safety story) backed by a running system, not slides. See [`docs/PROJECT_OVERVIEW.md`](../docs/PROJECT_OVERVIEW.md) for the current pitch framing.
-- Reconciliation drift is demonstrated before/after idempotency with a real number (target: a measurable % overstatement from duplicate events, down to 0 after the fix).
-- Evals run in CI and block merges below threshold (see the "Evals" PRD section).
-- Each stage below (Этап 1–7) has its own DoD satisfied per `CLAUDE.md` before being considered shippable.
-- A human who has never seen the code can read the README alone and understand what's real, what's simulated, and what's deliberately missing.
-- All infra (Vercel project + env vars, and CLI-orchestrated pieces where no native Pulumi provider exists — Supabase, Modal) is provisioned by a single Pulumi program in `infra/` — `pulumi up` is the one command that stands the whole deployment up, not manual dashboard clicking. See `docs/DEPLOYMENT.md`.
+**Target audience:**
+Primary: technical interviewers/hiring panels evaluating this combination of skills. Secondary (in-fiction, inside the product itself): a small investment firm's ops team trusting the numbers.
 
-**Non-goals:**
+### Success Metrics
+
+**North Star metric:**
+The project can be pitched end-to-end (problem → architecture → the reconciliation before/after → the safety story) backed by a running, deployed system — not slides. See [`docs/PROJECT_OVERVIEW.md`](../docs/PROJECT_OVERVIEW.md) for the current pitch framing.
+
+**Proxy metrics:**
+- Reconciliation drift demonstrated before/after idempotency with a real measured percentage, down to 0 after the fix.
+- Evals passing in CI, gating merges below threshold.
+- Every stage's Definition of Done (per `CLAUDE.md`) satisfied before being considered shippable.
+
+**Counter-metrics:**
+- README/architecture readability — a reader who's never seen the code should understand what's real, what's simulated, and what's deliberately missing, without needing to ask.
+- No stage ships with a DoD item silently skipped.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As an interviewer, I want to see a working system that closes the major capabilities implied by the role, so I can evaluate judgment, not just vocabulary. | P0 | Each of the 7 build stages has its own PRD entry and, once implemented, a working feature behind it. |
+| US-02 | As an interviewer, I want a single deployed instance I can look at, so I don't have to run the project myself to evaluate it. | P0 | `docs/DEPLOYMENT.md`'s readiness checklist passes; `pulumi up` stands up the full deployable surface from a clean checkout. |
+| US-03 | As a future reader of this repo, I want an honest account of what's real vs. simulated vs. missing, so I can trust the rest of the documentation. | P1 | README has a populated "What's missing" section, not a placeholder. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Free-tier deploy only (Vercel/Supabase/Modal) — see `docs/DEPLOYMENT.md`. Postgres RLS on every table (`CLAUDE.md` hard rule).
+
+**Localization:** English only — the deployed product and its docs.
+
+**Security/Legal:** No real PII — data is fictional/seeded. No `service_role` key or other secret in client code or in the repo, ever (`CLAUDE.md` hard rule).
+
+### User Flow & Design
+
+No single user flow at the product-overview level — see the per-stage entries below (Dashboard, RAG & Agent) for actual screens/states. Overall product flow: sign in → see pipeline/quality status → ask the AI copilot a question → get a cited, verifiable answer.
+
+### Out of Scope
+
 - Production-grade multi-tenant billing, horizontal scale, or a real second AI provider integration.
 - Full accounting-software feature parity (this is not QuickBooks) — only enough surface to make reconciliation and RAG meaningful.
 - Mobile app / native client.
 
-## Stretch (Этап 7)
+## Mock Provider
+
+**Status:** Approved — implemented and verified in Stage 1, no scope drift from these requirements
+**Participants:** Solo project
+**Timeline:** Stage 1
+
+### Context & Business Value
 
 **Problem:**
-Once the core loop (Этап 1–6) is real, remaining JD surface area — GPU/serverless workloads, multi-tenant isolation proof, secrets/PII hygiene — is worth closing if time allows, but none of it should block the core story.
+Without an upstream system that actually misbehaves, "idempotent ingestion" and "handles schema drift" are just vocabulary — there's nothing to demonstrate and nothing to test against.
 
-**User:**
-Same interviewer audience, specifically the follow-up questions ("what about a second tenant," "how do you handle secrets") that come up if the core demo lands well.
+**Business goal:**
+Give every downstream claim (idempotency, resilience, reconciliation) something real to prove itself against, so the rest of the project isn't asserting untested properties.
 
-**Success criteria (each item stands alone — attempt independently, none blocks another):**
-- Whisper transcription runs as a Modal function (GPU/serverless), producing timestamped chunks ingested into `chunks` — closes the JD's transcription + GPU-workload item by name, not just "Whisper somewhere."
-- A backfill script demonstrates idempotency directly: running it twice produces identical row counts and sums, shown in the README.
-- A second tenant exists with a CI test proving org A cannot see org B's data anywhere — dashboard, agent, or direct query.
-- README has explicit Secrets Management and PII Handling sections describing what's actually implemented (env/Supabase Vault for keys, which fields count as PII and where they're masked in logs/`audit_log`), not aspirational text.
+**Target audience:**
+Downstream: the ingestion job (Stage 2) and its tests. Narratively stands in for the real third-party accounting/payments API the target role's integration work would touch.
 
-**Non-goals:**
-- None beyond the project-wide non-goals in the Overview section — Infrastructure as Code moved from "consciously skipped" to a core Overview success criterion (Pulumi), see ADR.
+### Success Metrics
+
+**North Star metric:**
+Every chaos flag is independently toggleable and verifiably triggers its failure — no flag is decorative.
+
+**Proxy metrics:**
+Deterministic under a fixed seed (same seed → same failure sequence), so it doubles as a regression fixture, not just a demo toy.
+
+**Counter-metrics:**
+No chaos behavior should be so aggressive that a correctly-written client can never make progress — flags must be tunable, not maximal by default.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As the ingestion job, I want a cursor-paginated invoices endpoint, so I can pull data incrementally. | P0 | `GET /api/mock-provider/invoices` returns cursor-paginated pages. |
+| US-02 | As the ingestion job under test, I want deterministic chaos flags, so I can write regression tests against specific failure modes. | P0 | Seven flags — `duplicates` (~5% repeat rate), `schemaDrift` (`amount` number→string after a cursor point), `nullFields` (`customer` null on some fraction), `rateLimit` (429+`Retry-After` every 10th request), `serverError` (500 every 25th), `expiredToken` (401 after N requests), `futureDates` (some `issued_at` in the future) — each independently toggleable via env var or query param. |
+| US-03 | As the reconciliation check (Stage 3), I want an independent summary total, so I have something to compare against that isn't derived from the same data I'm validating. | P0 | `GET /api/mock-provider/summary` returns the provider's own aggregate total, computed independently of `/invoices`. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** In-memory/seeded dataset — no real persistence needed. Deterministic under a fixed seed.
+
+**Localization:** N/A — internal test double, no user-facing text.
+
+**Security/Legal:** No auth on the mock endpoint beyond the `expiredToken` chaos flag itself — this is a test double, not a real integration surface.
+
+### User Flow & Design
+
+No UI — this is an API-only test double. No screens/states.
+
+### Out of Scope
+
+- Real persistence.
+- Auth on the mock endpoint beyond the `expiredToken` chaos flag.
+- Modeling more than one upstream provider.
+
+## Ingestion & Transform
+
+**Status:** Draft
+**Participants:** Solo project
+**Timeline:** Stage 2
+
+### Context & Business Value
+
+**Problem:**
+Raw data from an adversarial provider has to become trustworthy rows without losing information or double-counting — and it has to survive being run twice, run out of order, or interrupted mid-page.
+
+**Business goal:**
+Make "reliable data pipeline with validation" a demonstrated property, not an assertion.
+
+**Target audience:**
+The transform stage (Stage 3) and the dashboard (Stage 4) both depend on `invoices`/`quarantine` being trustworthy. Also stands in for whoever operates the pipeline day-to-day (a data/platform engineer in a real org).
+
+### Success Metrics
+
+**North Star metric:**
+Running ingestion twice against identical mock-provider output yields zero net new rows in `raw_events` — idempotency proven, not claimed.
+
+**Proxy metrics:**
+Circuit breaker opens after 5 consecutive failures; retry honors `Retry-After`; `pipeline_runs` row counts (`rows_read`/`rows_written`/`rows_quarantined`) are accurate per run.
+
+**Counter-metrics:**
+Zero silent drops — every raw record ends up in either `invoices` or `quarantine` with a reason, never neither.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As the pipeline, I want cursor-based incremental pulls, so a re-run picks up where the last one left off. | P0 | Cursor stored in `pipeline_runs.cursor_to`; next run resumes from it, not from scratch. |
+| US-02 | As the pipeline under provider outage, I want retry with backoff and a circuit breaker, so transient failures don't cascade into a stuck job. | P0 | Exponential backoff + jitter; honors `Retry-After`; circuit breaker opens after 5 consecutive failures, reason recorded on `pipeline_runs.error`. |
+| US-03 | As the reconciliation check, I want ingestion to be idempotent, so re-running never inflates the numbers. | P0 | Two identical runs → zero net new `raw_events` rows (`unique(source, external_id, event_version)` + `ON CONFLICT DO NOTHING`). |
+| US-04 | As a data consumer, I want invalid records quarantined instead of dropped, so nothing silently disappears. | P0 | Zod validation: valid → `invoices`; invalid → `quarantine` with populated `reason` and `raw_event_id` preserved. |
+| US-05 | As the provider, I want to push events instead of only being polled, so ingestion is genuinely event-driven. | P1 | Deno Edge Function webhook (`provider-webhook`) reuses the same transform code and idempotency guarantee as the polling path. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** At-least-once delivery + dedup is the actual contract — not exactly-once. One provider only, no generic adapter abstraction.
+
+**Localization:** N/A.
+
+**Security/Legal:** Same as project-wide — no secrets in client code, RLS on every table touched.
+
+### User Flow & Design
+
+No direct UI — background job. Observable indirectly via `pipeline_runs` rows surfaced on the Dashboard (Stage 4).
+
+### Out of Scope
+
+- Exactly-once delivery guarantees beyond idempotent upsert.
+- A generic multi-provider adapter abstraction.
+
+## Data Quality & Reconciliation
+
+**Status:** Draft
+**Participants:** Solo project
+**Timeline:** Stage 3. The project's actual differentiator.
+
+### Context & Business Value
+
+**Problem:**
+A pipeline that ingests without checking itself is exactly the "AI on top of bad data" trap the whole project exists to avoid.
+
+**Business goal:**
+Turn "I built a pipeline" into "I built a pipeline that knows when it's lying to you" — the single strongest differentiator in the project.
+
+**Target audience:**
+The dashboard's Data Health panel (Stage 4) and the README's before/after artifact (the project's single strongest interview talking point) both depend on this stage's output.
+
+### Success Metrics
+
+**North Star metric:**
+Reconciliation drift is demonstrated before/after idempotency with a real measured number — not zero by construction, actually measured going from nonzero to zero.
+
+**Proxy metrics:**
+All 4 checks (freshness, volume, uniqueness, reconciliation) run and record a `pass`/`warn`/`fail` status per `run_id`, every run.
+
+**Counter-metrics:**
+No check should produce false positives on a healthy run — thresholds (2h freshness, ±50% volume) tuned against realistic seed data before being trusted.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As an operator, I want a freshness check, so I know when data has gone stale. | P0 | `now() - max(ingested_at) < 2 hours` recorded in `data_quality_results` every run. |
+| US-02 | As an operator, I want a volume check, so an unexpectedly small or large batch gets flagged. | P0 | Row count within ±50% of the trailing 7-day average. |
+| US-03 | As an operator, I want a uniqueness check, so duplicate records are caught even if ingestion logic has a gap. | P0 | No duplicates on `(org_id, external_id)`. |
+| US-04 | As an interviewer, I want to see the reconciliation drift before and after the idempotency fix, so I have concrete evidence the fix mattered. | P0 | The "before" number is captured once, during Stage 2 implementation — before the idempotent `unique` constraint + `ON CONFLICT DO NOTHING` lands — and preserved as a fixed artifact (numbers + a screenshot/log excerpt in the README). By Stage 3, idempotency is already a shipped P0 requirement, so "before" is never reproduced live against the running system — it is not a runtime toggle or a rollback. The "after" number comes from Stage 3's live reconciliation check against the already-idempotent pipeline. Both numbers shown in the README. |
+| US-05 | As the dashboard, I want per-run check status, so a user can drill into which specific run failed which check. | P1 | Each check's status queryable per `run_id`, not just as a global flag. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Reconciliation compares against `/api/mock-provider/summary` — an independent source, not internal consistency.
+
+**Localization:** N/A.
+
+**Security/Legal:** N/A beyond project-wide RLS.
+
+### User Flow & Design
+
+Surfaced entirely through the Dashboard's Data Health panel (Stage 4) — no standalone UI of its own.
+
+### Out of Scope
+
+- Automated external alerting/paging (email, Slack, PagerDuty) — a dashboard badge is the v1 notification surface.
+- Configurable thresholds via UI.
+
+## Dashboard
+
+**Status:** Draft
+**Participants:** Solo project — new UI routes through the `designer` agent per `CLAUDE.md`
+**Timeline:** Stage 4
+
+### Context & Business Value
+
+**Problem:**
+The pipeline and quality checks are invisible unless something surfaces them to a human — and the target role expects real frontend chops (Next.js/TS/Tailwind/TanStack Query/shadcn), auth, and real-time updates, not just a data table.
+
+**Business goal:**
+Prove full-stack product delivery, not just backend/data engineering — this is the screen an evaluator actually looks at.
+
+**Target audience:**
+The in-fiction investment firm's ops team, checking whether this month's numbers can be trusted before closing the books. Also the interviewer.
+
+### Success Metrics
+
+**North Star metric:**
+A user can look at the dashboard and correctly judge whether this month's numbers can be trusted, without reading code.
+
+**Proxy metrics:**
+Freshness badge and Data Health panel both reflect true pipeline state within one Realtime update cycle (no manual refresh needed).
+
+**Counter-metrics:**
+No dashboard state should ever show stale data as fresh, or a failing check as passing — false-green is worse than no signal.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As a user, I want to sign in before seeing any org's data, so unauthenticated access is impossible. | P0 | Supabase Auth (magic link) gates the dashboard; `memberships.role` determines which org's data is visible — verified by the RLS non-owner test in Definition of Done. |
+| US-02 | As a user, I want revenue/invoice/average-invoice tiles, so I get the headline numbers at a glance. | P0 | Tiles render from `invoices`. |
+| US-03 | As a user, I want a freshness badge, so I know if I'm looking at stale data. | P0 | Badge changes state (fresh/stale) crossing the 2-hour threshold — testable by manipulating `ingested_at` in a seeded run. |
+| US-04 | As a user, I want a Data Health panel, so I can see all 4 quality checks at a glance. | P0 | Panel shows all 4 checks with latest pass/warn/fail status. |
+| US-05 | As a user, I want to drill from a number down to its source records, so I can verify a figure instead of trusting it blindly. | P1 | Clicking a number shows contributing `raw_events`, `run_id`, source, timestamp, down to the raw payload. |
+| US-06 | As a user, I want pipeline status to update live, so I don't have to manually refresh. | P1 | New `pipeline_runs` row appears without manual refresh (Supabase Realtime), verifiable with two concurrent sessions. |
+| US-07 | As a user, I want to ask the AI copilot a question from the dashboard, so I don't need a separate tool. | P0 | Chat panel round-trips at least one query to the agent and renders an answer with visible citations. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Cursor-paginated invoices table. New components ship with a co-located `*.stories.tsx` per `CLAUDE.md`'s Frontend rules (default/loading/empty/error states).
+
+**Localization:** English only, no i18n.
+
+**Security/Legal:** RLS-enforced org isolation — no client-side-only access control.
+
+### User Flow & Design
+
+Sign in (magic link) → land on single dashboard page → tiles + freshness badge + Data Health panel + invoices table + chat panel, all visible without navigation. Empty state: no data ingested yet. Error state: a failing quality check shown as a red badge, not hidden. Figma/Miro: none yet — design routes through the `designer` agent per `CLAUDE.md`, not a separate design tool.
+
+### Out of Scope
+
+- Full visual polish/animation — Tailwind + shadcn, three components, no custom motion work.
+- Mobile-responsive layout or i18n.
+
+## RAG & Agent
+
+**Status:** Draft
+**Participants:** Solo project
+**Timeline:** Stage 5. Where the target role's core anxiety lives.
+
+### Context & Business Value
+
+**Problem:**
+An AI feature that can act (not just answer) has to be safe by construction, not by a prompt asking it to behave. "I trust the model" is not an acceptable design.
+
+**Business goal:**
+Demonstrate a safe agentic workflow the way the target role actually cares about it — scoped tools, RLS-bounded execution, full audit trail — not a demo that only works because nobody tried to break it.
+
+**Target audience:**
+The dashboard's chat panel (consumer of this stage) and the interviewer evaluating "safe agentic workflows, scoped tools, evals" directly.
+
+### Success Metrics
+
+**North Star metric:**
+A poisoned document in the corpus cannot cause the agent to do harm — not because it was told not to, but because no tool exists that could.
+
+**Proxy metrics:**
+Citation validity rate (deterministic check that cited ids were actually in retrieved context); recall@5 on a fixed evaluation query set (measured in the Evals stage).
+
+**Counter-metrics:**
+Zero unaudited agent actions — every tool call logged to both `llm_calls` and `audit_log`. Zero hallucinated answers on empty retrieval.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As a user, I want hybrid search over documents, so retrieval isn't limited to exact keyword or pure-semantic matches alone. | P0 | Vector + full-text combined via Reciprocal Rank Fusion, returns sensible top-5 results for a fixed evaluation query set (verified quantitatively in Evals). |
+| US-02 | As a user, I want the agent to answer from real data with citations, so I can verify the answer myself. | P0 | Responses cite `chunk_id`/`invoice_id`; deterministic check confirms cited ids were actually in retrieved context, else flagged unverified. |
+| US-03 | As a security-conscious evaluator, I want the agent's tools scoped to the calling user's own permissions, so it can't be used to exfiltrate another org's data. | P0 | Every tool call executes under the calling user's JWT; RLS applies exactly as it does to the dashboard — verified by a test: org A user cannot retrieve org B's chunks or invoices through the agent, even indirectly. |
+| US-04 | As a security-conscious evaluator, I want no tool capable of an irreversible side effect, so a poisoned document can't cause real damage. | P0 | Exactly 4 tools: `get_revenue_summary`, `list_invoices`, `search_documents` (read, auto-execute), `draft_customer_email` (draft only, no send capability exists anywhere in the system). |
+| US-05 | As an auditor, I want every agent step logged, so any action (or attempted action) is traceable after the fact. | P0 | Every step writes to `llm_calls` (model, tokens, cost, latency, tool_name/args) and `audit_log` (`actor_type='agent'`, `on_behalf_of=user_id`), and every row in that request/step chain shares one `correlation_id` — per `CLAUDE.md`'s project-wide logging contract, not just an agent-specific convention. |
+| US-06 | As a user, I want the agent to admit when it doesn't know, so I don't get a confident wrong answer. | P0 | Empty retrieval → model must answer "I don't have data on that," never a hallucinated guess. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Max 6 tool-call steps, 30s timeout, token ceiling enforced.
+
+**Localization:** English only.
+
+**Security/Legal:** No tool with real external side effects. JWT-scoped execution is the actual security boundary, not a system-prompt instruction.
+
+### User Flow & Design
+
+User types a question in the dashboard's chat panel → agent retrieves + reasons + optionally calls tools → answer rendered with citations. Empty retrieval → explicit "I don't have data" response, never silence or a guess. Prompt-injection attempt → agent attempts nothing harmful (no capable tool exists), attempt is visible in `audit_log`.
+
+### Out of Scope
+
+- Cross-session long-term memory.
+- More than 4 tools, or any tool with real external side effects.
+- Token-by-token streaming UI.
+
+## Evals
+
+**Status:** Draft
+**Participants:** Solo project
+**Timeline:** Stage 6
+
+### Context & Business Value
+
+**Problem:**
+"I tested it manually and it seemed fine" is not evidence. An agent feature that ships without a regression gate is a feature nobody can safely change later.
+
+**Business goal:**
+Make AI evals & observability a demonstrated CI gate, not a manual habit — the specific gap the target role calls out.
+
+**Target audience:**
+CI (blocks merges on regression), and future-me changing prompts/retrieval logic without a way to know if I made things worse.
+
+### Success Metrics
+
+**North Star metric:**
+A regression in retrieval quality, citation validity, or safety behavior gets caught by CI before merge — not discovered later by a user.
+
+**Proxy metrics:**
+recall@5, JSON-schema validity rate, citation-validity rate, abstention rate on unanswerable cases, LLM-as-judge groundedness score, cost, p95 latency — all computed and versioned.
+
+**Counter-metrics:**
+`make evals` never diverges from what CI runs — no "works locally, fails in CI" surprise.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As a maintainer, I want a versioned eval dataset, so regressions are measured against a fixed bar, not a moving one. | P0 | `evals/dataset.jsonl` has at least 20 cases spanning `metric`, `lookup`, `retrieval`, `unanswerable`, `injection` types. |
+| US-02 | As a maintainer, I want a single script that scores everything, so I don't have to manually check each dimension. | P0 | `evals/run.py` computes recall@5, JSON validity, citation validity, abstention rate, LLM-as-judge groundedness, cost, p95 latency. |
+| US-03 | As CI, I want a hard threshold, so a regression fails the build instead of just producing a warning. | P0 | Explicit versioned thresholds (recall@5 ≥ 0.8, citation validity ≥ 0.95, 100% correct abstention on `should_refuse`/injection cases); run exits non-zero when breached. |
+| US-04 | As a developer, I want to run the exact CI check locally, so I know before I push whether I broke something. | P0 | `make evals` runs the identical command CI runs. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Wired into GitHub Actions — regression blocks the merge, not just a local warning.
+
+**Localization:** N/A.
+
+**Security/Legal:** N/A.
+
+### User Flow & Design
+
+No UI — CLI script + CI job. Output: a results table + non-zero exit code on threshold breach.
+
+### Out of Scope
+
+- Continuous online eval monitoring against live production traffic.
+- A human-labeling pipeline for growing the dataset beyond the initial hand-written cases.
+
+## Stretch (Stage 7)
+
+**Status:** Draft
+**Participants:** Solo project
+**Timeline:** Stage 7 — optional, attempted only if the core loop (Stages 1–6) is already real
+
+### Context & Business Value
+
+**Problem:**
+Once the core loop is real, remaining target-role surface area — GPU/serverless workloads, multi-tenant isolation proof, secrets/PII hygiene — is worth closing if time allows, but none of it should block the core story.
+
+**Business goal:**
+Close follow-up-question surface area ("what about a second tenant," "how do you handle secrets") without risking the core demo's completeness.
+
+**Target audience:**
+Same interviewer audience, specifically the follow-up questions that come up if the core demo lands well.
+
+### Success Metrics
+
+**North Star metric:**
+N/A at this stage's level — each item below stands alone with its own bar; no combined metric.
+
+**Proxy metrics:**
+Each attempted item's own acceptance criteria (see Functional Requirements).
+
+**Counter-metrics:**
+None of these items should be attempted at the cost of a core-loop (Stage 1–6) regression — this stage never trades against the core.
+
+### Functional Requirements
+
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | As an interviewer, I want to see a real GPU/serverless workload, so "Modal" isn't just a name-drop. | P2 | Whisper transcription runs as a Modal function, producing timestamped chunks ingested into `chunks`. |
+| US-02 | As an interviewer, I want proof of idempotency beyond a claim, so I can see it demonstrated on demand. | P2 | Backfill script run twice produces identical row counts and sums, shown in the README. |
+| US-03 | As an interviewer, I want to see multi-tenant isolation actually tested, not just designed. | P2 | Second tenant exists with a CI test proving org A cannot see org B's data anywhere — dashboard, agent, or direct query. |
+| US-04 | As a reader, I want explicit secrets/PII documentation, so I don't have to infer the security model. | P2 | README has explicit Secrets Management and PII Handling sections describing what's actually implemented, not aspirational text. |
+
+### Non-Functional Requirements & Constraints
+
+**Technical constraints:** Each item independent — attempting one doesn't require attempting the others.
+
+**Localization:** N/A.
+
+**Security/Legal:** Secrets management and PII handling are the explicit subject of two of these items.
+
+### User Flow & Design
+
+No new user-facing flow beyond what Stages 1–6 already define; this stage documents and hardens, doesn't add new screens.
+
+### Out of Scope
+
+- Infrastructure as Code was previously listed here as consciously skipped — that decision reversed (see [ADR 0001](adr/0001-infrastructure-as-code-with-pulumi.md)); IaC via Pulumi is now a core Overview success criterion, not a Stage 7 item.
 

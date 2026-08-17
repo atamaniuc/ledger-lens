@@ -5,6 +5,7 @@
 .worktrees/
 .omc/logs/
 .omc/state/
+.omc/artifacts/
 
 node_modules/
 dist/

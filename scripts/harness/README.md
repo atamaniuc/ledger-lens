@@ -12,8 +12,9 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 
 | I want to | Script | Make target |
 |---|---|---|
-| Start a design decision for a new feature/stage | `new-adr.sh` | `make adr TITLE="..."` |
+| Record an architecture decision | `new-adr.sh` | `make adr TITLE="..."` |
 | Open a PRD entry before starting design (Phase 0) | `new-prd-section.sh` | `make prd FEATURE="..."` |
+| Write/update the approved architecture (Phase 1) | `new-design-section.sh` | `make design FEATURE="..."` |
 | Start work on a `tasks.md` item, isolated | `new-worktree.sh` | `make worktree BRANCH=...` |
 | Finish a task, clean up its worktree | `finish-worktree.sh` | `make worktree-done BRANCH=...` |
 | Get a second opinion from Codex (architect/critic) | `ask-codex.sh` | `make codex-architect PROMPT_FILE=...` / `make codex-critic PROMPT_FILE=...` |
@@ -24,6 +25,8 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 ## `new-adr.sh` — create an Architecture Decision Record
 
 **Why:** CLAUDE.md, Phase 1, step 4 — every architectural decision (chosen approach + rejected alternatives + reasoning) belongs in `.claude/adr/NNNN-<title>.md` with a sequential number. Easy to get the number wrong by hand, or to forget one of the four required sections (Context / Decision / Consequences / Alternatives considered).
+
+**Paired skill:** [`.omc/skills/adr/SKILL.md`](../../.omc/skills/adr/SKILL.md) — this script only produces the skeleton; the skill is what teaches you to fill Consequences with a real cost and Alternatives considered with real reasons, not a strawman. Load it whenever you're about to write ADR content, not just scaffold it.
 
 **What it does:**
 1. Looks at existing `.claude/adr/NNNN-*.md` files, takes the highest number, adds 1 (starts at `0001` if none exist yet).
@@ -52,13 +55,15 @@ This appends a reminder line to the new ADR ("mark ADR 0003 as `Superseded by 00
 
 ## `new-prd-section.sh` — open a PRD entry
 
-**Why:** CLAUDE.md, Phase 0 — no design work starts without an entry in `.claude/PRD.md` (problem, user, success criteria, non-goals). It's a gate, not bureaucracy: forces you to state "why" before "how."
+**Why:** CLAUDE.md, Phase 0 — no design work starts without an entry in `.claude/PRD.md`. It's a gate, not bureaucracy: forces you to state "why" before "how."
+
+**Paired skill:** [`.omc/skills/prd/SKILL.md`](../../.omc/skills/prd/SKILL.md) — this script only produces the skeleton (Metadata / Context & Business Value / Success Metrics / Functional Requirements / Non-Functional Requirements & Constraints / User Flow & Design / Out of Scope); the skill is what teaches you to write real North Star/proxy/counter metrics and honestly prioritized P0/P1/P2 stories into it, not just fill in headings. Load it whenever you're about to write PRD content, not just scaffold it.
 
 **What it does:**
 1. Creates `.claude/PRD.md` with a heading if it doesn't exist yet.
 2. Checks whether a `## <feature>` section with that exact name already exists.
-3. **Interactive (no piped stdin):** appends an empty skeleton — Problem / User / Success criteria / Non-goals — for you to fill in by hand.
-4. **Piped stdin:** writes whatever you pipe in as the section body verbatim, under the `## <feature>` heading. This is what makes it usable for scripted/agent-driven PRD writing instead of only hand-editing — an agent (or you, via a heredoc) can generate the full Problem/User/Success criteria/Non-goals content and hand it straight to the script.
+3. **Interactive (no piped stdin):** appends an empty skeleton matching the `prd` skill's structure — for you to fill in by hand.
+4. **Piped stdin:** writes whatever you pipe in as the section body verbatim, under the `## <feature>` heading. This is what makes it usable for scripted/agent-driven PRD writing instead of only hand-editing — an agent (or you, via a heredoc) can generate the full section content and hand it straight to the script.
 5. Refuses to duplicate an existing section unless you pass `--force`, in which case it replaces that section's content in place (used to go from an empty skeleton to real content without hand-editing the file, or to revise a section later).
 
 **Usage:**
@@ -70,18 +75,61 @@ make prd FEATURE="Mock Provider"
 
 # replace with real content, e.g. from a heredoc:
 scripts/harness/new-prd-section.sh --force "Mock Provider" <<'EOF'
+**Status:** Draft
+**Participants:**
+**Timeline:**
+
+### Context & Business Value
 **Problem:**
 ...
-**User:**
+### Success Metrics
+**North Star metric:**
 ...
-**Success criteria:**
+### Functional Requirements
+| ID | User Story | Priority | Acceptance Criteria |
+|---|---|---|---|
+| US-01 | ... | P0 | ... |
+### Non-Functional Requirements & Constraints
 ...
-**Non-goals:**
+### User Flow & Design
+...
+### Out of Scope
 ...
 EOF
 ```
 
-**Order in the real workflow:** `new-prd-section.sh` first (Phase 0), fill it in by hand/with an agent, then `/superpowers:brainstorming` → `new-adr.sh` (Phase 1), then `/omc-plan --consensus` → `tasks.md` (Phase 2).
+**Order in the real workflow:** `new-prd-section.sh` first (Phase 0), fill it in by hand/with an agent, then `/superpowers:brainstorming` → `new-design-section.sh` + `new-adr.sh` (Phase 1), then `/omc-plan --consensus` → `tasks.md` (Phase 2).
+
+---
+
+## `new-design-section.sh` — write the approved architecture
+
+**Why:** CLAUDE.md, Phase 1 step 3 — once `/superpowers:brainstorming` has walked through 2–3 approaches and one is approved, the actual architecture (components, data flow, error handling, testing plan) gets written down in `.claude/DESIGN.md`, not left implicit in chat history. Same mechanism as `new-prd-section.sh`, aimed at a different file.
+
+**Paired skill:** [`.omc/skills/design/SKILL.md`](../../.omc/skills/design/SKILL.md) — this script only produces the skeleton; the skill teaches the content rules (one clear purpose per component, PRD/ADR cross-links, don't write this until brainstorming has actually converged). Load it whenever you're about to write design content, not just scaffold it.
+
+**What it does:**
+1. Creates `.claude/DESIGN.md` with a heading if it doesn't exist yet.
+2. Checks whether a `## <feature>` section already exists.
+3. **Interactive (no piped stdin):** appends an empty skeleton — PRD/ADR cross-reference lines, Overview, Components, Data flow, Error handling, Testing plan, Open questions/risks.
+4. **Piped stdin:** writes the piped content verbatim as the section body — same scripted/agent-driven usage as `new-prd-section.sh`.
+5. Refuses to duplicate an existing section unless you pass `--force`.
+
+**Usage:**
+```bash
+scripts/harness/new-design-section.sh "Mock Provider"
+# → empty "## Mock Provider" skeleton in .claude/DESIGN.md
+
+make design FEATURE="Mock Provider"
+
+scripts/harness/new-design-section.sh --force "Mock Provider" <<'EOF'
+**PRD:** .claude/PRD.md#mock-provider
+**ADR(s):** .claude/adr/0002-mock-provider-layout.md
+...
+EOF
+```
+
+**`--force` here means something different than in `new-adr.sh`:** `.claude/DESIGN.md` is a living per-feature document, not an immutable decision log — CLAUDE.md's Definition of Done item 5 expects it to be updated in place when scope drifts during implementation. `--force` is the normal way to do that update, not an exception. If the update is actually an architecture *reversal* rather than a refinement, it still needs its own ADR (`new-adr.sh ... --supersedes NNNN`) — updating `DESIGN.md` alone isn't enough for that case.
 
 ---
 
@@ -114,7 +162,7 @@ cd .worktrees/stage-3-reconciliation
 # invisible in the main tree until merged
 ```
 
-**On branch naming:** per CLAUDE.md's Branch & Commit Convention — `stage-N-<short-desc>`, matching Этап N from the roadmap in `interview-preps/07_Пет_проект.md`. The script doesn't validate the name format — that discipline is on you/the agent.
+**On branch naming:** per CLAUDE.md's Branch & Commit Convention — `stage-N-<short-desc>`, matching Stage N from the roadmap in [`docs/PROJECT_OVERVIEW.md`](../../docs/PROJECT_OVERVIEW.md#build-roadmap). The script doesn't validate the name format — that discipline is on you/the agent.
 
 **On migrations:** per CLAUDE.md, if a task touches a Postgres migration, it does not get parallelized across worktrees against another migration — sequential only, one worktree at a time. The script doesn't enforce this itself; it's your responsibility when splitting `tasks.md` into parallel batches.
 
@@ -156,13 +204,13 @@ git branch -d stage-3-reconciliation
 ```bash
 scripts/harness/ask-codex.sh architect .claude/DESIGN.md
 scripts/harness/ask-codex.sh critic .claude/DESIGN.md
-git diff main... | scripts/harness/ask-codex.sh review -
+git diff main... | scripts/harness/ask-codex.sh code-reviewer -
 
 make codex-architect PROMPT_FILE=.claude/DESIGN.md
 make codex-critic PROMPT_FILE=.claude/DESIGN.md
 ```
 
-`role` isn't a hard enum — it's whatever label `omc ask` accepts (`architect`/`critic`/`review`/anything meaningful); it's passed straight into `--agent-prompt`.
+`role` is validated by `omc ask` against a fixed roster of agent-prompt files — `architect`, `critic`, `code-reviewer`, `analyst`, `code-simplifier`, `debugger`, `designer`, `document-specialist`, `executor`, `explore`, `git-master`, `planner`, `qa-tester`, `scientist`, `security-reviewer`, `test-engineer`, `tracer`, `verifier`, `writer`. Anything outside that list is rejected outright (confirmed by running it — `review` is not in the roster, `code-reviewer` is).
 
 ---
 
@@ -174,7 +222,7 @@ make codex-critic PROMPT_FILE=.claude/DESIGN.md
 1. Takes `git diff <REF>` (defaults to `REF=HEAD`, i.e. uncommitted changes; you can pass `main` or any other commit/branch).
 2. If the diff is empty — exits quietly (nothing to review), doesn't spend a Codex call.
 3. Builds a prompt: asks for correctness bugs, RLS/security regressions, and missing test coverage — with an explicit pointer to project conventions (RLS on every table, `correlation_id`, `run_id`, idempotent ingestion).
-4. Pipes it all into `ask-codex.sh review -`.
+4. Pipes it all into `ask-codex.sh code-reviewer -`.
 
 **Usage:**
 ```bash
@@ -197,7 +245,8 @@ make prd FEATURE="Mock Provider"
 # → fill in .claude/PRD.md by hand / via the planner agent
 
 # Phase 1 — design it
-# /superpowers:brainstorming in Claude Code → .claude/DESIGN.md
+# /superpowers:brainstorming in Claude Code walks through 2-3 approaches
+make design FEATURE="Mock Provider"    # write the approved architecture
 make adr TITLE="chaos-flag mock provider design"
 # optional — second opinion before treating the design as final:
 make codex-architect PROMPT_FILE=.claude/DESIGN.md
@@ -223,5 +272,5 @@ git branch -d stage-1-mock-provider
 
 - All written with `set -euo pipefail` — fail on the first error, never keep going blind.
 - None of them `git push`, merge, or delete branches without a separate explicit step — destructive/public actions are deliberately left to you.
-- `new-adr.sh` and `new-prd-section.sh` resolve the repo root **from their own path on disk** — invoke them via the copy that lives in the tree you're currently working in.
+- `new-adr.sh`, `new-prd-section.sh`, and `new-design-section.sh` resolve the repo root **from their own path on disk** — invoke them via the copy that lives in the tree you're currently working in.
 - `new-worktree.sh`, `finish-worktree.sh`, `codex-review.sh` resolve the root via `git rev-parse --show-toplevel` — these work correctly from any subdirectory of the current tree, and aren't subject to the footgun above.

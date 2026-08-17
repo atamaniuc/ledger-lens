@@ -99,7 +99,7 @@ Task not done until:
 - Visual changes to shared components → screenshot before/after in PR description.
 
 ## Branch & Commit Convention
-- Branch: `stage-N-<short-desc>` matching Этап N from roadmap (e.g. `stage-3-reconciliation`).
+- Branch: `stage-N-<short-desc>` matching Stage N from roadmap (e.g. `stage-3-reconciliation`).
 - Commits: Conventional Commits — `feat:`, `fix:`, `test:`, `chore:`, `docs:`. Scope in parens when useful: `feat(ingestion): cursor-based resume`.
 - One logical change per commit. Migration + its RLS policy + its test = one commit, not three.
 - No `--no-verify`, no force-push to main.

@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 # Thin wrapper around `omc ask codex --agent-prompt <role>`, for the second-opinion
-# passes CLAUDE.md's Phase 2 and Delegation Ladder call for (architect/critic/review).
+# passes CLAUDE.md's Phase 2 and Delegation Ladder call for.
+#
+# `role` is NOT a free-form label — `omc ask` validates it against a fixed
+# roster of agent-prompt files (verified by running this against a real
+# invalid role and reading the CLI's own error): analyst, architect,
+# code-reviewer, code-simplifier, critic, debugger, designer,
+# document-specialist, executor, explore, git-master, planner, qa-tester,
+# scientist, security-reviewer, test-engineer, tracer, verifier, writer.
+# For review purposes use `code-reviewer`, not `review` — an earlier
+# version of this script and codex-review.sh assumed `review` was valid;
+# it isn't, `omc ask` rejects it outright.
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
   cat >&2 <<EOF
 Usage: $(basename "$0") <role> <prompt-file|->
-  role: architect | critic | review | any free-form label omc ask accepts
+  role: architect | critic | code-reviewer | any other role in the fixed
+        roster above — omc ask rejects anything outside it
   prompt-file: path to a file with the prompt, or - to read stdin
 
 Examples:
   $(basename "$0") architect .claude/DESIGN.md
-  git diff main... | $(basename "$0") review -
+  git diff main... | $(basename "$0") code-reviewer -
 EOF
   exit 1
 fi

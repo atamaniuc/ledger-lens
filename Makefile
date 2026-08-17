@@ -1,4 +1,4 @@
-.PHONY: adr prd worktree worktree-done codex-architect codex-critic codex-review
+.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review
 
 # Usage: make adr TITLE="cursor-based ingestion resume"
 adr:
@@ -9,6 +9,11 @@ adr:
 prd:
 	@test -n "$(FEATURE)" || (echo "FEATURE required" >&2; exit 1)
 	@scripts/harness/new-prd-section.sh "$(FEATURE)"
+
+# Usage: make design FEATURE="Ingestion cursor resume"
+design:
+	@test -n "$(FEATURE)" || (echo "FEATURE required" >&2; exit 1)
+	@scripts/harness/new-design-section.sh "$(FEATURE)"
 
 # Usage: make worktree BRANCH=stage-3-reconciliation [BASE=main]
 worktree:

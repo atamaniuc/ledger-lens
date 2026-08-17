@@ -183,12 +183,12 @@ Full column-level DDL (including RLS policies) lives in
 
 ```mermaid
 flowchart LR
-    S1["Этап 1<br/>Mock Provider<br/>~1h"] --> S2["Этап 2<br/>Ingestion + Transform<br/>~2h"]
-    S2 --> S3["Этап 3<br/>Data Quality +<br/>Reconciliation<br/>~1.5h"]
-    S3 --> S4["Этап 4<br/>Dashboard<br/>~2h"]
-    S4 --> S5["Этап 5<br/>RAG + Agent<br/>~3h"]
-    S5 --> S6["Этап 6<br/>Evals<br/>~1.5h"]
-    S6 -.optional.-> S7["Этап 7<br/>Stretch<br/>Modal · 2nd tenant · secrets/PII docs"]
+    S1["Stage 1<br/>Mock Provider"] --> S2["Stage 2<br/>Ingestion + Transform"]
+    S2 --> S3["Stage 3<br/>Data Quality +<br/>Reconciliation"]
+    S3 --> S4["Stage 4<br/>Dashboard"]
+    S4 --> S5["Stage 5<br/>RAG + Agent"]
+    S5 --> S6["Stage 6<br/>Evals"]
+    S6 -.optional.-> S7["Stage 7<br/>Stretch<br/>Modal · 2nd tenant · secrets/PII docs"]
 
     classDef required fill:#1f3a5f,stroke:#5b9bd5,color:#eee;
     classDef optional fill:#3a2f1f,stroke:#c8963e,color:#eee;
@@ -199,7 +199,7 @@ flowchart LR
 Each stage has its own PRD entry (problem, user, testable success criteria,
 non-goals) in [`.claude/PRD.md`](../.claude/PRD.md), and per `CLAUDE.md`'s
 Phase 1, gets its own `.claude/DESIGN.md` section + ADR before code starts.
-Этап 3 (Data Quality & Reconciliation) is the project's actual
+Stage 3 (Data Quality & Reconciliation) is the project's actual
 differentiator — the before/after reconciliation-drift number is the
 strongest single artifact in the whole build.
 
@@ -239,13 +239,40 @@ sequenceDiagram
 
 ## Where things stand
 
-- **Code:** none yet. Repo currently holds workflow rules (`CLAUDE.md`),
-  the meta-harness (`scripts/harness/`), the full PRD (`.claude/PRD.md`),
-  the database schema (`docs/DATABASE_SCHEMA.md`), the deployment plan
-  (`docs/DEPLOYMENT.md`), and this overview.
-- **Next decision:** Phase 1 design for Этап 1 (Mock Provider) — in
-  progress via `/superpowers:brainstorming`, paused pending a project-layout
-  decision (standalone Next.js app now vs. deferred to Этап 4).
+- **Layout decided:** single Next.js app (Bun), no monorepo — see
+  [ADR 0002](../.claude/adr/0002-project-layout-single-next-js-app-no-monorepo.md)
+  and the "Project Layout" section in [`.claude/DESIGN.md`](../.claude/DESIGN.md).
+  App scaffolded, dependencies installed, build verified, `supabase init`
+  done.
+- **Code:** Stage 1 (Mock Provider) in progress.
+- **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo
+  root — a kanban-style board tracking every stage from here to Definition
+  of Done, plus which agent/harness role did each step.
 - **Deploy readiness:** see [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)'s
   readiness checklist — the repo is meant to be push/deploy-ready at any
   point, not just at the end.
+
+## Roadmap to production
+
+1. **Setup** — scaffold the Next.js app once, before Stage 1, not deferred
+   to Stage 4 (ADR 0002). Done.
+2. **Stages 1–6, sequential** — each stage: design (if it has a real
+   fork) → `/omc-plan --consensus` → `tasks.md` → worktree + Delegation
+   Ladder → Definition of Done → merge. Stage 4 and Stage 5 route through
+   `--architect codex --critic codex` (auth/RLS/agent-surface changes).
+3. **First live deploy — at Stage 4.** `infra/` (Pulumi) gets built here,
+   not before: this is the first point there's a real app + schema worth
+   standing up. `pulumi up` runs for the first time at this stage.
+4. **Stage 5** — first point real LLM secrets matter; set through Pulumi
+   config, never committed.
+5. **Stage 6** — CI eval gate goes live in GitHub Actions. Once this
+   merges, the project meets this build's definition of "production":
+   deployed, gated, evaluable end-to-end.
+6. **Cutover** — run `docs/DEPLOYMENT.md`'s readiness checklist,
+   `pulumi preview` → `pulumi up` for the final deploy, fill the README's
+   real artifacts (reconciliation before/after number, failure-mode
+   table, security model, prompt-injection transcript) from the live
+   system, rehearse the pitch against it.
+7. **Stage 7 (optional)** — attempted independently, any subset, never at
+   the cost of a Stage 1–6 regression. Not required to hit the production
+   bar above.

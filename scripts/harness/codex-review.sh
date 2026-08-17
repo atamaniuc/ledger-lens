@@ -22,4 +22,4 @@ PROMPT="Review this diff for correctness bugs, RLS/security regressions, and mis
 Diff:
 ${DIFF}"
 
-"$(dirname "${BASH_SOURCE[0]}")/ask-codex.sh" review - <<< "$PROMPT"
+"$(dirname "${BASH_SOURCE[0]}")/ask-codex.sh" code-reviewer - <<< "$PROMPT"

@@ -248,9 +248,15 @@ alone.
 
 ## Row-Level Security
 
-Minimum viable RLS — enable on at least these three, extend to every
-table that holds org-scoped data before shipping (per `CLAUDE.md`: *every
-table, RLS on*):
+Worked example on these three — **every** org-scoped table in this schema
+needs the same treatment before that table is queried by anything other
+than a migration (`CLAUDE.md`: *every table, RLS on* — not a suggestion).
+That means `raw_events`, `pipeline_runs`, `quarantine`,
+`data_quality_results`, `documents`, `llm_calls`, and `jobs` too, each
+enabled and policied in the same migration that creates it — not
+deferred to a later cleanup pass. Flagged explicitly here because a
+review pass caught this doc reading as if the three-table example were
+sufficient coverage; it never was.
 
 ```sql
 alter table invoices enable row level security;

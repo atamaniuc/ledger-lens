@@ -40,7 +40,7 @@ in a new `infra/` Pulumi program:
     provider-webhook` (Supabase's own Terraform provider exists but adding
     the Terraform bridge is not worth it for the two operations actually
     needed here).
-  - Modal (Этап 7 only): `modal deploy`.
+  - Modal (Stage 7 only): `modal deploy`.
 - Pulumi Cloud's free individual tier as the state backend (not a local
   `Pulumi.*.json` file committed to the repo) — avoids ever having
   infra state, which can contain resource IDs and other sensitive output,

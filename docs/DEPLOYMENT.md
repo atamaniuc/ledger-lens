@@ -20,7 +20,7 @@ stated plainly rather than presented as uniform IaC coverage:
 - **Command-wrapped steps** (`@pulumi/command`'s `local.Command`, still
   orchestrated by `pulumi up`, but only as idempotent as the underlying
   CLI): `supabase db push`, `supabase functions deploy provider-webhook`,
-  and (Этап 7 only) `modal deploy`. No stable native Pulumi provider covers
+  and (Stage 7 only) `modal deploy`. No stable native Pulumi provider covers
   these two operations well enough to justify the setup cost yet.
 
 State backend: Pulumi Cloud's free individual tier — not a local state
@@ -42,7 +42,7 @@ Compose is a local-dev tool, Pulumi is for the deployed infra.)
 | Next.js app | Vercel | Pulumi (native resource) |
 | Postgres, pgvector, Auth, Realtime | Supabase | Pulumi (command-wrapped `db push`) |
 | Webhook receiver (Deno) | Supabase Edge Functions | Pulumi (command-wrapped `functions deploy`) |
-| Whisper transcription (Этап 7, optional) | Modal | Pulumi (command-wrapped `modal deploy`) |
+| Whisper transcription (Stage 7, optional) | Modal | Pulumi (command-wrapped `modal deploy`) |
 | CI / evals gate | GitHub Actions | Not Pulumi-managed — a workflow file, not deployable infra |
 
 ## One-time setup
@@ -81,7 +81,7 @@ Python (embeddings + evals, per the RAG & Agent / Evals PRD entries):
 pip install openai pydantic psycopg[binary] python-dotenv --break-system-packages
 ```
 
-Modal (optional, Этап 7 only):
+Modal (optional, Stage 7 only):
 
 ```bash
 pip install modal --break-system-packages
@@ -103,7 +103,7 @@ via `pulumi preview`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Pulumi → Vercel env var, `.env.local` locally | Public — RLS is the actual boundary, not this key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Pulumi → Vercel env var, marked sensitive | **Never** in client code — CLAUDE.md hard rule |
 | `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) | Pulumi → Vercel env var, marked sensitive | LLM calls happen server-side / in the agent, never from the browser |
-| `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | Local + CI only (Этап 7) | Not needed by the deployed Next.js app itself |
+| `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | Local + CI only (Stage 7) | Not needed by the deployed Next.js app itself |
 
 ## Deploy sequence
 
@@ -118,7 +118,7 @@ Equivalent Makefile targets to be added alongside the `infra/` program
 (`make infra-preview`, `make infra-up`, `make infra-destroy`) — not added
 yet because there is no `infra/` program for them to call; adding
 non-functional targets ahead of the code they drive would just be dead
-config. Wire them in during the Этап 1/2 implementation pass, same as the
+config. Wire them in during the Stage 1/2 implementation pass, same as the
 app-level targets.
 
 ## CI

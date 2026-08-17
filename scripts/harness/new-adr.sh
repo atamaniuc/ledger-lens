@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # Scaffold a new ADR at .claude/adr/NNNN-<slug>.md per CLAUDE.md Phase 1 step 4.
+#
+# See also: .omc/skills/adr/SKILL.md — this script only scaffolds the four
+# section headings; the skill teaches what makes them worth reading later
+# (honest Consequences with real costs, Alternatives that were genuinely
+# considered, not strawmen). Skeleton and skill are kept in sync
+# deliberately — if you change one, change the other.
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
