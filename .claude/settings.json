@@ -1,0 +1,10 @@
+{
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "supabase@claude-plugins-official": true,
+    "codex@openai-codex": true,
+    "pulumi-neo@pulumi-skills": true
+  }
+}

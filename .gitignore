@@ -1,0 +1,22 @@
+.DS_Store
+*.log
+*.tmp
+
+.worktrees/
+.omc/logs/
+.omc/state/
+
+node_modules/
+dist/
+build/
+out/
+.next/
+
+.env
+.env.local
+
+.idea/
+.claude/settings.local.json
+
+# Personal interview-prep material — not part of the project deliverable.
+interview-preps/
