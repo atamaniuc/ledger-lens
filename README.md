@@ -2,7 +2,7 @@
 
 **AI copilot over financial data you can actually trust.**
 
-*Status: pre-implementation (Phase 0/1) · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
+*Status: Stage 1 of 7 done (Mock Provider) · Stage 2 (Ingestion & Transform) next · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
 
 ---
 
@@ -368,11 +368,29 @@ material, not part of this repository's tracked history or deliverable.
 
 ## Project status
 
-No application code yet. What exists today: the workflow rules, the full
-PRD across all seven stages, the complete database schema, the deployment
-plan, the meta-harness, and this documentation set — all push/deploy-ready
-at any point per [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)'s checklist.
+Two ways development is counted here, both explained in
+[`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md#roadmap-to-production)
+and tracked live in [`PROGRESS.md`](PROGRESS.md):
 
-Next: Phase 1 design for Stage 1 (Mock Provider), in progress via
-`/superpowers:brainstorming`, currently paused on a project-layout
-decision (standalone Next.js app now vs. deferred to Stage 4).
+- **Workflow phases** (per stage): Phase 0 (PRD) → Phase 1 (Design + ADR)
+  → Phase 2 (plan + code). Applies fresh to each stage below.
+- **Build stages** (the actual work, 7 total, see
+  [Business processes](#business-processes)): sequential, Stage *N*
+  depends on Stage *N-1* shipping first.
+
+**Where things stand — Stage 1 of 7 done:**
+
+- ✅ **Setup** — project layout decided ([ADR 0002](.claude/adr/0002-project-layout-single-next-js-app-no-monorepo.md)),
+  Next.js app scaffolded, Supabase initialized.
+- ✅ **Stage 1 — Mock Provider** — done, Definition of Done passed. Seven
+  chaos flags, deterministic under seed, reviewed via `make codex-review`.
+- ⬜ **Stage 2 — Ingestion & Transform** — next up. First stage that
+  writes to real Postgres tables — every table gets RLS enabled in the
+  same migration that creates it.
+- ⬜ Stages 3–6 — not started.
+- ⬜ Stage 7 (Stretch) — optional, independent of the production bar.
+
+Full per-stage checklist and per-agent tracking: [`PROGRESS.md`](PROGRESS.md).
+That file is the single source of truth for current stage — this section
+and the status badge above just need to stay consistent with it (see
+`CLAUDE.md`'s Definition of Done, item 8).

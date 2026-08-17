@@ -89,6 +89,7 @@ Task not done until:
 5. `tasks.md` item checked off, `.claude/DESIGN.md` updated if scope drifted from plan.
 6. No secrets, no `service_role` key, in diff.
 7. Architecture decision changed mid-task? New ADR, don't silently edit an old one — supersede it (`Status: Superseded by NNNN`).
+8. Status docs synced with the new state, same commit — three places, not one: `PROGRESS.md`'s `## Current status` section, `README.md`'s status badge (line 5) + `## Project status` section, and `docs/PROJECT_OVERVIEW.md`'s `## Where things stand` section. `PROGRESS.md` is the single source of truth for what stage is active; the other two just need to stop contradicting it.
 
 ## Frontend: Design System & Storybook
 - Any new dashboard UI (metrics tile, freshness badge, lineage drill-down, chart) → `designer` agent, not ad-hoc component code.

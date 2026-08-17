@@ -244,7 +244,8 @@ sequenceDiagram
   and the "Project Layout" section in [`.claude/DESIGN.md`](../.claude/DESIGN.md).
   App scaffolded, dependencies installed, build verified, `supabase init`
   done.
-- **Code:** Stage 1 (Mock Provider) in progress.
+- **Code:** Stage 1 (Mock Provider) — done, Definition of Done passed.
+  Stage 2 (Ingestion & Transform) next.
 - **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo
   root — a kanban-style board tracking every stage from here to Definition
   of Done, plus which agent/harness role did each step.
@@ -260,6 +261,9 @@ sequenceDiagram
    fork) → `/omc-plan --consensus` → `tasks.md` → worktree + Delegation
    Ladder → Definition of Done → merge. Stage 4 and Stage 5 route through
    `--architect codex --critic codex` (auth/RLS/agent-surface changes).
+   **Stage 1 (Mock Provider): done**, DoD passed — see
+   [`PROGRESS.md`](../PROGRESS.md). Stage 2 (Ingestion & Transform) next;
+   Stages 3–6 not started.
 3. **First live deploy — at Stage 4.** `infra/` (Pulumi) gets built here,
    not before: this is the first point there's a real app + schema worth
    standing up. `pulumi up` runs for the first time at this stage.
