@@ -12,6 +12,16 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Parallel-agent git worktrees (CLAUDE.md "Parallel Execution").
+    // Each one carries its own node_modules and .next build output; the
+    // default ignores above only match those at the repo root, so without
+    // this `bun run lint` reports hundreds of errors from generated code
+    // in sibling worktrees and stops being a usable gate.
+    ".worktrees/**",
+    // Deno Edge Functions — npm: specifiers, Deno globals, and .ts import
+    // extensions don't parse under the Next.js app's config. Excluded from
+    // tsconfig.json for the same reason; check them with `deno check`.
+    "supabase/functions/**",
   ]),
 ]);
 
