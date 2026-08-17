@@ -31,9 +31,21 @@ type DataFlags = Pick<ChaosFlags, "duplicates" | "schemaDrift" | "nullFields" | 
 
 function buildInvoice(index: number, rand: () => number, flags: DataFlags): RawInvoice {
   const amount = Math.round((5 + rand() * 5000) * 100) / 100;
+  // Every draw is consumed unconditionally, and the flag gates only whether
+  // its *result* is applied. Short-circuiting (`flags.nullFields && rand() <
+  // 0.08`) skips the draw when the flag is off, which shifts the PRNG stream
+  // for every record after it — so the same seed produced different amounts
+  // depending on which flags were set. That broke two things at once: the
+  // PRD's "deterministic under a fixed seed" claim for this stage, and Stage
+  // 3's reconciliation, which compares the ingested total against /summary
+  // (computed with duplicates forced off). With the streams diverging,
+  // reconciliation drift could never reach zero no matter how correct the
+  // pipeline was.
+  const nullRoll = rand();
+  const futureRoll = rand();
   const drifted = flags.schemaDrift && index >= SCHEMA_DRIFT_INDEX;
-  const nulled = flags.nullFields && rand() < 0.08;
-  const future = flags.futureDates && rand() < 0.03;
+  const nulled = flags.nullFields && nullRoll < 0.08;
+  const future = flags.futureDates && futureRoll < 0.03;
 
   const issuedDate = new Date();
   const offsetDays = future ? -Math.floor(1 + rand() * 30) : Math.floor(rand() * 180);
@@ -63,7 +75,11 @@ export function generateDataset(flags: DataFlags, seed: number = DEFAULT_SEED): 
     // ~5% repeat rate: reinsert the record just produced. This is what
     // makes the reconciliation-drift demo (Stage 3) possible — a naive
     // consumer that doesn't dedupe will overstate its total.
-    if (flags.duplicates && rand() < 0.05) {
+    //
+    // Draw first, then check the flag — same reason as in buildInvoice: a
+    // short-circuited draw desynchronizes the stream for every later record.
+    const duplicateRoll = rand();
+    if (flags.duplicates && duplicateRoll < 0.05) {
       invoices.push({ ...invoice });
     }
   }

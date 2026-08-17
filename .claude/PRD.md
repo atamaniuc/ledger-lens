@@ -113,7 +113,7 @@ No UI — this is an API-only test double. No screens/states.
 
 ## Ingestion & Transform
 
-**Status:** Draft
+**Status:** Approved — implemented and verified in Stage 2. Acceptance criteria above were amended during that stage: the review pass found the original US-03 wording specified an idempotency key without `org_id` (a spec defect, not just an implementation one) and that US-01/US-04 were under-specified about cursor terminal values and non-Zod write failures. See ADR 0004 and `.claude/DESIGN.md`.
 **Participants:** Solo project
 **Timeline:** Stage 2
 
@@ -143,11 +143,11 @@ Zero silent drops — every raw record ends up in either `invoices` or `quaranti
 
 | ID | User Story | Priority | Acceptance Criteria |
 |---|---|---|---|
-| US-01 | As the pipeline, I want cursor-based incremental pulls, so a re-run picks up where the last one left off. | P0 | Cursor stored in `pipeline_runs.cursor_to`; next run resumes from it, not from scratch. |
-| US-02 | As the pipeline under provider outage, I want retry with backoff and a circuit breaker, so transient failures don't cascade into a stuck job. | P0 | Exponential backoff + jitter; honors `Retry-After`; circuit breaker opens after 5 consecutive failures, reason recorded on `pipeline_runs.error`. |
-| US-03 | As the reconciliation check, I want ingestion to be idempotent, so re-running never inflates the numbers. | P0 | Two identical runs → zero net new `raw_events` rows (`unique(source, external_id, event_version)` + `ON CONFLICT DO NOTHING`). |
-| US-04 | As a data consumer, I want invalid records quarantined instead of dropped, so nothing silently disappears. | P0 | Zod validation: valid → `invoices`; invalid → `quarantine` with populated `reason` and `raw_event_id` preserved. |
-| US-05 | As the provider, I want to push events instead of only being polled, so ingestion is genuinely event-driven. | P1 | Deno Edge Function webhook (`provider-webhook`) reuses the same transform code and idempotency guarantee as the polling path. |
+| US-01 | As the pipeline, I want cursor-based incremental pulls, so a re-run picks up where the last one left off. | P0 | Cursor stored in `pipeline_runs.cursor_to`; next run resumes from it, not from scratch. A drained dataset stores the offset past the last consumed record, never `null` — storing the provider's terminal `null` verbatim would make every subsequent run a full re-scan. Resume reads only `kind='incremental'` runs with a non-null cursor, so a cursorless webhook run can't reset it. |
+| US-02 | As the pipeline under provider outage, I want retry with backoff and a circuit breaker, so transient failures don't cascade into a stuck job. | P0 | Exponential backoff + jitter; honors `Retry-After` (delta-seconds; an HTTP-date form falls back to computed backoff rather than becoming a zero-delay retry); circuit breaker opens after 5 consecutive failures, reason recorded on `pipeline_runs.error`. A wall-clock budget ends the run cleanly before a serverless execution limit can abandon it mid-write. |
+| US-03 | As the reconciliation check, I want ingestion to be idempotent, so re-running never inflates the numbers. | P0 | Two identical runs → zero net new `raw_events` rows, via `unique(org_id, source, external_id, event_version)` + `ON CONFLICT DO NOTHING`. The key **must** include `org_id`: without it a second tenant's identical `external_id` conflicts with the first tenant's row and is silently discarded. A conflict counts as a duplicate only when the raw event also already has an `invoices` or `quarantine` row — one without either is an orphan from an interrupted run and gets completed, not skipped. |
+| US-04 | As a data consumer, I want invalid records quarantined instead of dropped, so nothing silently disappears. | P0 | Zod validation: valid → `invoices`; invalid → `quarantine` with populated `reason` and `raw_event_id` preserved. Applies to DB-level rejections too (a well-formed but impossible date, an over-length field), not just Zod failures — a single bad record never aborts the page. `rows_read = rows_written + rows_quarantined + rows_deduplicated` holds exactly on every run; an imbalance is a silent drop by definition. |
+| US-05 | As the provider, I want to push events instead of only being polled, so ingestion is genuinely event-driven. | P1 | Deno Edge Function webhook (`provider-webhook`) reuses the same transform code and idempotency guarantee as the polling path — the same `validateInvoice` and the same atomic `ingest_raw_event` call, not a parallel reimplementation. Writes `kind='webhook'` so it never interferes with the polling path's cursor resume. |
 
 ### Non-Functional Requirements & Constraints
 
@@ -155,11 +155,11 @@ Zero silent drops — every raw record ends up in either `invoices` or `quaranti
 
 **Localization:** N/A.
 
-**Security/Legal:** Same as project-wide — no secrets in client code, RLS on every table touched.
+**Security/Legal:** Same as project-wide — no secrets in client code, RLS on every table touched. Both ingestion entrypoints write with the service-role client (the pipeline acts as itself, not as an end user, so there is no user JWT for RLS to key off), which means both must authenticate their caller with a shared secret: `org_id` arrives in the request and would otherwise be an attacker-controlled tenant selector. `CLAUDE.md`'s "no cross-`org_id` query without explicit filter" is not satisfied by a filter the caller supplies.
 
 ### User Flow & Design
 
-No direct UI — background job. Observable indirectly via `pipeline_runs` rows surfaced on the Dashboard (Stage 4).
+No direct UI — background job. Observable indirectly via `pipeline_runs` rows surfaced on the Dashboard (Stage 4). Every run carries a `correlation_id` (accepted from the caller or generated) on both its log lines and its `pipeline_runs` row, per `CLAUDE.md`'s project-wide logging contract.
 
 ### Out of Scope
 

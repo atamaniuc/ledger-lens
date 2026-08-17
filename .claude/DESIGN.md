@@ -51,48 +51,141 @@ Layout itself isn't independently tested; validated indirectly by later stages a
 ## Ingestion & Transform
 
 **PRD:** `.claude/PRD.md` — "Ingestion & Transform" section (US-01..US-05).
-**ADR(s):** [0003](adr/0003-bounded-per-invocation-polling-ingestion-no-job-queue.md) — bounded per-invocation polling, no job queue.
+**ADR(s):** [0003](adr/0003-bounded-per-invocation-polling-ingestion-no-job-queue.md) — bounded per-invocation polling, no job queue. [0002](adr/0002-project-layout-single-next-js-app-no-monorepo.md) — why the Deno function imports shared TypeScript by relative path.
 
 **Overview:**
 
 One polling ingestion path (Next.js API route) and one push path (Deno
-webhook Edge Function) both funnel through the same transform module, so
-idempotency and validation are proven once and reused, not reimplemented
-twice — the exact requirement in US-05.
+webhook Edge Function). Both authenticate their caller, both call the same
+`validateInvoice`, and both write through the same atomic Postgres function
+— so idempotency and validation are proven once and reused, not
+reimplemented twice, which is the actual requirement in US-05.
+
+This section was updated after implementation and review (Definition of
+Done item 5). The pre-implementation version had both paths issuing the
+raw-event insert and its downstream insert as two separate statements; the
+review pass showed that leaves unrecoverable orphans, so the write path
+moved into Postgres. Nothing else about the shape changed.
 
 **Components:**
 
-- `lib/ingestion/transform.ts` — pure functions, no I/O. `validateInvoice(raw): { ok: true, invoice } | { ok: false, reason }` (Zod schema against the mock provider's `RawInvoice` shape). Shared verbatim by both paths: the Next.js route imports it as a relative TS import; the Deno function imports the same file via a relative path per ADR 0002 (Deno resolves local `.ts` imports natively, no build step needed).
-- `lib/ingestion/backoff.ts` — `withRetry(fn, opts)`: exponential backoff + jitter, honors `Retry-After` when the mock provider returns 429, and a simple consecutive-failure counter the caller uses to trip its own circuit breaker (breaker decision stays in the route/function, not hidden in this helper — keeps the retry primitive reusable and boring).
-- `app/api/ingestion/run/route.ts` — `POST`. Reads the last succeeded run's `pipeline_runs.cursor_to` as `cursor_from`; loops pages up to `MAX_PAGES_PER_RUN`; per page: fetch (via `withRetry`) -> for each raw record, `INSERT ... ON CONFLICT (source, external_id, event_version) DO NOTHING RETURNING id` into `raw_events` -> if a row came back (genuinely new), run it through `transform.ts` -> `invoices` on success, `quarantine` (with `reason`) on failure; if no row came back (conflict = already ingested), skip transform entirely — that's the idempotency guarantee, not a re-derivation of it. Writes a `pipeline_runs` row up front (`status=running`), updates it to `succeeded`/`failed` with counts and `cursor_to` on exit, including on circuit-breaker abort.
-- `supabase/functions/provider-webhook/index.ts` — Deno Edge Function. Verifies a shared-secret header (env var, not committed), parses one event payload matching the same `RawInvoice` shape, runs it through the identical `raw_events` insert + `transform.ts` + `invoices`/`quarantine` logic as the polling route. No pagination, no cursor — one event per call.
+- `lib/ingestion/transform.ts` — pure, no I/O. `validateInvoice(raw)` returns
+  `{ok: true, invoice}` or `{ok: false, reason, details}` (Zod against the mock
+  provider's `RawInvoice` shape). Shared verbatim: the Next.js route imports it
+  normally, the Deno function by relative path (ADR 0002, with
+  `supabase/functions/provider-webhook/deno.json` mapping the bare `zod`
+  specifier to `npm:zod` for the Edge Runtime).
+- `lib/ingestion/constants.ts` — `EVENT_VERSION`, `PIPELINE_VERSION`, and the
+  `IngestOutcome` type. `EVENT_VERSION` is part of the idempotency key, so the
+  two paths drifting on its value would create duplicate raw events for the
+  same record — the one thing this stage exists to prevent. Hardcoding it in
+  each path made that drift possible; a shared constant does not.
+- `lib/ingestion/cursor.ts` — cursor and breaker arithmetic as pure functions:
+  `nextCursorTo`, `parseCursor`, `parseRetryAfterMs`, `countersBalance`, plus
+  the `MAX_PAGES_PER_RUN`/`CONSECUTIVE_FAILURE_LIMIT` constants. Extracted
+  because the first implementation inlined all of it in the route handler,
+  where it was untestable without a live database — and three of the review’s
+  six defects lived in exactly that untested arithmetic.
+- `lib/ingestion/backoff.ts` — `withRetry(fn, opts)`: exponential backoff +
+  jitter, honors an explicit `Retry-After` (capped separately from the computed
+  backoff ceiling, since the provider's number can legitimately exceed it), and
+  requires that value to be *finite* — `??` alone lets `NaN` through, and
+  `setTimeout(cb, NaN)` fires at 1ms, turning a malformed header into a retry
+  storm. The breaker decision stays in the caller, not here.
+- `lib/ingestion/hash.ts` — `hashPayload` over `crypto.subtle`, a global in
+  both Node and Deno, so it needs no runtime-specific import.
+- `public.ingest_raw_event` (Postgres) — one atomic call per record: the
+  `raw_events` insert plus its `invoices` or `quarantine` counterpart in a
+  single transaction. Returns `written` / `quarantined` / `duplicate`. See
+  `docs/DATABASE_SCHEMA.md`’s "Write path" section.
+- `public.reap_abandoned_runs` (Postgres) — closes out runs stuck at
+  `running` because their invocation was killed. Called at the start of each
+  run; no scheduler to deploy (ADR 0003).
+- `app/api/ingestion/run/route.ts` — `POST`, shared-secret authenticated.
+  Reaps stale runs, resolves the resume cursor, opens a `pipeline_runs` row,
+  then loops pages up to `MAX_PAGES_PER_RUN` within a wall-clock budget,
+  calling `ingest_raw_event` per record. Closes the run row on every exit
+  path, including breaker abort and budget exhaustion.
+- `supabase/functions/provider-webhook/index.ts` — Deno Edge Function.
+  Shared-secret auth, full body validation *before* any write, one
+  `pipeline_runs` row with `kind='webhook'`, then the same
+  `ingest_raw_event` call. One event per request, no pagination, no cursor.
+- `supabase/functions/provider-webhook/simulate.sh` — asserts four cases
+  (accepted / deduplicated / quarantined / rejected) and exits non-zero on
+  mismatch. It is a gate, not a demo — see the testing plan below.
 
 **Data flow:**
 
 ```
-mock-provider /invoices --poll--> ingestion route --raw_events(insert, dedup)--> transform.ts --ok--> invoices
-                                                                              --fail--> quarantine
-mock-provider (push, simulated) --webhook--> provider-webhook --same raw_events/transform/invoices/quarantine path
+mock-provider /invoices --poll--> ingestion route --+
+                                                    |
+provider (push, simulated) --webhook--> Edge Fn ----+--> ingest_raw_event (one transaction)
+                                                            |
+                                            raw_events + (invoices | quarantine)
 ```
 
-Every write in both paths carries the owning `pipeline_runs.run_id` and the source `raw_events.id`, so `invoices`/`quarantine` rows are traceable back to the exact raw payload and pipeline run that produced them (lineage — see `docs/PROJECT_OVERVIEW.md`'s architecture diagram).
+Every write carries the owning `pipeline_runs.run_id` and the source
+`raw_events.id`, so any `invoices`/`quarantine` row traces back to the exact
+raw payload and run that produced it (the lineage drill-down Stage 4 needs).
+Every run also carries a `correlation_id` on both its log lines and its
+`pipeline_runs` row.
 
 **Error handling:**
 
-- Page fetch fails (network/5xx/429): `withRetry` backs off and retries; 5 consecutive failures trip the circuit breaker, the run aborts with `status=failed`, `error` populated, `cursor_to` left at the last page that fully succeeded — never advanced past a page that wasn't fully written.
-- Record fails Zod validation: never dropped, never blocks the page — goes to `quarantine` with a `reason`, page processing continues. This is US-04's whole point.
-- Webhook auth failure (missing/wrong shared secret): `401`, nothing written, no `pipeline_runs` row created for a rejected call (nothing happened, nothing to record).
-- Duplicate delivery (either path): `ON CONFLICT DO NOTHING` on `raw_events` makes re-delivery a no-op past that point — this is what US-03's idempotency claim actually rests on.
+- Page fetch fails: `withRetry` backs off; 5 consecutive page-level failures
+  trip the breaker, the run ends `failed` with `error` populated, and
+  `cursor_to` stays at the last page that was fully written — a failed page is
+  retried at the same cursor, never skipped.
+- Record fails validation: quarantined with a reason, page continues (US-04).
+- Record fails to *write* (a date Zod accepts but Postgres rejects, an
+  over-length field, a transient error): also quarantined, with
+  `raw_event_id: null` because the atomic call rolled back. The page still
+  continues; 5 consecutive record failures abort the run. Previously any such
+  error killed the whole run, which contradicted US-04.
+- Duplicate delivery, either path: `ON CONFLICT DO NOTHING` inside
+  `ingest_raw_event` makes it a no-op — but only when the raw event already
+  has a downstream row. Otherwise it is an orphan and gets completed.
+- Wall-clock budget exceeded: run ends `succeeded` with its cursor persisted,
+  so the next invocation continues. Bounded work, not a failure (ADR 0003).
+- Webhook auth failure or malformed body: `401`/`400`, nothing written, no
+  `pipeline_runs` row — nothing happened, nothing to record.
+- Unauthenticated polling trigger: `401` before any DB access.
 
 **Testing plan:**
 
-- Idempotency: run the ingestion route twice against identical mock-provider output (chaos flags off for this test — determinism matters more than chaos here), assert zero net new `raw_events` rows on the second run. This is the PRD's own North Star metric, not just a nice-to-have test.
-- Quarantine: force `nullFields`/`schemaDrift` chaos on, assert every record lands in either `invoices` or `quarantine`, never neither, and `quarantine.reason` is non-empty.
-- Circuit breaker: point the route at a URL that always 500s, assert it aborts after exactly 5 consecutive failures and `pipeline_runs.status = failed`.
-- Webhook: POST one valid + one invalid event, assert the same `invoices`/`quarantine` outcome the polling path would produce for the same payload — proving actual code reuse, not just similar behavior.
+- Unit (`bun test`, 21 tests): cursor arithmetic including the drained-dataset
+  case that shipped broken; `Retry-After` parsing including the HTTP-date form;
+  backoff clamping and the `NaN` guard; the counter-balance invariant;
+  `validateInvoice` accepting schema drift and rejecting null customers.
+- Postgres-level, verified against the live project: new event written; same
+  event re-ingested returns `duplicate`; **a second tenant's identical
+  `external_id` is written, not discarded**; invalid event quarantined; an
+  orphaned raw event completed rather than skipped; zero orphans left behind.
+  This is the evidence behind US-03’s North Star metric.
+- `simulate.sh` for the webhook path, asserting outcomes.
+- Not covered: the route handler end-to-end (needs
+  `SUPABASE_SERVICE_ROLE_KEY`, absent in the build environment) and
+  `deno check` (Deno not installed). `make check` runs everything that is
+  available and says out loud what it skipped, rather than reporting a clean
+  pass over a gap.
 
 **Open questions / risks:**
 
-- The mock provider (Stage 1) only exposes a pull API — it does not itself push to the webhook. `provider-webhook` is proven with directly-POSTed test payloads, documented as "how a real provider would call it," not driven end-to-end by the mock provider. Extending Stage 1 to actually push is out of scope for Stage 2 (would be scope drift into Stage 1) — flag if a future stage needs it.
-- No cross-invocation lock yet (see ADR 0003 consequences) — fine at today's single-tenant manual-trigger volume, revisit before Stage 4's cron is live alongside manual triggers.
+- No generated Supabase types, so `supabase.rpc()` returns `{}` and the
+  outcome shape is a hand-written interface (`IngestOutcome`). Generating them
+  would be genuinely better typed, but adds a large file that can silently
+  drift from the schema with no CI to catch it. Revisit when CI exists.
+- No cross-invocation lock. Two overlapping runs for one `org_id` would both
+  advance from the same cursor. Harmless today (single tenant, manual
+  trigger); needs an advisory lock before Stage 4’s cron can fire alongside a
+  manual trigger.
+- The mock provider still cannot push, so the webhook is proven by
+  `simulate.sh` rather than driven end-to-end. Extending Stage 1 to push would
+  be scope drift into a finished stage.
+- The `expiredToken` chaos flag is now survivable rather than fatal: the route
+  rotates its Bearer token on a 401. The flag is still exercised (the 401 does
+  happen and is logged) but no longer fails a run — a deliberate choice, since
+  a real client refreshes its token. Noted because `CLAUDE.md` forbids
+  softening mock-provider failure modes to make the pipeline pass, and this is
+  the closest call in this stage.
 

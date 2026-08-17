@@ -51,16 +51,26 @@ create table pipeline_runs (
   id           uuid primary key default gen_random_uuid(),
   org_id       uuid not null references orgs(id),
   source       text not null,
-  kind         text not null check (kind in ('incremental','full','backfill')),
+  -- 'webhook' is distinct from 'incremental' on purpose: the polling path
+  -- resumes from the newest succeeded *incremental* run's cursor_to, and a
+  -- cursorless webhook run counted as one would reset it to the beginning.
+  kind         text not null
+               check (kind in ('incremental','full','backfill','webhook')),
   started_at   timestamptz not null default now(),
   finished_at  timestamptz,
   status       text not null default 'running'
                check (status in ('running','succeeded','failed')),
   cursor_from  text,
   cursor_to    text,
-  rows_read    int default 0,
-  rows_written int default 0,
-  rows_quarantined int default 0,
+  rows_read    int not null default 0,
+  rows_written int not null default 0,
+  rows_quarantined int not null default 0,
+  -- Records that were already ingested. Without this column the identity
+  -- rows_read = written + quarantined + deduplicated doesn't hold, and
+  -- "every raw record ends up somewhere" can't be checked from this table —
+  -- which is exactly how a silent-drop bug stayed invisible.
+  rows_deduplicated int not null default 0,
+  correlation_id text,
   error        text
 );
 ```
@@ -82,8 +92,17 @@ create table raw_events (
   payload_hash  text not null,
   run_id        uuid not null references pipeline_runs(id),
   ingested_at   timestamptz not null default now(),
-  -- THIS is the idempotency guarantee
-  unique (source, external_id, event_version)
+  -- THIS is the idempotency guarantee — and org_id is part of it.
+  --
+  -- An earlier version of this schema omitted org_id here, which shipped
+  -- and had to be corrected in a follow-up migration. The failure was
+  -- silent and total: a second tenant ingesting the same external_id from
+  -- the same source conflicted with the first tenant's row, ON CONFLICT DO
+  -- NOTHING discarded it, and the run reported success with an empty
+  -- invoices table. Note the asymmetry that gave it away — `invoices` was
+  -- already `unique (org_id, external_id)`; nothing else in this schema
+  -- treats external_id as globally unique.
+  unique (org_id, source, external_id, event_version)
 );
 ```
 
@@ -289,6 +308,38 @@ once per statement instead of re-evaluating per row.
 **Verification (Definition of Done item 4):** query as a user who is *not*
 a member of the target `org_id` and confirm the result set is empty — not
 an error, not another org's masked data, empty.
+
+---
+
+## Write path: `ingest_raw_event`
+
+Both ingestion entrypoints (the polling route and the `provider-webhook`
+Edge Function) write through one `plpgsql` function rather than issuing the
+`raw_events` insert and its `invoices`/`quarantine` counterpart as separate
+statements. Full definition in
+`supabase/migrations/20260817143416_stage2_pin_ingest_raw_event_search_path.sql`.
+
+Why it exists: as two round-trips, a failure between them left a
+`raw_events` row with no downstream row. Since idempotency was keyed on
+"does a raw event exist", the retry that should have healed that gap was
+the thing that permanently closed it — and reported success. Inside one
+function the two writes are one transaction, so a failure rolls back both
+and no orphan can be created. The conflict path also checks for a
+downstream row, so an orphan left by an earlier run gets completed instead
+of skipped.
+
+Validation stays in TypeScript (`lib/ingestion/transform.ts`, shared
+verbatim by both paths per ADR 0002) — the function receives an
+already-decided outcome and does not reimplement the Zod schema in SQL.
+
+`reap_abandoned_runs` (same migration series) closes out `pipeline_runs`
+rows stuck at `status='running'` because a serverless invocation was killed
+before it could close its own row. Called at the start of each run, so
+staleness is bounded by run frequency without deploying a scheduler.
+
+Both functions are `SECURITY INVOKER` with `search_path` pinned to `''`,
+and `EXECUTE` is revoked from `public`/`anon`/`authenticated` — only the
+pipeline's service-role client calls them.
 
 ---
 

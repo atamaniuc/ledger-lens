@@ -12,6 +12,7 @@ dist/
 build/
 out/
 .next/
+tsconfig.tsbuildinfo
 
 .env
 .env.local

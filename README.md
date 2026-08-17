@@ -2,7 +2,7 @@
 
 **AI copilot over financial data you can actually trust.**
 
-*Status: Stage 1 of 7 done (Mock Provider) · Stage 2 (Ingestion & Transform) next · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
+*Status: Stages 1–2 of 7 done (Mock Provider, Ingestion & Transform) · Stage 3 (Data Quality & Reconciliation) next · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
 
 ---
 
@@ -52,7 +52,7 @@ time:
 | Feature | Why it matters |
 |---|---|
 | **A mock provider that fights back** | Not a static fixture — it deliberately sends duplicate events, drifts its schema mid-stream, expires tokens, and returns 429s/500s on a schedule. Idempotency, retries, and schema tolerance are *proven*, not asserted. |
-| **Reconciliation before/after artifact** | The centerpiece: before idempotency, duplicate events cause a measurable overstatement against the provider's own independent summary total. After the fix, drift is exactly zero. One real number beats a paragraph of claims. |
+| **Reconciliation before/after artifact** | The centerpiece, and now measured: duplicate events overstate the total by **1,389,015 cents (+2.65%)** against the provider's own independent summary; the shipped idempotent pipeline lands on **exactly 0**. Capturing it also exposed a determinism bug that had made zero drift unreachable — [the full write-up](docs/RECONCILIATION_BASELINE.md) is more interesting than the number. |
 | **Prompt-injection containment, not prevention** | A poisoned document lives in the RAG corpus on purpose. The agent can't cause harm not because it was told not to, but because the only write-adjacent tool it has *drafts* an email and nothing ever sends one. The attempt is still fully audited. |
 | **Lineage drill-down** | Click any dashboard number and see exactly which raw records, which pipeline run, and which source produced it — down to the raw payload. Rare in portfolio projects, immediately convincing in a demo. |
 | **Hybrid retrieval with Reciprocal Rank Fusion** | Vector search (pgvector/HNSW) and full-text search combined by RRF, not just one or the other — named and demonstrated, not just mentioned. |
@@ -378,16 +378,22 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   [Business processes](#business-processes)): sequential, Stage *N*
   depends on Stage *N-1* shipping first.
 
-**Where things stand — Stage 1 of 7 done:**
+**Where things stand — Stages 1–2 of 7 done:**
 
 - ✅ **Setup** — project layout decided ([ADR 0002](.claude/adr/0002-project-layout-single-next-js-app-no-monorepo.md)),
   Next.js app scaffolded, Supabase initialized.
-- ✅ **Stage 1 — Mock Provider** — done, Definition of Done passed. Seven
-  chaos flags, deterministic under seed, reviewed via `make codex-review`.
-- ⬜ **Stage 2 — Ingestion & Transform** — next up. First stage that
-  writes to real Postgres tables — every table gets RLS enabled in the
-  same migration that creates it.
-- ⬜ Stages 3–6 — not started.
+- ✅ **Stage 1 — Mock Provider** — done. Seven chaos flags, deterministic
+  under seed.
+- ✅ **Stage 2 — Ingestion & Transform** — done. Polling route + webhook
+  Edge Function sharing one transform and one atomic write path
+  ([ADR 0003](.claude/adr/0003-bounded-per-invocation-polling-ingestion-no-job-queue.md),
+  [ADR 0004](.claude/adr/0004-atomic-single-record-ingest-in-postgres-not-two-client-round-trips.md)).
+  Schema live with RLS on every table from the migration that created it.
+  **Reconciliation baseline banked:** drift +2.65% before idempotency,
+  exactly 0 after — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md).
+- ⬜ **Stage 3 — Data Quality & Reconciliation** — next up. The project's
+  actual differentiator; its headline input is already measured.
+- ⬜ Stages 4–6 — not started.
 - ⬜ Stage 7 (Stretch) — optional, independent of the production bar.
 
 Full per-stage checklist and per-agent tracking: [`PROGRESS.md`](PROGRESS.md).

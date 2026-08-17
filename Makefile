@@ -1,4 +1,4 @@
-.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review
+.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check
 
 # Usage: make adr TITLE="cursor-based ingestion resume"
 adr:
@@ -38,3 +38,21 @@ codex-critic:
 # Usage: make codex-review [REF=main]
 codex-review:
 	@scripts/harness/codex-review.sh $(REF)
+
+# The Definition of Done's "tests pass" gate, in one command.
+check:
+	bun run typecheck
+	bun run lint
+	bun test
+	@$(MAKE) --no-print-directory deno-check
+
+# supabase/functions/ is excluded from tsconfig.json and eslint (Deno
+# runtime: npm: specifiers, Deno globals, .ts import extensions), so
+# `bun run typecheck` does not cover it. This is the compensating gate —
+# without it those files would be checked by nothing at all.
+deno-check:
+	@if command -v deno >/dev/null 2>&1; then \
+		deno check --allow-import supabase/functions/provider-webhook/index.ts; \
+	else \
+		echo "deno not installed — supabase/functions/ went unchecked. Install Deno to close this gap: https://deno.land"; \
+	fi

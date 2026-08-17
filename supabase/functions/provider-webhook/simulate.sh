@@ -3,10 +3,15 @@ set -euo pipefail
 
 # Proves provider-webhook end-to-end without the mock provider (Stage 1
 # only exposes a pull API — see .claude/DESIGN.md's "Open questions /
-# risks"). POSTs one valid event and one invalid event (null customer,
-# triggers Zod's nullFields-style failure in lib/ingestion/transform.ts)
-# against a locally-served function, documented as "how a real provider
-# would call it."
+# risks"). Asserts, rather than just printing: this is the gate that backs
+# DESIGN's testing-plan item "proving actual code reuse, not just similar
+# behavior", so it exits non-zero when an outcome doesn't match.
+#
+# Cases, in order:
+#   1. valid event            -> succeeded  (invoices row)
+#   2. same event redelivered -> duplicate  (US-03 idempotency, no new row)
+#   3. null customer          -> quarantined (US-04, never dropped)
+#   4. wrong secret           -> 401, nothing written
 #
 # Prereqs:
 #   supabase functions serve provider-webhook --env-file supabase/.env.local
@@ -19,44 +24,79 @@ FUNCTION_URL="${FUNCTION_URL:-http://127.0.0.1:54321/functions/v1/provider-webho
 WEBHOOK_SHARED_SECRET="${WEBHOOK_SHARED_SECRET:?set WEBHOOK_SHARED_SECRET}"
 ORG_ID="${ORG_ID:?set ORG_ID to an existing orgs.id}"
 
-echo "== valid event =="
-curl -sS -X POST "$FUNCTION_URL" \
-  -H "content-type: application/json" \
-  -H "x-webhook-secret: $WEBHOOK_SHARED_SECRET" \
-  -d "{
-    \"org_id\": \"$ORG_ID\",
-    \"source\": \"mock-provider\",
-    \"event\": {
-      \"external_id\": \"inv-webhook-001\",
-      \"customer\": \"Acme Corp\",
-      \"amount\": 4999,
-      \"currency\": \"USD\",
-      \"status\": \"open\",
-      \"issued_at\": \"2026-08-15\"
-    }
-  }" | tee /dev/stderr
-echo
+# Fresh external_id per invocation, so case 1 is genuinely new and case 2 is
+# genuinely a redelivery of it — a fixed id would make case 1 report
+# "duplicate" on the second run of this script.
+RUN_TAG="$(date +%s)"
+FAILURES=0
 
-echo "== invalid event (null customer, quarantined not dropped) =="
-curl -sS -X POST "$FUNCTION_URL" \
-  -H "content-type: application/json" \
-  -H "x-webhook-secret: $WEBHOOK_SHARED_SECRET" \
-  -d "{
-    \"org_id\": \"$ORG_ID\",
-    \"source\": \"mock-provider\",
-    \"event\": {
-      \"external_id\": \"inv-webhook-002\",
-      \"customer\": null,
-      \"amount\": 1500,
-      \"currency\": \"USD\",
-      \"status\": \"open\",
-      \"issued_at\": \"2026-08-15\"
-    }
-  }" | tee /dev/stderr
-echo
+post() {
+  local secret="$1" payload="$2"
+  curl -sS -o /tmp/webhook-body.$$ -w '%{http_code}' -X POST "$FUNCTION_URL" \
+    -H "content-type: application/json" \
+    -H "x-webhook-secret: $secret" \
+    -d "$payload"
+}
 
-echo "== auth failure (wrong secret, 401, nothing written) =="
-curl -sS -o /dev/null -w "HTTP %{http_code}\n" -X POST "$FUNCTION_URL" \
-  -H "content-type: application/json" \
-  -H "x-webhook-secret: wrong-secret" \
-  -d "{\"org_id\": \"$ORG_ID\", \"event\": {}}"
+expect() {
+  local label="$1" want_status="$2" want_fragment="$3" got_status="$4"
+  local body
+  body="$(cat /tmp/webhook-body.$$)"
+  if [ "$got_status" != "$want_status" ] || ! grep -q "$want_fragment" <<<"$body"; then
+    echo "FAIL  $label"
+    echo "      want HTTP $want_status containing '$want_fragment'"
+    echo "      got  HTTP $got_status: $body"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "PASS  $label  ($body)"
+  fi
+}
+
+valid_event() {
+  cat <<EOF
+{
+  "org_id": "$ORG_ID",
+  "source": "mock-provider",
+  "event": {
+    "external_id": "inv-webhook-$RUN_TAG",
+    "customer": "Acme Corp",
+    "amount": 4999,
+    "currency": "USD",
+    "status": "open",
+    "issued_at": "2026-08-15"
+  }
+}
+EOF
+}
+
+invalid_event() {
+  cat <<EOF
+{
+  "org_id": "$ORG_ID",
+  "source": "mock-provider",
+  "event": {
+    "external_id": "inv-webhook-$RUN_TAG-bad",
+    "customer": null,
+    "amount": 1500,
+    "currency": "USD",
+    "status": "open",
+    "issued_at": "2026-08-15"
+  }
+}
+EOF
+}
+
+expect "valid event accepted"           200 '"status":"succeeded"'   "$(post "$WEBHOOK_SHARED_SECRET" "$(valid_event)")"
+expect "redelivery deduplicated"        200 '"status":"duplicate"'   "$(post "$WEBHOOK_SHARED_SECRET" "$(valid_event)")"
+expect "null customer quarantined"      200 '"status":"quarantined"' "$(post "$WEBHOOK_SHARED_SECRET" "$(invalid_event)")"
+expect "wrong secret rejected"          401 'unauthorized'           "$(post "wrong-secret" "$(valid_event)")"
+
+rm -f /tmp/webhook-body.$$
+
+if [ "$FAILURES" -gt 0 ]; then
+  echo
+  echo "$FAILURES case(s) failed."
+  exit 1
+fi
+echo
+echo "All 4 cases passed."

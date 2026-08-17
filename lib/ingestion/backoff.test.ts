@@ -39,4 +39,69 @@ describe("withRetry", () => {
       globalThis.setTimeout = originalSetTimeout;
     }
   });
+
+  test("an explicit Retry-After is honored past maxDelayMs but capped at maxRetryAfterMs", async () => {
+    const delays = await captureDelays(async () => {
+      let calls = 0;
+      await withRetry(
+        async () => {
+          calls++;
+          if (calls === 1) throw new RetryableError("rate limited", 60_000);
+          return "ok";
+        },
+        { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 5, maxRetryAfterMs: 30_000 },
+      );
+    });
+    // Not clamped down to maxDelayMs (5) — US-02 requires honoring the
+    // provider's number — but not unbounded either.
+    expect(delays[0]).toBe(30_000);
+  });
+
+  test("a NaN retryAfterMs falls back to computed backoff, never a 1ms spin", async () => {
+    const delays = await captureDelays(async () => {
+      let calls = 0;
+      await withRetry(
+        async () => {
+          calls++;
+          // What `Number(<HTTP-date Retry-After>)` produces. `?? ` would let
+          // this through, and setTimeout coerces NaN to 1ms — a retry storm
+          // against a provider that just asked us to back off.
+          if (calls === 1) throw new RetryableError("rate limited", Number.NaN);
+          return "ok";
+        },
+        { maxAttempts: 2, baseDelayMs: 100, maxDelayMs: 5000 },
+      );
+    });
+    expect(Number.isNaN(delays[0])).toBe(false);
+    expect(delays[0]).toBeGreaterThanOrEqual(100);
+  });
+
+  test("computed backoff never exceeds maxDelayMs once jitter is added", async () => {
+    const delays = await captureDelays(async () => {
+      await withRetry(
+        async () => {
+          throw new RetryableError("always fails");
+        },
+        { maxAttempts: 4, baseDelayMs: 1000, maxDelayMs: 1200 },
+      ).catch(() => undefined);
+    });
+    for (const delay of delays) expect(delay).toBeLessThanOrEqual(1200);
+  });
 });
+
+/** Runs `fn` with setTimeout stubbed so requested delays are recorded, not waited on. */
+async function captureDelays(fn: () => Promise<void>): Promise<number[]> {
+  const delays: number[] = [];
+  const originalSetTimeout = globalThis.setTimeout;
+  // @ts-expect-error - stub setTimeout to capture requested delays without waiting
+  globalThis.setTimeout = (cb: () => void, ms: number) => {
+    delays.push(ms);
+    return originalSetTimeout(cb, 0);
+  };
+  try {
+    await fn();
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+  return delays;
+}
