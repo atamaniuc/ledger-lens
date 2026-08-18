@@ -13,6 +13,11 @@ import {
   parseRetryAfterMs,
 } from "@/lib/ingestion/cursor";
 import type { RawInvoice } from "@/lib/mock-provider/data";
+import {
+  fetchProviderSummary,
+  runChecks,
+  type RunChecksOutcome,
+} from "@/lib/data-quality/run-checks";
 
 // Route-level integration testing (idempotency, circuit breaker) needs
 // SUPABASE_SERVICE_ROLE_KEY in .env.local — not available in the
@@ -306,6 +311,33 @@ export async function POST(req: NextRequest) {
   const status: "succeeded" | "failed" = abortReason ? "failed" : "succeeded";
   await closeRun(status, abortReason);
 
+  // Stage 3, US-05: every run gets a data-quality verdict, without a
+  // scheduler to deploy. Deliberately after closeRun — the checks read
+  // pipeline_runs.rows_written, so they need the closed-out numbers, not the
+  // zeros the row still carried while the run was open.
+  //
+  // A failure here never fails the ingestion run. The data is already
+  // written and the counters are already persisted; losing the verdict is a
+  // gap in observability, not a corrupted ingest, and reporting the run as
+  // failed would be a lie that a retry would then act on.
+  let dataQuality: RunChecksOutcome | null = null;
+  if (status === "succeeded") {
+    try {
+      const summary = await fetchProviderSummary(baseUrl);
+      dataQuality = await runChecks(supabase, { orgId, runId, summary });
+      log("data_quality_checked", {
+        run_id: runId,
+        overall: dataQuality.overall,
+        complete: dataQuality.complete,
+      });
+    } catch (err) {
+      log("data_quality_failed", {
+        run_id: runId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const counters = { rowsRead, rowsWritten, rowsQuarantined, rowsDeduplicated };
   const balanced = countersBalance(counters);
   if (!balanced) {
@@ -329,5 +361,8 @@ export async function POST(req: NextRequest) {
     counters_balanced: balanced,
     pages_processed: pagesProcessed,
     error: abortReason,
+    // null when the run failed, or when the checks themselves could not run
+    // — distinguishable from a passing verdict, which is the point.
+    data_quality: dataQuality,
   });
 }

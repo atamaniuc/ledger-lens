@@ -2,7 +2,7 @@
 
 **AI copilot over financial data you can actually trust.**
 
-*Status: Stages 1–2 of 7 done (Mock Provider, Ingestion & Transform) · Stage 3 (Data Quality & Reconciliation) next · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
+*Status: Stages 1–3 of 7 done (Mock Provider, Ingestion & Transform, Data Quality & Reconciliation) · Stage 4 (Dashboard) next · Stack: Next.js · Supabase/Postgres · pgvector · Pulumi · Bun*
 
 ---
 
@@ -389,7 +389,7 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   [Business processes](#business-processes)): sequential, Stage *N*
   depends on Stage *N-1* shipping first.
 
-**Where things stand — Stages 1–2 of 7 done:**
+**Where things stand — Stages 1–3 of 7 done:**
 
 - ✅ **Setup** — project layout decided ([ADR 0002](.claude/adr/0002-project-layout-single-next-js-app-no-monorepo.md)),
   Next.js app scaffolded, Supabase initialized.
@@ -411,9 +411,17 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   the shell suite cannot, a real GoTrue sign-in, so RLS is exercised
   through a genuine JWT. Setup, curl recipes, and IDE database
   connection in [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
-- ⬜ **Stage 3 — Data Quality & Reconciliation** — next up. The project's
-  actual differentiator; its headline input is already measured.
-- ⬜ Stages 4–6 — not started.
+- ✅ **Stage 3 — Data Quality & Reconciliation** — done. Four checks
+  (freshness, volume, uniqueness, reconciliation) in one Postgres
+  function, one transaction, recorded per `run_id`, with a verdict
+  attached to every ingestion run ([ADR 0005](.claude/adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md)).
+  **Reconciliation drift measured live: exactly 0** — invoiced
+  47,942,632 + quarantined 4,475,029 = the provider's independent
+  52,417,661. Comparing against written invoices alone would report
+  −8.54% on a healthy pipeline; the check counts quarantined value
+  because quarantining a corrupt record is a visible outcome, not a loss.
+- ⬜ **Stage 4 — Dashboard (+ first `infra/` deploy)** — next up.
+- ⬜ Stages 5–6 — not started.
 - ⬜ Stage 7 (Stretch) — optional, independent of the production bar.
 
 Full per-stage checklist and per-agent tracking: [`PROGRESS.md`](PROGRESS.md).

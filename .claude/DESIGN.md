@@ -189,3 +189,125 @@ Every run also carries a `correlation_id` on both its log lines and its
   softening mock-provider failure modes to make the pipeline pass, and this is
   the closest call in this stage.
 
+## Data Quality & Reconciliation
+
+**PRD:** `.claude/PRD.md` — "Data Quality & Reconciliation" section (US-01..US-05).
+**ADR(s):** [0005](adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md) — one Postgres function for all four checks, and why reconciliation counts quarantined value.
+
+**Overview:**
+
+Four checks — freshness, volume, uniqueness, reconciliation — run as one
+Postgres function and write one `data_quality_results` row each, all inside a
+single transaction, keyed to the `pipeline_runs.run_id` they describe. The
+caller fetches the provider's independent `/summary` first and passes its
+numbers in; the function performs no I/O.
+
+The check worth arguing about is reconciliation. Comparing the provider's
+total against `sum(invoices.amount_cents)` reports an 8.54% shortfall on a
+pipeline behaving exactly as designed, because the twenty records the
+provider deliberately corrupts are correctly quarantined rather than written.
+Reconciliation therefore compares against *accounted* value — invoiced plus
+the amounts recoverable from quarantined records' original payloads — which
+lands on exactly zero and makes any nonzero result a real signal. ADR 0005
+has the numbers and the rejected alternatives.
+
+**Components:**
+
+- `public.run_data_quality_checks(p_org_id, p_run_id, p_provider_total_cents,
+  p_provider_invoice_count)` (Postgres) — computes all four checks and inserts
+  four `data_quality_results` rows in one transaction. `SECURITY INVOKER`,
+  `set search_path = ''`, `EXECUTE` granted to `service_role` only.
+- `lib/data-quality/constants.ts` — check names, result types, and
+  `worstStatus` (a run's verdict is the worst of its checks; one failure is
+  not averaged away by three passes). Deliberately **no thresholds**: the
+  design originally put the status arithmetic here as pure functions, which
+  would have meant two sources of truth for the same numbers with nothing
+  keeping them in sync. The numbers live where they are applied — in the
+  SQL function — and their boundary behaviour is asserted against the live
+  function in `scripts/smoke.sh 3`, including both edges of every band.
+- `lib/data-quality/run-checks.ts` — `fetchProviderSummary` and `runChecks`,
+  shared by the standalone route and the end of an ingestion run so the two
+  entry points cannot drift.
+- `app/api/data-quality/run/route.ts` — `POST`, shared-secret authenticated
+  the same way the ingestion trigger is. Fetches `/summary`, calls the
+  function, returns the four results.
+- The ingestion route calls the same endpoint's logic at the end of a
+  successful run, so US-05's "every run" holds without a scheduler.
+
+**Data flow:**
+
+```
+mock-provider /summary --+
+                         |
+pipeline_runs.run_id ----+--> run_data_quality_checks (one transaction)
+invoices / quarantine ---+              |
+raw_events --------------+     4 x data_quality_results
+```
+
+**Thresholds, and why these numbers:**
+
+| Check | pass | warn | fail |
+|---|---|---|---|
+| freshness | `now() - max(ingested_at) < 2h` | 2h–24h | > 24h, or no data at all |
+| volume | within ±50% of the trailing 7-day mean `rows_read` | ±50%–±80% | beyond ±80% |
+| uniqueness | zero duplicate `(org_id, external_id)` | — | any duplicate |
+| reconciliation | drift exactly 0, no unaccounted rows | \|drift\| ≤ 0.5% | otherwise, or any unaccounted row |
+
+Volume measures `rows_read`, not `rows_written`, and this was a correction
+made during implementation. The check asks whether an unexpectedly small or
+large batch arrived from upstream. A run that reads its usual 207 records
+and deduplicates every one of them is a healthy idempotent re-run — but it
+writes zero, so a `rows_written` baseline scored it at −100% and failed it.
+That is the false positive the PRD's counter-metric forbids, and it fired
+on the most ordinary thing this pipeline does.
+
+Two further abstentions, both for the same reason. Fewer than three prior
+succeeded runs reports `pass` with `details.reason = "insufficient_history"`
+rather than warning about a baseline that does not exist yet; a fresh
+database is healthy. And a check invocation with no `run_id` at all reports
+`pass` with `reason = "no_run_context"` — without a run there is no batch to
+size, and treating the absent run as a zero-row batch failed volume on every
+ad-hoc invocation.
+
+**Error handling:**
+
+- Provider `/summary` unreachable: the route returns 502 and writes nothing.
+  Three checks would have succeeded, but a `data_quality_results` set missing
+  its reconciliation row is worse than none — it reads as "reconciliation was
+  not configured" rather than "reconciliation could not run".
+- Called with a `run_id` that does not belong to `org_id`: the function raises
+  rather than silently scoping to the wrong tenant.
+- Called twice for the same `run_id`: rows accumulate. Results are a log, not
+  a current-state table; the dashboard reads the newest per `(run_id,
+  check_name)`.
+
+**Testing plan:**
+
+- Unit (`bun test`): threshold arithmetic including both boundaries of every
+  band, the sign of drift, and the insufficient-history case.
+- Postgres-level against the live local database: all four checks on a healthy
+  run (reconciliation must be exactly 0); a forced stale `ingested_at`; a
+  forced volume outlier; a quarantine row with a null `raw_event_id` driving
+  reconciliation to `fail`.
+- `scripts/smoke.sh 3` end-to-end, and a fourth Postman folder.
+- RLS: a non-member reads zero `data_quality_results` rows.
+
+**Open questions / risks:**
+
+- Reconciliation depends on `raw_events.payload` keeping a readable `amount`.
+  An upstream rename would make quarantined value unrecoverable and turn the
+  check red — arguably correct, but the failure would point here rather than
+  at the schema change.
+- The volume baseline is per `org_id` across succeeded runs, so a run that
+  legitimately reads nothing (drained cursor, nothing new upstream) still
+  drags the mean down. Less acute now that the measure is `rows_read`
+  rather than `rows_written`, but not gone. Worth watching once Stage 4's
+  cron fires on a schedule rather than on demand.
+- `uniqueness` cannot fail while `invoices` carries its
+  `unique (org_id, external_id)` constraint. Kept deliberately (ADR 0005) so
+  that a migration dropping the constraint does not silently take its
+  verification with it, and its `details` carry a non-tautological
+  observation — semantic duplicates under different `external_id`s — that is
+  reported but not enforced.
+
+

@@ -203,7 +203,8 @@ non-goals) in [`.claude/PRD.md`](../.claude/PRD.md), and per `CLAUDE.md`'s
 Phase 1, gets its own `.claude/DESIGN.md` section + ADR before code starts.
 Stage 3 (Data Quality & Reconciliation) is the project's actual
 differentiator — the before/after reconciliation-drift number is the
-strongest single artifact in the whole build.
+strongest single artifact in the whole build, and it is now measured live
+on every run rather than captured once by a script.
 
 ---
 
@@ -246,14 +247,18 @@ sequenceDiagram
   and the "Project Layout" section in [`.claude/DESIGN.md`](../.claude/DESIGN.md).
   App scaffolded, dependencies installed, build verified, `supabase init`
   done.
-- **Code:** Stages 1–2 done, Definition of Done passed on both. Stage 1
-  (Mock Provider) and Stage 2 (Ingestion & Transform: polling route +
-  webhook Edge Function, live Postgres schema with RLS, atomic write path
-  per ADR 0004). Stage 3 (Data Quality & Reconciliation) next.
+- **Code:** Stages 1–3 done, Definition of Done passed on each. Stage 1
+  (Mock Provider), Stage 2 (Ingestion & Transform: polling route + webhook
+  Edge Function, live Postgres schema with RLS, atomic write path per
+  ADR 0004), Stage 3 (Data Quality & Reconciliation: four checks in one
+  Postgres function per ADR 0005, recorded per `run_id`). Stage 4
+  (Dashboard, and the first `infra/` deploy) next.
 - **Reconciliation baseline captured:** +2.65% drift before idempotency,
   exactly 0 after — [`docs/RECONCILIATION_BASELINE.md`](RECONCILIATION_BASELINE.md).
   This is Stage 3's headline input, banked during Stage 2 as its PRD
-  requires.
+  requires, and now measured live by Stage 3's reconciliation check on
+  every run — invoiced 47,942,632 + quarantined 4,475,029 against the
+  provider's independent 52,417,661.
 - **Runs locally:** the full stack (Next.js + Supabase in Docker, seeded
   with two tenants) comes up with `make dev-up` + `bun run dev`, and
   `scripts/smoke.sh` asserts each stage end-to-end over HTTP — 19 checks
@@ -274,10 +279,9 @@ sequenceDiagram
    fork) → `/omc-plan --consensus` → `tasks.md` → worktree + Delegation
    Ladder → Definition of Done → merge. Stage 4 and Stage 5 route through
    `--architect codex --critic codex` (auth/RLS/agent-surface changes).
-   **Stages 1–2 done**, DoD passed on both — see
+   **Stages 1–3 done**, DoD passed on each — see
    [`PROGRESS.md`](../PROGRESS.md) for each stage's checklist and what was
-   carried forward. Stage 3 (Data Quality & Reconciliation) next; Stages
-   4–6 not started.
+   carried forward. Stage 4 (Dashboard) next; Stages 5–6 not started.
 3. **First live deploy — at Stage 4.** `infra/` (Pulumi) gets built here,
    not before: this is the first point there's a real app + schema worth
    standing up. `pulumi up` runs for the first time at this stage.

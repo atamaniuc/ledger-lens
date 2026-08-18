@@ -670,7 +670,339 @@
       "description": "Auth on the trigger, counter balance, idempotency, and tenant-scoped idempotency across two orgs."
     },
     {
-      "name": "Stage 3 \u2014 RLS & tenant isolation",
+      "name": "Stage 3 \u2014 Data Quality & Reconciliation",
+      "description": "Four checks per run: freshness, volume, uniqueness, reconciliation. The reconciliation assertion is the project's headline number.",
+      "item": [
+        {
+          "name": "Checks without the secret are rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 without x-ingestion-secret', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/data-quality/run",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": \"{{orgA}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Rewind Acme's cursor before a measured run",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cursor rewound', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{serviceRoleKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceRoleKey}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=minimal"
+              }
+            ],
+            "url": "{{supabaseUrl}}/rest/v1/pipeline_runs?org_id=eq.{{orgA}}&kind=eq.incremental",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cursor_to\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A run carries its own quality verdict",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "const dq = b.data_quality;",
+                  "// US-05: every run gets a verdict, with no scheduler to deploy.",
+                  "pm.test('the run returned a verdict', () => pm.expect(dq, JSON.stringify(b)).to.be.an('object'));",
+                  "pm.test('all four checks ran, not a partial set', () => {",
+                  "  pm.expect(dq.complete, JSON.stringify(dq && dq.results)).to.be.true;",
+                  "  pm.expect(dq.results).to.have.lengthOf(4);",
+                  "});",
+                  "pm.test('the run is healthy overall', () => pm.expect(dq.overall).to.eql('pass'));",
+                  "",
+                  "// US-04, the headline number. Every cent the provider reported is either",
+                  "// invoiced or accounted for in quarantine \u2014 not \"close enough\", zero.",
+                  "const recon = dq.results.find(r => r.check_name === 'reconciliation');",
+                  "pm.test('reconciliation drift is exactly 0', () => {",
+                  "  pm.expect(Number(recon.delta), JSON.stringify(recon)).to.eql(0);",
+                  "});",
+                  "pm.test('no record has value that cannot be located', () => {",
+                  "  pm.expect(Number(recon.details.unaccounted_rows)).to.eql(0);",
+                  "});",
+                  "pm.test('invoiced + quarantined equals the provider total', () => {",
+                  "  pm.expect(Number(recon.details.invoiced_cents) + Number(recon.details.quarantined_cents))",
+                  "    .to.eql(Number(recon.expected));",
+                  "});",
+                  "pm.collectionVariables.set('dqRunId', b.run_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-ingestion-secret",
+                "value": "{{ingestionSecret}}"
+              },
+              {
+                "key": "x-correlation-id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/ingestion/run",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": \"{{orgA}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Reconciliation compares against accounted value rather than written value. Comparing against sum(invoices) alone reports an ~8.5% shortfall on a healthy pipeline, because quarantining corrupt records is correct behaviour, not loss. See ADR 0005."
+          }
+        },
+        {
+          "name": "Rewind again, for the idempotent re-run",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cursor rewound', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{serviceRoleKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceRoleKey}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=minimal"
+              }
+            ],
+            "url": "{{supabaseUrl}}/rest/v1/pipeline_runs?org_id=eq.{{orgA}}&kind=eq.incremental",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cursor_to\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A fully deduplicated re-run stays healthy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('the re-run wrote nothing', () => pm.expect(b.rows_written).to.eql(0));",
+                  "// The most normal thing this pipeline does must not read as an anomaly.",
+                  "// Measuring the volume baseline on rows_written made it one: a run that",
+                  "// deduplicates everything writes zero and scored -100% against its own",
+                  "// history.",
+                  "const vol = b.data_quality.results.find(r => r.check_name === 'volume');",
+                  "pm.test('volume does not fail on a write-nothing re-run', () => {",
+                  "  pm.expect(vol.status, JSON.stringify(vol)).to.not.eql('fail');",
+                  "});",
+                  "pm.test('reconciliation is still exactly 0', () => {",
+                  "  const r = b.data_quality.results.find(x => x.check_name === 'reconciliation');",
+                  "  pm.expect(Number(r.delta)).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-ingestion-secret",
+                "value": "{{ingestionSecret}}"
+              },
+              {
+                "key": "x-correlation-id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/ingestion/run",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": \"{{orgA}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Ad-hoc checks with no run abstain on volume",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('all four checks ran', () => pm.expect(b.complete).to.be.true);",
+                  "// Without a run there is no batch to size. Reporting the absent run as a",
+                  "// zero-row batch failed volume on every ad-hoc invocation.",
+                  "const vol = b.results.find(r => r.check_name === 'volume');",
+                  "pm.test('volume abstains rather than failing', () => {",
+                  "  pm.expect(vol.status).to.not.eql('fail');",
+                  "  pm.expect(vol.details.reason).to.eql('no_run_context');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-ingestion-secret",
+                "value": "{{ingestionSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/data-quality/run",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": \"{{orgA}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Results are recorded per run, queryable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json();",
+                  "// US-05: a user drills into which specific run failed which specific check,",
+                  "// so the results have to be keyed to the run, not to a global flag.",
+                  "pm.test('four rows for that run', () => pm.expect(rows).to.have.lengthOf(4));",
+                  "pm.test('one row per check name', () => {",
+                  "  pm.expect(rows.map(r => r.check_name).sort())",
+                  "    .to.eql(['freshness', 'reconciliation', 'uniqueness', 'volume']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{serviceRoleKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceRoleKey}}"
+              }
+            ],
+            "url": "{{supabaseUrl}}/rest/v1/data_quality_results?select=check_name,status,delta&run_id=eq.{{dqRunId}}&order=check_name"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cross-cutting \u2014 RLS & tenant isolation",
       "item": [
         {
           "name": "anon cannot read invoices at all",
@@ -856,6 +1188,10 @@
     },
     {
       "key": "bobToken",
+      "value": ""
+    },
+    {
+      "key": "dqRunId",
       "value": ""
     }
   ]

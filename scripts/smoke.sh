@@ -9,6 +9,7 @@
 #   scripts/smoke.sh          # every implemented stage
 #   scripts/smoke.sh 1        # mock provider only (no database needed)
 #   scripts/smoke.sh 2        # ingestion only (needs the local stack up)
+#   scripts/smoke.sh 3        # data quality checks only
 #
 # Requires: the Next.js dev server (bun run dev), the local Supabase stack
 # (supabase start), and .env.local — see docs/LOCAL_DEV.md.
@@ -342,14 +343,195 @@ stage2() {
   fi
 }
 
+# --- Stage 3: Data Quality & Reconciliation -------------------------------
+
+dq() {  # dq <org_id> [run_id] -> response body
+  local body
+  if [ -n "${2:-}" ]; then body="{\"org_id\":\"$1\",\"run_id\":\"$2\"}"
+  else body="{\"org_id\":\"$1\"}"; fi
+  curl -sS -X POST "$BASE_URL/api/data-quality/run" \
+    -H 'content-type: application/json' \
+    -H "x-ingestion-secret: ${INGESTION_TRIGGER_SECRET:-}" \
+    -d "$body"
+}
+
+# Runs the checks inside a transaction that mutates state first, then rolls
+# back. Asserting that a check *can* fail matters as much as asserting it
+# passes: a check that cannot go red is decoration.
+dq_what_if() {  # dq_what_if <setup sql> <check_name> -> status
+  psql "$DB_URL" -tAq <<SQL 2>/dev/null | tail -1
+begin;
+$1;
+select status from public.run_data_quality_checks(
+  '$ORG_A', (select id from public.pipeline_runs
+              where org_id = '$ORG_A' and kind = 'incremental'
+              order by started_at desc limit 1),
+  $PROVIDER_TOTAL, $PROVIDER_COUNT)
+ where check_name = '$2';
+rollback;
+SQL
+}
+
+stage3() {
+  head_ "Stage 3 — Data Quality & Reconciliation"
+
+  require_local_db
+  if ! psql_q 'select 1' >/dev/null; then
+    bad "local database reachable" "$DB_URL"; return
+  fi
+  if [ -z "${INGESTION_TRIGGER_SECRET:-}" ]; then
+    bad "INGESTION_TRIGGER_SECRET set" "missing from .env.local"; return
+  fi
+
+  local summary
+  summary=$(curl -fsS "$BASE_URL/api/mock-provider/summary" 2>/dev/null)
+  PROVIDER_TOTAL=$(jq -r .total_amount_cents <<<"$summary")
+  PROVIDER_COUNT=$(jq -r .invoice_count <<<"$summary")
+
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/data-quality/run" \
+    -H 'content-type: application/json' -d "{\"org_id\":\"$ORG_A\"}")
+  [ "$code" = "401" ] && ok "unauthenticated check trigger rejected (401)" \
+                      || bad "unauthenticated check trigger rejected" "got $code"
+
+  # US-05: every run gets a verdict, without a scheduler.
+  psql_q "update pipeline_runs set cursor_to = null where org_id = '$ORG_A' and kind = 'incremental'" >/dev/null
+  local run
+  run=$(curl -sS -X POST "$BASE_URL/api/ingestion/run" -H 'content-type: application/json' \
+    -H "x-ingestion-secret: $INGESTION_TRIGGER_SECRET" -d "{\"org_id\":\"$ORG_A\"}")
+  local overall complete
+  overall=$(jq -r '.data_quality.overall // "missing"' <<<"$run")
+  complete=$(jq -r '.data_quality.complete // false' <<<"$run")
+  [ "$overall" != "missing" ] && ok "an ingestion run carries a data-quality verdict ($overall)" \
+                              || bad "ingestion run carries a verdict" "$run"
+  [ "$complete" = "true" ] && ok "all four checks ran, not a partial set" \
+                           || bad "all four checks ran" "complete=$complete"
+
+  # US-04, the headline number: every cent the provider reported is either
+  # invoiced or accounted for in quarantine. Not "close enough" — zero.
+  local recon drift unacc
+  recon=$(jq -r '.data_quality.results[] | select(.check_name=="reconciliation")' <<<"$run")
+  drift=$(jq -r '.delta' <<<"$recon")
+  unacc=$(jq -r '.details.unaccounted_rows' <<<"$recon")
+  if [ "$drift" = "0" ] && [ "$unacc" = "0" ]; then
+    ok "reconciliation drift is exactly 0 (invoiced $(jq -r .details.invoiced_cents <<<"$recon") + quarantined $(jq -r .details.quarantined_cents <<<"$recon") = $(jq -r .expected <<<"$recon"))"
+  else
+    bad "reconciliation drift is exactly 0" "drift=$drift unaccounted=$unacc"
+  fi
+
+  # An idempotent re-run reads its usual batch and writes nothing. That is
+  # the most normal thing this pipeline does, and it must not read as a
+  # volume anomaly — measuring the baseline on rows_written made it one.
+  psql_q "update pipeline_runs set cursor_to = null where org_id = '$ORG_A' and kind = 'incremental'" >/dev/null
+  local rerun vol
+  rerun=$(curl -sS -X POST "$BASE_URL/api/ingestion/run" -H 'content-type: application/json' \
+    -H "x-ingestion-secret: $INGESTION_TRIGGER_SECRET" -d "{\"org_id\":\"$ORG_A\"}")
+  vol=$(jq -r '.data_quality.results[] | select(.check_name=="volume") | .status' <<<"$rerun")
+  # Asserted as an allow-list, not as "not fail". A missing verdict makes jq
+  # print nothing, and an absent status is not a passing status — with a
+  # negated test the check would go green precisely when it stopped running.
+  if [ "$(jq -r .rows_written <<<"$rerun")" = "0" ] && { [ "$vol" = "pass" ] || [ "$vol" = "warn" ]; }; then
+    ok "a fully deduplicated re-run does not trip the volume check ($vol)"
+  else
+    bad "deduplicated re-run does not trip volume" "written=$(jq -r .rows_written <<<"$rerun") volume=$vol"
+  fi
+
+  # Ad-hoc invocation with no run: there is no batch to size, so volume must
+  # abstain rather than report the absent run as a zero-row batch.
+  local adhoc
+  adhoc=$(dq "$ORG_A")
+  local adhocVol adhocReason
+  adhocVol=$(jq -r '.results[] | select(.check_name=="volume") | .status' <<<"$adhoc")
+  adhocReason=$(jq -r '.results[] | select(.check_name=="volume") | .details.reason // ""' <<<"$adhoc")
+  if { [ "$adhocVol" = "pass" ] || [ "$adhocVol" = "warn" ]; } && [ "$adhocReason" = "no_run_context" ]; then
+    ok "checks without a run_id abstain on volume rather than failing"
+  else
+    bad "checks without a run_id abstain on volume" "status=$adhocVol reason=$adhocReason"
+  fi
+
+  # Each check must be able to go red. Asserted against mutations that are
+  # rolled back, so the database is unchanged afterwards.
+  [ "$(dq_what_if "update raw_events set ingested_at = now() - interval '25 hours' where org_id = '$ORG_A'" freshness)" = "fail" ] \
+    && ok "freshness fails on 25-hour-old data" || bad "freshness fails on stale data" "stayed green"
+
+  [ "$(dq_what_if "insert into quarantine (org_id, raw_event_id, run_id, reason) select '$ORG_A', null, id, 'simulated' from pipeline_runs where org_id='$ORG_A' order by started_at desc limit 1" reconciliation)" = "fail" ] \
+    && ok "reconciliation fails on a record whose value cannot be located" \
+    || bad "reconciliation fails on an unaccounted record" "stayed green"
+
+  [ "$(dq_what_if "delete from invoices where id in (select id from invoices where org_id='$ORG_A' limit 5)" reconciliation)" = "fail" ] \
+    && ok "reconciliation fails when value actually goes missing" \
+    || bad "reconciliation fails on real loss" "stayed green"
+
+  # A quarantined payload whose amount is JSON null: `payload ? 'amount'` is
+  # true, the cast yields NULL, and sum() skips it — so the value went
+  # missing while the check reported zero unaccounted rows, pointing its
+  # reader at the wrong place.
+  [ "$(dq_what_if "update raw_events set payload = jsonb_set(payload,'{amount}','null')
+        where id = (select raw_event_id from quarantine
+                     where org_id='$ORG_A' and raw_event_id is not null limit 1)" reconciliation)" = "fail" ] \
+    && ok "a null amount in a quarantined payload is counted as unaccounted" \
+    || bad "null amount counted as unaccounted" "stayed green"
+
+  # A non-numeric amount used to raise `invalid input syntax for type
+  # numeric` and take the whole quality run down. Corrupt payloads are what
+  # this pipeline exists to receive; one must not be able to disable the
+  # check that would report it.
+  [ "$(dq_what_if "update raw_events set payload = jsonb_set(payload,'{amount}','\"not-a-number\"')
+        where id = (select raw_event_id from quarantine
+                     where org_id='$ORG_A' and raw_event_id is not null limit 1)" reconciliation)" = "fail" ] \
+    && ok "a non-numeric amount is reported, not fatal to the whole check" \
+    || bad "non-numeric amount survives the check" "the check raised or stayed green"
+
+  local rid
+  rid=$(psql_q "select id from pipeline_runs where org_id = '$ORG_A' and kind='incremental' order by started_at desc limit 1")
+  # The baseline needs three prior succeeded runs before volume will judge
+  # anything, so they are synthesised inside the same rolled-back
+  # transaction. Without them this assertion silently measured
+  # insufficient_history and passed for the wrong reason.
+  [ "$(dq_what_if "insert into pipeline_runs (org_id, source, kind, status, started_at, finished_at, rows_read)
+        select '$ORG_A', 'mock-provider', 'incremental', 'succeeded', now() - interval '1 day', now() - interval '1 day', 207
+          from generate_series(1,3);
+       update pipeline_runs set rows_read = 20 where id = '$rid'" volume)" = "fail" ] \
+    && ok "volume fails on a batch 90% below a three-run baseline" \
+    || bad "volume fails on a small batch" "stayed green"
+
+  # And the boundary holds: exactly at the edge of the tolerated band is
+  # still a pass, so the check is not quietly one-sided.
+  [ "$(dq_what_if "insert into pipeline_runs (org_id, source, kind, status, started_at, finished_at, rows_read)
+        select '$ORG_A', 'mock-provider', 'incremental', 'succeeded', now() - interval '1 day', now() - interval '1 day', 207
+          from generate_series(1,3);
+       update pipeline_runs set rows_read = 104 where id = '$rid'" volume)" = "pass" ] \
+    && ok "volume tolerates a batch just inside the -50% band" \
+    || bad "volume tolerates the -50% boundary" "went red inside the tolerated band"
+
+  # Cross-tenant: attributing one org's results to another must raise, not
+  # quietly scope to the wrong tenant.
+  local crossed
+  crossed=$(psql "$DB_URL" -tAc "select 1 from public.run_data_quality_checks('$ORG_B', '$rid', $PROVIDER_TOTAL, $PROVIDER_COUNT)" 2>&1 | head -1)
+  case "$crossed" in
+    *"does not belong to org"*) ok "a run_id from another org is rejected, not silently rescoped" ;;
+    *) bad "cross-org run_id rejected" "$crossed" ;;
+  esac
+
+  # RLS on the new table, same standard as every other.
+  local leaked own
+  leaked=$(as_user "$BOB" "select count(*) from data_quality_results where org_id = '$ORG_A'")
+  own=$(as_user "$BOB"    "select count(*) from data_quality_results where org_id = '$ORG_B'")
+  if [ "$leaked" = "0" ]; then
+    ok "RLS: Globex's user sees zero of Acme's quality results (its own: ${own:-0})"
+  else
+    bad "RLS on data_quality_results" "saw $leaked rows of the other tenant"
+  fi
+}
+
 # --- main ------------------------------------------------------------------
 
 require_server
 case "${1:-all}" in
   1) stage1 ;;
   2) stage2 ;;
-  all) stage1; stage2 ;;
-  *) echo "unknown stage: $1 (expected 1, 2, or all)" >&2; exit 2 ;;
+  3) stage3 ;;
+  all) stage1; stage2; stage3 ;;
+  *) echo "unknown stage: $1 (expected 1, 2, 3, or all)" >&2; exit 2 ;;
 esac
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"

@@ -25,6 +25,46 @@ Captured 2026-08-17, mock provider seed 42, 200 invoices, chaos flag
 | **Before idempotency** — naive consumer, no dedup | 53,806,676 | **+1,389,015** | **+2.650%** |
 | **After idempotency** — shipped pipeline | 52,417,661 | **0** | **0.000%** |
 
+## The live "after", from Stage 3
+
+The table above was produced by a script walking the provider's stream.
+Stage 3 now measures the same thing from the database itself, on every
+run, and records it in `data_quality_results`:
+
+```json
+{
+  "check_name": "reconciliation",
+  "status": "pass",
+  "observed": 52417661,
+  "expected": 52417661,
+  "delta": 0,
+  "details": {
+    "invoiced_cents": 47942632,
+    "quarantined_cents": 4475029,
+    "unaccounted_rows": 0,
+    "drift_pct": 0
+  }
+}
+```
+
+The split is the part worth reading. Comparing the provider's total
+against `sum(invoices.amount_cents)` alone gives 47,942,632 — a shortfall
+of **4,475,029 cents (−8.54%)** on a pipeline behaving exactly as
+designed. That gap is the twenty records the provider deliberately
+corrupts and the pipeline correctly quarantines.
+
+So the live check compares against *accounted* value: invoiced, plus the
+amounts still recoverable from quarantined records' original payloads.
+That lands on exactly zero, and states a property worth stating — **no
+value disappears silently.** Quarantining a record is a visible,
+accounted-for outcome; losing one is not. Records whose value cannot be
+located at all (a quarantine row with no surviving payload) are counted
+as `unaccounted_rows` and fail the check regardless of the arithmetic.
+
+The reasoning, the rejected alternatives, and why the threshold was not
+simply widened to 10% so the naive comparison would pass, are in
+[ADR 0005](../.claude/adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md).
+
 ## What "before" means here, precisely
 
 It is not a measurement of a broken build. Idempotency was present from

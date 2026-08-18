@@ -49,14 +49,23 @@ difference immediately paid for itself — the seed was writing NULL into
 so every sign-in failed with a 500 while every shell-side RLS check kept
 passing. Fixed in the seed with the reason recorded there.
 
-**Next: Stage 3 (Data Quality & Reconciliation).** Not started. The
-project's actual differentiator. Its headline input is already captured and
-banked — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md):
-drift goes from **+2.65% (+1,389,015 cents)** before idempotency to
-**exactly 0** after. Capturing it during Stage 2 was a PRD requirement
-(Stage 3 US-04) that the stage had initially missed, and doing it surfaced a
-Stage 1 determinism bug that would have made zero drift unreachable — also
-fixed and pinned by tests.
+**Stage 3 (Data Quality & Reconciliation) — done, DoD passed.** Four checks
+— freshness, volume, uniqueness, reconciliation — computed by one Postgres
+function in one transaction and recorded per `run_id`, plus a standalone
+route and an automatic verdict at the end of every ingestion run. See its
+checklist below.
+
+The stage's headline number is now measured live rather than by a script:
+reconciliation drift is **exactly 0**, because the check compares against
+*accounted* value — invoiced (47,942,632) plus quarantined-but-recoverable
+(4,475,029) — against the provider's independent total (52,417,661).
+Comparing against written invoices alone reports a **−8.54%** shortfall on
+a perfectly healthy pipeline, which is why the naive framing was rejected
+(ADR 0005). The before/after pair is in
+[`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md):
+**+2.65%** before idempotency, **0** after.
+
+**Next: Stage 4 (Dashboard + first `infra/` deploy).** Not started.
 
 **Tracking convention:** one row per stage. `Agent` records which harness
 role actually did the work (`main` = direct in the primary session, no
@@ -74,7 +83,6 @@ yet at solo/sequential scale — this file is the board until one is.
 
 | Stage | Depends on |
 |---|---|
-| 3 — Data Quality & Reconciliation | Stage 2 |
 | 4 — Dashboard (+ first `infra/` deploy) | Stage 3 |
 | 5 — RAG & Agent | Stage 4 |
 | 6 — Evals (CI gate live → production bar met) | Stage 5 |
@@ -82,11 +90,11 @@ yet at solo/sequential scale — this file is the board until one is.
 
 ## In Progress
 
-_(empty — Stage 3 not started yet)_
+_(empty — Stage 4 not started yet)_
 
 ## Review
 
-_(empty — Stage 2 passed review, moved to Done)_
+_(empty — Stage 3 passed review, moved to Done)_
 
 ## Done
 
@@ -101,6 +109,7 @@ _(empty — Stage 2 passed review, moved to Done)_
 | **Stage 1 — Mock Provider** (`/invoices` + `/summary`, 7 chaos flags) | main + codex (review) | Build/lint clean, all 7 flags runtime-verified live. `make codex-review`: 5 findings, 4 fixed (DESIGN.md self-contradiction, missing `correlation_id` in RAG&Agent PRD, Stage 2/3 reconciliation-ordering contradiction, RLS-coverage wording), 1 accepted as a known limitation (no file lock in `new-design-section.sh`). Also fixed a real harness bug found along the way: `omc ask`'s `--agent-prompt` role is a fixed roster — `review` doesn't exist, `code-reviewer` does. |
 | **Local verification loop** (`supabase/seed.sql`, `.env.local`, `scripts/smoke.sh`, `docs/LOCAL_DEV.md`, `make dev-up`/`smoke`/`verify`) | main | The first `supabase db reset` against an empty database exposed two defects that only a hosted project's history was hiding: (1) a migration revoking `public.rls_auto_enable()`, a function no migration creates — it is an artifact of that one project, so the run aborted on any other database; now guarded by a `to_regprocedure` check rather than dropped, since the revoke still matters where the function is real. (2) No table or function grants anywhere — the hosted project pre-dates Supabase's removal of the "auto-expose new entities" default and had been supplying them invisibly, so on a current project the ingestion route failed with `permission denied for table pipeline_runs`. Fixed with an explicit least-privilege grants migration that revokes the three Data API roles down to nothing before granting back only what each uses (`anon`: nothing; `authenticated`: SELECT only; `service_role`: verb-by-verb, no DELETE or TRUNCATE anywhere). Revoke-then-grant rather than grant-only so a project carrying the legacy default converges to the same privilege set instead of silently keeping a wider one. **Applied to the hosted project and verified against it**, not just reasoned about: a `supabase db dump` before the push showed `GRANT ALL` to `anon`, `authenticated`, and `service_role` on all six tables and both sequences (24 grants); the dump after shows 14 narrow grants, `anon` absent entirely, and no DELETE or TRUNCATE anywhere. Function-level privileges match local exactly. `supabase migration list` now shows all six migrations present in both. Also fixed `bun run lint` going red on the CLI's `supabase/.temp/` scratch bundle. |
 | **Stage 2 — Ingestion & Transform** (polling route + webhook Edge Function, ADR 0003/0004) | worktree:stage-2-ingestion-route + worktree:stage-2-webhook (parallel) + main (schema, fixes) + code-reviewer | Two agents in isolated worktrees, merged and reviewed as one diff. Review: 2 CRITICAL + 4 HIGH + 5 MEDIUM, all addressed — tenant-scoped idempotency key (a **spec** defect the PRD itself specified), non-atomic raw/downstream writes leaving permanent orphans, cursor regressing to null on a drained dataset, webhook poisoning the polling cursor, unauthenticated trigger writing to any `org_id`, one bad record aborting the whole run. Also captured the reconciliation baseline PRD Stage 3 US-04 required during this stage, which surfaced and fixed a Stage 1 PRNG-determinism bug that made zero drift unreachable. |
+| **Stage 3 — Data Quality & Reconciliation** (`run_data_quality_checks`, `/api/data-quality/run`, ADR 0005) | main + cavecrew-reviewer | Four checks in one Postgres function, one transaction, recorded per `run_id`; a verdict attached to every ingestion run without a scheduler. Two false positives were found and fixed during implementation rather than shipped: the volume baseline measured `rows_written`, so a fully deduplicated re-run — the most ordinary thing this pipeline does — scored −100% and failed; and an ad-hoc invocation with no `run_id` was treated as a zero-row batch and failed the same check. Both now abstain with a stated reason. The new table also inherited Postgres' default ACL (TRUNCATE/REFERENCES/TRIGGER for `anon`), which the Stage 2 privilege guard in `scripts/smoke.sh` caught immediately — exactly the divergence that guard was added for. |
 
 ---
 
@@ -140,3 +149,18 @@ Recorded in `.claude/DESIGN.md`'s open questions:
 - No CI yet, so `make check` and `scripts/smoke.sh` are habits rather than gates. `deno check` in particular runs nowhere.
 - The mock provider still can't push, so the webhook is proven by `simulate.sh` rather than driven end-to-end — `scripts/smoke.sh` covers the polling route but not the Edge Function.
 - `get_advisors` (Definition of Done item 1) is a hosted-project API that was reachable through an MCP server which is no longer connected, and it has no CLI or local equivalent. The grants migration is therefore not advisor-checked. Nothing it does is of a kind the advisors flag — it only narrows privileges — but that is reasoning, not a clean advisor run.
+
+---
+
+## Stage 3 — Definition of Done checklist
+
+Per `CLAUDE.md`'s Definition of Done:
+
+- [x] **Migration applied clean, advisors checked.** One migration (`data_quality_results` + RLS + explicit least-privilege grants + `run_data_quality_checks`). Applied from empty via `supabase db reset` repeatedly during implementation. `get_advisors` itself is unreachable — the MCP server that exposed it is no longer connected and there is no CLI equivalent — so the two lints it would raise here were checked directly against the catalog instead: the function is `SECURITY INVOKER` with `search_path` pinned to `''`, and the table has RLS enabled with a policy. Stated as what it is: an equivalent check, not an advisor run.
+- [x] **Tests pass.** `make check` → typecheck, lint, 33 unit tests. `scripts/smoke.sh` → 32 assertions across three stages, all green from an empty database. Postman/newman → 67 assertions. Every check is asserted both ways: that it passes on healthy data *and* that it can go red — freshness on 25-hour-old data, reconciliation on an unaccounted record and on real value loss, volume on a batch 90% below a synthesised three-run baseline, plus the tolerated-band boundary. A check that cannot go red is decoration.
+- [x] **Reviewer pass ran on the diff, findings resolved.** See the Done row and the commit.
+- [x] **RLS verified.** `data_quality_results` has RLS on from the migration that created it, with the same org-membership policy as every other table. A non-member reads zero rows — empty, not an error. `anon` holds no privileges on it; `service_role` has SELECT and INSERT only, no DELETE, no TRUNCATE.
+- [x] **`.claude/DESIGN.md` updated for scope drift.** Reconciled with the implementation after the fact: the design proposed a `thresholds.ts` holding the status arithmetic as pure functions, which was dropped once it became clear it would be a second source of truth for numbers the SQL function already applies. The volume measure changed from `rows_written` to `rows_read` for the reason recorded there. No `tasks.md` — executed directly; noting that rather than pretending the artifact exists.
+- [x] **No secrets in diff.**
+- [x] **Architecture decision → new ADR.** ADR 0005: one function for all four checks, and reconciliation against accounted rather than written value, with the measured numbers behind the rejected alternative.
+- [x] **Status docs synced in the same commit.** This file, `README.md`, `docs/PROJECT_OVERVIEW.md`, and `docs/RECONCILIATION_BASELINE.md` (which now carries the live Stage 3 result alongside the Stage 2 capture).
