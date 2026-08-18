@@ -314,3 +314,164 @@ ad-hoc invocation.
   reported but not enforced.
 
 
+## Dashboard
+
+**PRD:** `.claude/PRD.md` → "## Dashboard" (US-01 … US-06; US-07 moved to Stage 5, see below)
+**ADR(s):** [0007](adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md) (access path), [0002](adr/0002-project-layout-single-next-js-app-no-monorepo.md) (single app), [0005](adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md) (what the Data Health panel renders)
+
+**Overview:**
+
+Stage 4 puts a face on the pipeline: one authenticated page showing what
+Stages 1–3 produce — headline numbers, how fresh they are, whether the four
+quality checks pass, where any number came from, and pipeline runs as they
+happen. The architectural decision underneath it is narrow and load-bearing:
+the dashboard reads Postgres directly under the signed-in user's own JWT, so
+Row-Level Security is the authorization mechanism rather than a second copy
+of it written in application code. That choice is recorded in ADR 0007 and
+shapes every component below.
+
+**Scope change from the PRD as written:** US-07 (the AI copilot chat panel)
+was specified P0 but depends on the agent, which does not exist until Stage
+5. It moves to Stage 5 at P1 and ships with the agent it displays. Stage 4's
+layout reserves the column it will occupy and renders nothing into it. The
+PRD entry is amended to match rather than left contradicting this document.
+
+**Components:**
+
+*Access layer — three Supabase clients, deliberately distinct.* The
+separation is the security boundary, not a style preference.
+
+- `lib/supabase/service-client.ts` *(exists, unchanged)* — service-role key,
+  server-only, bypasses RLS by design. Used by the ingestion route and the
+  webhook Edge Function, which act as the pipeline rather than as any user.
+  Nothing in Stage 4 imports it.
+- `lib/supabase/server-client.ts` *(new)* — `createServerClient` from
+  `@supabase/ssr`, reading the session from cookies. Every dashboard read
+  goes through it. Depends on: the request's cookie store. Used by: Server
+  Components and route handlers.
+- `lib/supabase/browser-client.ts` *(new)* — `createBrowserClient`, same user
+  JWT, in the browser. Used by the two interactive components (realtime
+  subscription, lineage drill-down). Never sees the service-role key.
+
+`middleware.ts` refreshes the session cookie on each request (the standard
+`@supabase/ssr` pattern — without it the access token silently expires
+mid-session) and redirects unauthenticated requests for `/dashboard` to
+`/login`.
+
+*Routes.* `/login` (magic-link form, Client Component), `/auth/callback`
+(route handler exchanging the code for a session), `/dashboard` (Server
+Component, the single page the PRD describes). `/` redirects to one or the
+other depending on session state.
+
+*UI components.* Each ships a co-located `*.stories.tsx` covering default,
+loading, empty, and error states, per `CLAUDE.md`'s Frontend rules. Design
+tokens live in one file; no hardcoded hex or px in a component.
+
+| Component | US | Kind | What it does | Reads |
+|---|---|---|---|---|
+| `MetricTiles` | US-02 | Server | Total revenue, invoice count, average invoice | `invoices` |
+| `FreshnessBadge` | US-03 | Server | Fresh/stale against a 2-hour threshold | `max(invoices.ingested_at)` |
+| `DataHealthPanel` | US-04 | Server | Latest status of all four checks | `data_quality_results` |
+| `InvoicesTable` | US-02 | Server + Client | Cursor-paginated invoice list | `invoices` |
+| `LineageDrillDown` | US-05 | Client | Number → contributing records, run, source, raw payload | `raw_events`, `pipeline_runs` |
+| `PipelineStatusLive` | US-06 | Client | Runs appearing and changing state without a refresh | `pipeline_runs` (Realtime) |
+
+**Data flow:**
+
+*Read path (US-01 – US-05).* Browser request → `middleware.ts` refreshes the
+session → Server Component calls `createServerClient()` → query issued to
+Postgres as `authenticated` with the user's JWT → RLS policy filters to the
+orgs in that user's `memberships` → rows render server-side. No API route
+sits in this path, and no application code filters by `org_id`; the policy
+does it. First paint carries real numbers rather than skeletons.
+
+*Live path (US-06).* `browser-client` is created, `realtime.setAuth(token)`
+is called with the user's access token **before** subscribing — without it
+Realtime evaluates policies as the anonymous role and the subscription
+returns nothing. The channel listens for `INSERT` and `UPDATE` on
+`pipeline_runs`, never `*`. New and changed runs update local state and
+invalidate the TanStack Query keys for any derived figure.
+
+*Migration.* One statement adds `pipeline_runs` to the `supabase_realtime`
+publication, which currently contains no tables at all. `REPLICA IDENTITY`
+stays `DEFAULT`: it is sufficient for the `new` record on INSERT and UPDATE,
+and `FULL` would add the whole pre-image of every row to the WAL to deliver
+`old` records this feature never reads.
+
+**Error handling:**
+
+Two of these are the substance of the PRD's counter-metric — false-green is
+worse than no signal — rather than generic error plumbing.
+
+- **No session** → `middleware.ts` redirects to `/login`. The dashboard
+  never renders partially for an unauthenticated request.
+- **Signed in, no membership** → an empty state, *not* an error. RLS
+  correctly returns zero rows for a user who belongs to no org; rendering
+  that as a failure would teach users to distrust a working system, and is
+  also exactly what the cross-tenant Definition-of-Done check expects to
+  see.
+- **No data ingested yet** → empty state naming the next action, per the
+  PRD's User Flow.
+- **A failing quality check** → rendered red and in place. Never hidden,
+  never collapsed behind a toggle, never softened to a warning.
+- **Data older than the freshness threshold** → the badge says stale.
+  There is no path that renders stale data as fresh; if the freshness query
+  itself fails, the badge renders unknown rather than defaulting to fresh.
+- **Realtime disconnects** → fall back to refetching on an interval *and
+  say so in the UI*. A frozen live panel that still looks live is the same
+  false-green failure in a different costume.
+- **A query throws** → that panel renders its error state; the rest of the
+  page still renders. One failing tile does not blank the dashboard.
+
+**Testing plan:**
+
+*Unit* (`bun test`): the freshness threshold boundary and the metric
+derivations, as pure functions in `lib/dashboard/`, so the arithmetic is
+provable without a browser.
+
+*Storybook*: every component in default, loading, empty, and error states —
+the error/stale states are first-class here, not edge cases, because the
+dashboard's whole job is signalling them.
+
+*End-to-end* (`tests/stage4-dashboard.spec.ts`, Playwright):
+
+- an unauthenticated request to `/dashboard` redirects to `/login`;
+- signing in as `bob@globex.test` shows Globex's numbers and **none** of
+  Acme's — the Definition-of-Done cross-tenant check, asserted through the
+  rendered page rather than only at the SQL layer;
+- the freshness badge flips state when `ingested_at` is pushed past the
+  threshold;
+- the Data Health panel shows all four checks, and a check forced to `fail`
+  renders red;
+- Realtime: with the page open, an inserted `pipeline_runs` row appears
+  without a reload, and a second session scoped to the other org does not
+  receive it;
+- the magic-link flow completes end-to-end by reading the message out of
+  Mailpit's API, so the login form is covered rather than only bypassed.
+
+Existing specs establish the pattern this follows: sessions are created
+programmatically against the seeded users, as `tests/rls.spec.ts` already
+does, and any fabricated rows are cleaned up in `afterAll` — Stage 3's
+reconciliation check is tenant-wide and not run-scoped, so test data left
+behind shows up as real drift.
+
+**Open questions / risks:**
+
+- **Realtime and DELETE.** Supabase's documentation is explicit that RLS
+  policies are *not* applied to `DELETE` events, because Postgres cannot
+  verify access to a row that no longer exists. Subscribing to `*` would
+  therefore broadcast other tenants' primary keys. Mitigated by subscribing
+  to `INSERT` and `UPDATE` only; recorded in ADR 0007 so a later "just
+  listen to everything" change has to argue with it first.
+- **`@supabase/ssr` is a new dependency.** Unavoidable for cookie-based
+  sessions in the App Router; `supabase-js` alone has no server-side session
+  story. Noted rather than hidden.
+- **Server-rendered numbers are a point-in-time snapshot.** Only
+  `pipeline_runs` is live; tiles refresh on navigation or on a Realtime-
+  triggered invalidation. Making every figure live would mean publishing
+  `invoices` too, which is a much larger WAL and RLS surface for a
+  dashboard nobody watches by the second.
+- **Storybook adds meaningful build weight** to a project whose CI does not
+  exist yet. Accepted because `CLAUDE.md` requires a story per component and
+  the four states are the actual product here.
+

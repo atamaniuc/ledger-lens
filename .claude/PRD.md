@@ -223,7 +223,7 @@ Surfaced entirely through the Dashboard's Data Health panel (Stage 4) — no sta
 
 ## Dashboard
 
-**Status:** Draft
+**Status:** Approved — architecture agreed in Stage 4's Phase 1; see `.claude/DESIGN.md` ("Dashboard") and ADR 0007. One amendment made during that phase: US-07 was specified P0 but depends on an agent that does not exist until Stage 5, and moves there at P1 — see its row below.
 **Participants:** Solo project — new UI routes through the `designer` agent per `CLAUDE.md`
 **Timeline:** Stage 4
 
@@ -259,7 +259,7 @@ No dashboard state should ever show stale data as fresh, or a failing check as p
 | US-04 | As a user, I want a Data Health panel, so I can see all 4 quality checks at a glance. | P0 | Panel shows all 4 checks with latest pass/warn/fail status. |
 | US-05 | As a user, I want to drill from a number down to its source records, so I can verify a figure instead of trusting it blindly. | P1 | Clicking a number shows contributing `raw_events`, `run_id`, source, timestamp, down to the raw payload. |
 | US-06 | As a user, I want pipeline status to update live, so I don't have to manually refresh. | P1 | New `pipeline_runs` row appears without manual refresh (Supabase Realtime), verifiable with two concurrent sessions. |
-| US-07 | As a user, I want to ask the AI copilot a question from the dashboard, so I don't need a separate tool. | P0 | Chat panel round-trips at least one query to the agent and renders an answer with visible citations. |
+| US-07 | As a user, I want to ask the AI copilot a question from the dashboard, so I don't need a separate tool. | ~~P0~~ **P1 — moved to Stage 5** | Chat panel round-trips at least one query to the agent and renders an answer with visible citations. **Amended during Stage 4's Phase 1:** this was specified P0 in a stage that does not contain an agent — it cannot be satisfied before Stage 5 builds one, and a stub panel would only be a P0 marked done without the behaviour it promises. It ships in Stage 5 alongside the agent it displays. Stage 4's layout reserves the column and renders nothing into it. |
 
 ### Non-Functional Requirements & Constraints
 
