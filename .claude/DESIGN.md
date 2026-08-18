@@ -370,7 +370,7 @@ tokens live in one file; no hardcoded hex or px in a component.
 | Component | US | Kind | What it does | Reads |
 |---|---|---|---|---|
 | `MetricTiles` | US-02 | Server | Total revenue, invoice count, average invoice | `invoices` |
-| `FreshnessBadge` | US-03 | Server | Fresh/stale against a 2-hour threshold | `max(invoices.ingested_at)` |
+| `FreshnessBadge` | US-03 | Server | Fresh/stale against a 2-hour threshold | `max(raw_events.ingested_at)` |
 | `DataHealthPanel` | US-04 | Server | Latest status of all four checks | `data_quality_results` |
 | `InvoicesTable` | US-02 | Server + Client | Cursor-paginated invoice list | `invoices` |
 | `LineageDrillDown` | US-05 | Client | Number → contributing records, run, source, raw payload | `raw_events`, `pipeline_runs` |
@@ -389,8 +389,21 @@ does it. First paint carries real numbers rather than skeletons.
 is called with the user's access token **before** subscribing — without it
 Realtime evaluates policies as the anonymous role and the subscription
 returns nothing. The channel listens for `INSERT` and `UPDATE` on
-`pipeline_runs`, never `*`. New and changed runs update local state and
-invalidate the TanStack Query keys for any derived figure.
+`pipeline_runs`, never `*`. New and changed runs update the live panel's own
+local state directly.
+
+The derived figures on the rest of the page are a separate question, and the
+first draft of this document got it wrong: it said the subscription would
+"invalidate the TanStack Query keys," which cannot work when those figures
+are rendered by Server Components — a Server Component's query is not a
+TanStack Query cache entry, so there would be no key to invalidate and the
+tiles would sit stale behind a live-looking panel. That is exactly the
+false-green failure this design's error handling exists to prevent. The live
+panel therefore calls `router.refresh()` when a run reaches a terminal state,
+which re-renders the server tree — the same query path, the same RLS, one
+round trip — and TanStack Query is reserved for the genuinely client-side
+reads (lineage drill-down, invoice pagination). Corrected here after the
+Phase 2 architecture review caught it.
 
 *Migration.* One statement adds `pipeline_runs` to the `supabase_realtime`
 publication, which currently contains no tables at all. `REPLICA IDENTITY`

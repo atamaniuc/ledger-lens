@@ -196,7 +196,7 @@ Recorded in `.claude/DESIGN.md`'s open questions:
 - No generated Supabase types, so `supabase.rpc()` return shapes are hand-written interfaces.
 - No CI yet, so `task check` and `task e2e` are habits rather than gates. They run locally, including `deno check`, but nothing enforces them on a push.
 - The mock provider still can't push, so the webhook has no real upstream — `tests/stage2-webhook.spec.ts` is what drives it. Extending Stage 1 to push would be scope drift into a finished stage.
-- `get_advisors` (Definition of Done item 1) is a hosted-project API that was reachable through an MCP server which is no longer connected, and it has no CLI or local equivalent. The grants migration is therefore not advisor-checked. Nothing it does is of a kind the advisors flag — it only narrows privileges — but that is reasoning, not a clean advisor run.
+- ~~`get_advisors` unreachable~~ — **resolved.** The Supabase MCP server is connected again, so Definition of Done item 1 is checkable rather than reasoned about. Baseline recorded 2026-08-18 against the hosted project: **security clean** (no lints), **performance 10 INFO `unused_index`** across `data_quality_results`, `memberships`, `pipeline_runs`, `raw_events`, `invoices`, `quarantine` — expected, since those indexes exist for query patterns the dashboard has not exercised yet. Later stages diff against this baseline rather than against zero.
 
 ---
 
