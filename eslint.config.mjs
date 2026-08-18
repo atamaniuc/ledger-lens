@@ -28,6 +28,9 @@ const eslintConfig = defineConfig([
     // `bun run lint` red with ~150 errors from vendored code.
     "supabase/.temp/**",
     "supabase/.branches/**",
+    // Playwright run artifacts — traces, screenshots, HTML reports.
+    "test-results/**",
+    "playwright-report/**",
   ]),
 ]);
 

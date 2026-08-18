@@ -224,7 +224,8 @@ has the numbers and the rejected alternatives.
   would have meant two sources of truth for the same numbers with nothing
   keeping them in sync. The numbers live where they are applied — in the
   SQL function — and their boundary behaviour is asserted against the live
-  function in `scripts/smoke.sh 3`, including both edges of every band.
+  function in `tests/stage3-data-quality.spec.ts`, including both edges of
+  every band.
 - `lib/data-quality/run-checks.ts` — `fetchProviderSummary` and `runChecks`,
   shared by the standalone route and the end of an ingestion run so the two
   entry points cannot drift.
@@ -289,7 +290,7 @@ ad-hoc invocation.
   run (reconciliation must be exactly 0); a forced stale `ingested_at`; a
   forced volume outlier; a quarantine row with a null `raw_event_id` driving
   reconciliation to `fail`.
-- `scripts/smoke.sh 3` end-to-end, and a fourth Postman folder.
+- `tests/stage3-data-quality.spec.ts` end-to-end, and a Postman folder.
 - RLS: a non-member reads zero `data_quality_results` rows.
 
 **Open questions / risks:**

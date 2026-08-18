@@ -358,11 +358,12 @@ docs/
   LOCAL_DEV.md               Running locally, verifying a stage, IDE database setup
   DEPLOYMENT.md              Deploy plan, env vars, CI, readiness checklist
   RECONCILIATION_BASELINE.md The before/after drift measurement
+tests/                       Playwright end-to-end suite, one spec per stage
+  helpers/                   Typed API wrappers and the database helpers
 postman/
   *.postman_collection.json  The same checks as a Postman collection
   *.template.json            Environment template; the real one is generated
 scripts/
-  smoke.sh                   End-to-end checks against the running app, per stage
   postman-env.sh             Generates the Postman environment from the local stack
   harness/                   The meta-harness scripts + their own README
 supabase/
@@ -404,8 +405,9 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   exactly 0 after — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md).
 - ✅ **Local verification loop** — the whole stack runs on one machine
   (`make dev-up`, `bun run dev`) against a seeded two-tenant local
-  Postgres, and `scripts/smoke.sh` asserts each stage end-to-end over
-  HTTP: 19 checks, all green. The same ground is covered by a Postman
+  Postgres, and a Playwright suite asserts each stage end-to-end over
+  HTTP: 32 tests, all green, every check proven able to fail as well as
+  to pass. The same ground is covered by a Postman
   collection (`postman/`, 47 assertions over 20 requests) for when
   watching the traffic beats a pass/fail line — and it reaches one thing
   the shell suite cannot, a real GoTrue sign-in, so RLS is exercised

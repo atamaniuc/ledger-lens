@@ -261,7 +261,7 @@ sequenceDiagram
   provider's independent 52,417,661.
 - **Runs locally:** the full stack (Next.js + Supabase in Docker, seeded
   with two tenants) comes up with `make dev-up` + `bun run dev`, and
-  `scripts/smoke.sh` asserts each stage end-to-end over HTTP — 19 checks
+  a Playwright suite asserts each stage end-to-end over HTTP — 32 tests
   green. See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers
   connecting IntelliJ IDEA/DataGrip to the database.
 - **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo

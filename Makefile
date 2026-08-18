@@ -1,4 +1,4 @@
-.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check dev-up dev-down dev-reset dev-status smoke verify postman-env
+.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check dev-up dev-down dev-reset dev-status e2e verify postman-env
 
 # Usage: make adr TITLE="cursor-based ingestion resume"
 adr:
@@ -40,10 +40,12 @@ codex-review:
 	@scripts/harness/codex-review.sh $(REF)
 
 # The Definition of Done's "tests pass" gate, in one command.
+# Pure-logic gate: no server, no database. `make verify` adds the
+# end-to-end suite on top.
 check:
 	bun run typecheck
 	bun run lint
-	bun test
+	bun run test
 	@$(MAKE) --no-print-directory deno-check
 
 # supabase/functions/ is excluded from tsconfig.json and eslint (Deno
@@ -80,16 +82,16 @@ dev-down:
 dev-status:
 	supabase status
 
-# End-to-end checks against the running app + database.
-# Usage: make smoke [STAGE=1|2|all]
-smoke:
-	@scripts/smoke.sh $(or $(STAGE),all)
+# End-to-end checks against the running app + database (Playwright).
+# Usage: make e2e [ARGS="tests/stage3-data-quality.spec.ts"]
+e2e:
+	bun run test:e2e $(ARGS)
 
 # The full gate: pure-logic checks, then the running system. A stage is not
 # verified until both are green (CLAUDE.md Definition of Done item 2).
 verify:
 	@$(MAKE) --no-print-directory check
-	@scripts/smoke.sh
+	bun run test:e2e
 
 # Regenerates the Postman environment from .env.local + `supabase status`.
 # The environment file itself is gitignored; the template beside it is not.

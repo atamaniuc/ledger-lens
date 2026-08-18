@@ -18,7 +18,7 @@ non-secret by design, and a mistake there costs nothing.
 | [Docker Desktop](https://docs.docker.com/desktop/) | runs the local Supabase stack | `docker info` |
 | [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) | starts/resets the stack, applies migrations | `supabase --version` |
 | [Bun](https://bun.sh) | package manager, dev server, test runner | `bun --version` |
-| `psql`, `jq` | used by `scripts/smoke.sh` | `psql --version`, `jq --version` |
+| `psql` | ad-hoc queries; the test suite talks to Postgres directly | `psql --version` |
 | [Deno](https://deno.land) *(optional)* | type-checks `supabase/functions/` — `make check` skips this gate loudly when absent | `deno --version` |
 
 ---
@@ -74,8 +74,8 @@ and cannot be tested with one:
 | Acme Corp | `00000000-0000-4000-8000-000000000001` | `alice@acme.test` | `password123` |
 | Globex Inc | `00000000-0000-4000-8000-000000000002` | `bob@globex.test` | `password123` |
 
-The UUIDs are fixed so the curl commands below and `scripts/smoke.sh` can
-hardcode them.
+The UUIDs are fixed so the curl commands below and the Playwright specs
+can name them.
 
 ---
 
@@ -88,15 +88,16 @@ bun run dev             # http://localhost:3000
 
 ```bash
 make check              # typecheck + lint + unit tests (+ deno check)
-scripts/smoke.sh        # end-to-end against the running app + database
+make e2e                # Playwright: the running app against a running database
+make verify             # both, in that order
 supabase stop           # when done; add --no-backup to discard local data
 ```
 
-`make check` and `scripts/smoke.sh` answer different questions.
-`make check` proves the pure logic is right. `scripts/smoke.sh` proves the
-running app talks to a running Postgres correctly — HTTP status codes, RLS
-under a real JWT, idempotency across two actual runs. A stage is not
-verified until both are green.
+`make check` and `make e2e` answer different questions. `make check`
+proves the pure logic is right, with no server and no database. `make e2e`
+proves the running app talks to a running Postgres correctly — HTTP status
+codes, RLS under a real JWT, idempotency across two actual runs. A stage
+is not verified until both are green, which is what `make verify` runs.
 
 ---
 
@@ -237,30 +238,53 @@ bunx --bun newman run postman/LedgerLens.postman_collection.json \
   -e postman/LedgerLens.local.postman_environment.json
 ```
 
-The collection overlaps `scripts/smoke.sh` deliberately, but reaches one
+The collection overlaps the Playwright suite deliberately, but reaches one
 thing the shell version cannot: a real GoTrue sign-in, so RLS is
 exercised through a genuine JWT rather than an impersonated role. That
 difference is not academic — it is what caught the seed writing NULL into
 `auth.users.confirmation_token`, which made every sign-in fail with a 500
-while every `set local role` check kept passing.
+while every `set local role` check kept passing. `tests/rls.spec.ts` now
+covers both paths for the same reason.
 
-### Automated: `scripts/smoke.sh`
+### Automated: the Playwright suite
 
 Everything above, asserted:
 
 ```bash
-scripts/smoke.sh          # all implemented stages
-scripts/smoke.sh 1        # mock provider only — no database needed
-scripts/smoke.sh 2        # ingestion only
+make e2e                                    # every spec
+make e2e ARGS=tests/stage3-data-quality.spec.ts
+bun run test:e2e:ui                         # the interactive runner
+make verify                                 # make check, then the suite
 ```
 
-It needs the dev server running and `.env.local` present; it reads
-`.env.local` itself so the secret never has to be exported by hand.
-`BASE_URL` and `DB_URL` override the defaults.
+Playwright starts the dev server itself if one is not already running, and
+reuses yours if it is. `.env.local` is read by `playwright.config.ts`, so
+no secret has to be exported by hand; `BASE_URL` and `DB_URL` override the
+defaults.
 
-Each new stage adds a `stageN` function to that script. A stage that
-cannot be smoke-tested from outside the process is a stage whose seams are
-in the wrong place.
+| Spec | What it covers |
+|---|---|
+| `tests/stage1-mock-provider.spec.ts` | Each chaos flag in isolation, and a cursor walk that reconciles against `/summary` |
+| `tests/stage2-ingestion.spec.ts` | Trigger auth, counter balance, idempotency, tenant-scoped idempotency, orphans, privilege grants |
+| `tests/stage3-data-quality.spec.ts` | All four checks, both green and red, plus the threshold boundaries |
+| `tests/rls.spec.ts` | Tenant isolation through Postgres *and* through PostgREST as a signed-in user |
+
+`tests/helpers/db.ts` holds the database side: `whatIf()` runs a mutation
+inside a transaction that is always rolled back, which is how a check is
+proven able to go red without leaving the database changed, and `asUser()`
+runs a query as the `authenticated` role with a real JWT claim.
+
+Every check is asserted both ways — that it passes on healthy data and
+that it fails on broken data. A check that cannot go red is decoration,
+and this suite has caught three of those in itself.
+
+The database helpers refuse to run against anything but a loopback host.
+They truncate tables, and `DB_URL` is an overridable environment variable;
+the obvious way to "check the hosted project quickly" would otherwise
+destroy real data.
+
+Each new stage adds a spec file. A stage that cannot be exercised from
+outside the process is a stage whose seams are in the wrong place.
 
 ---
 
@@ -355,8 +379,8 @@ select grantee, table_name, privilege_type
  order by table_name, grantee;
 ```
 
-`scripts/smoke.sh 2` asserts the same thing locally, so the two can be
-compared directly. `supabase db dump -f before.sql` before a push and
+`tests/stage2-ingestion.spec.ts` asserts the same thing locally, so the
+two can be compared directly. `supabase db dump -f before.sql` before a push and
 again after gives a diffable record of what actually changed — more
 reliable than reading the migration and assuming, and it needs no
 password of its own once `supabase link` has run.
