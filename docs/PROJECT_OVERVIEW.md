@@ -4,7 +4,9 @@
 
 This is the working overview of the LedgerLens project: what it is, how the
 pieces fit together, and where to go for more detail. For the full database
-schema, see [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md). For the
+schema, see [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md). To run it on
+your machine and verify a stage by hand, see
+[`docs/LOCAL_DEV.md`](LOCAL_DEV.md). For the
 deployment plan, see [`docs/DEPLOYMENT.md`](DEPLOYMENT.md). For scoped
 requirements per stage, see [`.claude/PRD.md`](../.claude/PRD.md). For
 workflow rules (how work gets planned and executed), see
@@ -252,6 +254,11 @@ sequenceDiagram
   exactly 0 after — [`docs/RECONCILIATION_BASELINE.md`](RECONCILIATION_BASELINE.md).
   This is Stage 3's headline input, banked during Stage 2 as its PRD
   requires.
+- **Runs locally:** the full stack (Next.js + Supabase in Docker, seeded
+  with two tenants) comes up with `make dev-up` + `bun run dev`, and
+  `scripts/smoke.sh` asserts each stage end-to-end over HTTP — 19 checks
+  green. See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers
+  connecting IntelliJ IDEA/DataGrip to the database.
 - **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo
   root — a kanban-style board tracking every stage from here to Definition
   of Done, plus which agent/harness role did each step.

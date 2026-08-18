@@ -20,6 +20,25 @@ defect the PRD itself specified (`raw_events` idempotency key without
 `org_id`, which silently discarded a second tenant's data). ADR 0004
 records the resulting reversal of how records get written.
 
+**Local verification loop — done.** The stack now runs end-to-end on one
+machine: local Supabase (Docker) seeded with two tenants and two auth
+users, `.env.local`, and `scripts/smoke.sh` asserting each stage over HTTP
+against the running app — 19 checks, all green, re-runnable. Setup, curl
+recipes, and IntelliJ IDEA/DataGrip connection details are in
+[`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md). Standing up that loop found two
+reproducibility defects that were invisible against the hosted project and
+would have broken any fresh deploy — see the Done row below. Reviewed by
+`cavecrew-reviewer` over two passes: 1 HIGH, 2 MEDIUM, all fixed. The
+smoke script could truncate a non-local database if `DB_URL` were
+overridden; its pagination assertion passed when the request failed on the
+first page, a check that could not tell a clean walk from no walk at all;
+and the first version of the loopback guard matched a substring, which
+both rejected valid URLs without userinfo and would have accepted
+`…@db.example.com/x?opt=127.0.0.1` and the host
+`127.0.0.1.attacker.example`. The guard now parses the host out and
+matches it exactly, refusing anything that is not a recognisable postgres
+URL; ten URL forms were checked against it.
+
 **Next: Stage 3 (Data Quality & Reconciliation).** Not started. The
 project's actual differentiator. Its headline input is already captured and
 banked — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md):
@@ -70,6 +89,7 @@ _(empty — Stage 2 passed review, moved to Done)_
 | Project layout decision, no monorepo (ADR 0002, `DESIGN.md`) | main | |
 | Next.js app scaffold + Supabase init | main | |
 | **Stage 1 — Mock Provider** (`/invoices` + `/summary`, 7 chaos flags) | main + codex (review) | Build/lint clean, all 7 flags runtime-verified live. `make codex-review`: 5 findings, 4 fixed (DESIGN.md self-contradiction, missing `correlation_id` in RAG&Agent PRD, Stage 2/3 reconciliation-ordering contradiction, RLS-coverage wording), 1 accepted as a known limitation (no file lock in `new-design-section.sh`). Also fixed a real harness bug found along the way: `omc ask`'s `--agent-prompt` role is a fixed roster — `review` doesn't exist, `code-reviewer` does. |
+| **Local verification loop** (`supabase/seed.sql`, `.env.local`, `scripts/smoke.sh`, `docs/LOCAL_DEV.md`, `make dev-up`/`smoke`/`verify`) | main | The first `supabase db reset` against an empty database exposed two defects that only a hosted project's history was hiding: (1) a migration revoking `public.rls_auto_enable()`, a function no migration creates — it is an artifact of that one project, so the run aborted on any other database; now guarded by a `to_regprocedure` check rather than dropped, since the revoke still matters where the function is real. (2) No table or function grants anywhere — the hosted project pre-dates Supabase's removal of the "auto-expose new entities" default and had been supplying them invisibly, so on a current project the ingestion route failed with `permission denied for table pipeline_runs`. Fixed with an explicit least-privilege grants migration that revokes the three Data API roles down to nothing before granting back only what each uses (`anon`: nothing; `authenticated`: SELECT only; `service_role`: verb-by-verb, no DELETE or TRUNCATE anywhere). Revoke-then-grant rather than grant-only so a project carrying the legacy default converges to the same privilege set instead of silently keeping a wider one — verified by reproducing that default locally and diffing the end state. Also fixed `bun run lint` going red on the CLI's `supabase/.temp/` scratch bundle. |
 | **Stage 2 — Ingestion & Transform** (polling route + webhook Edge Function, ADR 0003/0004) | worktree:stage-2-ingestion-route + worktree:stage-2-webhook (parallel) + main (schema, fixes) + code-reviewer | Two agents in isolated worktrees, merged and reviewed as one diff. Review: 2 CRITICAL + 4 HIGH + 5 MEDIUM, all addressed — tenant-scoped idempotency key (a **spec** defect the PRD itself specified), non-atomic raw/downstream writes leaving permanent orphans, cursor regressing to null on a drained dataset, webhook poisoning the polling cursor, unauthenticated trigger writing to any `org_id`, one bad record aborting the whole run. Also captured the reconciliation baseline PRD Stage 3 US-04 required during this stage, which surfaced and fixed a Stage 1 PRNG-determinism bug that made zero drift unreachable. |
 
 ---
@@ -107,5 +127,7 @@ Recorded in `.claude/DESIGN.md`'s open questions:
 
 - No cross-invocation lock — two overlapping runs for one `org_id` would advance from the same cursor. Harmless at manual-trigger scale; needs an advisory lock before Stage 4's cron can fire alongside a manual trigger.
 - No generated Supabase types, so `supabase.rpc()` return shapes are hand-written interfaces.
-- No CI yet, so `make check` is a habit rather than a gate. `deno check` in particular runs nowhere.
-- The mock provider still can't push, so the webhook is proven by `simulate.sh` rather than driven end-to-end.
+- No CI yet, so `make check` and `scripts/smoke.sh` are habits rather than gates. `deno check` in particular runs nowhere.
+- The mock provider still can't push, so the webhook is proven by `simulate.sh` rather than driven end-to-end — `scripts/smoke.sh` covers the polling route but not the Edge Function.
+- The hosted project is behind the repo by one migration (`20260818094500_stage2_explicit_data_api_grants`) and it is **not** a no-op there. Reproducing the legacy default locally (`auto_expose_new_tables = true`, then `supabase db reset`) confirmed what that project actually holds: `anon` and `authenticated` have SELECT/INSERT/UPDATE/DELETE/TRUNCATE on every table. RLS denies all of it today — no INSERT/UPDATE/DELETE policy exists, and RLS denies what no policy allows — so this is a latent trap rather than a live hole: the next table added without RLS would be world-writable there and closed locally, with nothing reporting the difference. The migration now revokes before granting, and the resulting privilege set was verified byte-identical under both defaults. `scripts/smoke.sh` asserts it (anon holds nothing; no DELETE or TRUNCATE for any Data API role). Applying it to the hosted project needs `supabase link` + `supabase db push`, which needs that project's database password.
+- `get_advisors` (Definition of Done item 1) is a hosted-project API with no local equivalent, so the local stack cannot re-check it. The advisor state recorded for Stage 2 was captured against the hosted project and still stands; the new grants migration has not been advisor-checked.

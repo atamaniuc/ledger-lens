@@ -355,9 +355,16 @@ Makefile                     make targets wrapping scripts/harness/
 docs/
   PROJECT_OVERVIEW.md        Architecture, data model, roadmap, agent safety flow
   DATABASE_SCHEMA.md         Full SQL DDL + RLS policies
+  LOCAL_DEV.md               Running locally, verifying a stage, IDE database setup
   DEPLOYMENT.md              Deploy plan, env vars, CI, readiness checklist
+  RECONCILIATION_BASELINE.md The before/after drift measurement
 scripts/
+  smoke.sh                   End-to-end checks against the running app, per stage
   harness/                   The meta-harness scripts + their own README
+supabase/
+  migrations/                Schema + RLS, applied in order by `supabase db reset`
+  seed.sql                   Two local tenants + auth users (local stack only)
+  functions/                 Deno Edge Functions (provider-webhook)
 infra/                       Pulumi program (added once Stage 1 needs a real deploy)
 ```
 
@@ -391,6 +398,11 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   Schema live with RLS on every table from the migration that created it.
   **Reconciliation baseline banked:** drift +2.65% before idempotency,
   exactly 0 after — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md).
+- ✅ **Local verification loop** — the whole stack runs on one machine
+  (`make dev-up`, `bun run dev`) against a seeded two-tenant local
+  Postgres, and `scripts/smoke.sh` asserts each stage end-to-end over
+  HTTP: 19 checks, all green. Setup, curl recipes, and IDE database
+  connection in [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
 - ⬜ **Stage 3 — Data Quality & Reconciliation** — next up. The project's
   actual differentiator; its headline input is already measured.
 - ⬜ Stages 4–6 — not started.

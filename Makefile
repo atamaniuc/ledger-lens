@@ -1,4 +1,4 @@
-.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check
+.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check dev-up dev-down dev-reset dev-status smoke verify
 
 # Usage: make adr TITLE="cursor-based ingestion resume"
 adr:
@@ -56,3 +56,37 @@ deno-check:
 	else \
 		echo "deno not installed — supabase/functions/ went unchecked. Install Deno to close this gap: https://deno.land"; \
 	fi
+
+# --- Local development ------------------------------------------------------
+# See docs/LOCAL_DEV.md. The local Supabase stack is where a stage gets
+# verified by hand: resettable in seconds, non-secret credentials, and a
+# mistake there costs nothing.
+
+# Start the local stack (Docker) and load schema + seed data.
+dev-up:
+	supabase start
+	@$(MAKE) --no-print-directory dev-reset
+
+# Drop and rebuild the local database: every migration in order, then
+# supabase/seed.sql. Also the only check that the migrations apply cleanly
+# from empty — the hosted project only ever saw them applied one at a time.
+dev-reset:
+	supabase db reset
+
+dev-down:
+	supabase stop
+
+# Local URLs and keys, including the service_role key .env.local needs.
+dev-status:
+	supabase status
+
+# End-to-end checks against the running app + database.
+# Usage: make smoke [STAGE=1|2|all]
+smoke:
+	@scripts/smoke.sh $(or $(STAGE),all)
+
+# The full gate: pure-logic checks, then the running system. A stage is not
+# verified until both are green (CLAUDE.md Definition of Done item 2).
+verify:
+	@$(MAKE) --no-print-directory check
+	@scripts/smoke.sh

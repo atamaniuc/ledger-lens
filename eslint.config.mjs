@@ -22,6 +22,12 @@ const eslintConfig = defineConfig([
     // extensions don't parse under the Next.js app's config. Excluded from
     // tsconfig.json for the same reason; check them with `deno check`.
     "supabase/functions/**",
+    // Supabase CLI scratch space, written by `supabase start`. It is
+    // gitignored but eslint walks the working tree, not the index, so a
+    // running local stack drops a bundled edge-runtime file here and turns
+    // `bun run lint` red with ~150 errors from vendored code.
+    "supabase/.temp/**",
+    "supabase/.branches/**",
   ]),
 ]);
 
