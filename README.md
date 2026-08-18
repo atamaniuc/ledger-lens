@@ -34,12 +34,12 @@ task install            # dependencies
 cp supabase/.env.example supabase/.env   # the Edge Function's shared secret
 task dev-up             # local Supabase in Docker: migrations + two-tenant seed
 task env                # writes .env.local from the running stack
-task dev                # http://localhost:3000
+task dev                # http://localhost:3000 — hot reload + IDE debug, containerised
 ```
 
 ```bash
-make                    # every target, grouped
-task verify             # typecheck, lint, unit tests, deno check, then Playwright
+task                    # every task, grouped
+task verify             # typecheck, lint, unit tests, deno check, types-check, then Playwright — the first four run in Docker
 task docker-up          # the production build, containerised, beside the stack
 ```
 
@@ -257,27 +257,27 @@ convention the path of least resistance. Full rules in
 
 ```mermaid
 flowchart TD
-    PRD["Phase 0 — PRD\nmake prd FEATURE=..."] --> DESIGN["Phase 1 — Design\nsuperpowers:brainstorming"]
-    DESIGN -->|optional second opinion| CODEX1["Codex architect / critic\nmake codex-architect / codex-critic"]
-    CODEX1 --> ADR["ADR\nmake adr TITLE=..."]
+    PRD["Phase 0 — PRD\ntask prd FEATURE=..."] --> DESIGN["Phase 1 — Design\nsuperpowers:brainstorming"]
+    DESIGN -->|optional second opinion| CODEX1["Codex architect / critic\ntask codex-architect / codex-critic"]
+    CODEX1 --> ADR["ADR\ntask adr TITLE=..."]
     DESIGN --> ADR
     ADR --> PLAN["Phase 2 — Plan\n/omc-plan --consensus [--architect codex --critic codex]"]
     PLAN --> TASKS[("tasks.md")]
 
-    TASKS --> WT1["Worktree: stage-N-a\nmake worktree BRANCH=..."]
-    TASKS --> WT2["Worktree: stage-N-b\nmake worktree BRANCH=..."]
+    TASKS --> WT1["Worktree: stage-N-a\ntask worktree BRANCH=..."]
+    TASKS --> WT2["Worktree: stage-N-b\ntask worktree BRANCH=..."]
 
     subgraph LADDER["Delegation Ladder — per task"]
         direction LR
         LOC["cavecrew-investigator\nlocate"] --> EXE["cavecrew-builder / OMC executor\nexecute"]
-        EXE --> REV["cavecrew-reviewer / Codex\nmake codex-review"]
+        EXE --> REV["cavecrew-reviewer / Codex\ntask codex-review"]
     end
 
     WT1 --> LADDER
     WT2 --> LADDER
 
     LADDER --> DOD["Definition of Done"]
-    DOD --> MERGE["merge --ff-only\nmake worktree-done"]
+    DOD --> MERGE["merge --ff-only\ntask worktree-done"]
     MERGE --> COMMIT["commit"]
 ```
 
@@ -389,8 +389,11 @@ docs/
   RECONCILIATION_BASELINE.md The before/after drift measurement
 tests/                       Playwright end-to-end suite, one spec per stage
   helpers/                   Typed API wrappers, database and local-stack helpers
+lib/
+  supabase/database.types.ts Generated from the local schema — `task types` / `task types-check`
 scripts/
   write-env-local.sh         Writes .env.local from the running local stack
+  gen-types.sh                Regenerates lib/supabase/database.types.ts
   harness/                   The meta-harness scripts + their own README
 supabase/
   migrations/                Schema + RLS, applied in order by `supabase db reset`

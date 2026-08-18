@@ -30,9 +30,13 @@ committed; actual secrets go through `pulumi config set --secret`
 
 ## What Docker Compose does and does not cover
 
-`compose.yaml` covers the Next.js app only: a production image, joined to
-the network `supabase start` already created, so the deployed artifact gets
-exercised locally instead of first on the deploy target (`task docker-up`).
+`compose.yaml` covers the Next.js app only, in two modes, both joined to the
+network `supabase start` already created: a production image (`task
+docker-up`), so the deployed artifact gets exercised locally instead of
+first on the deploy target, and a bind-mounted dev image with hot reload and
+an IDE-attachable debugger (`task docker-dev`), for catching container-
+specific bugs without giving up the inner loop. See
+[ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
 
 It deliberately does **not** define Postgres, Auth, PostgREST or the Edge
 Runtime. `supabase start` owns those containers, their versions travel with

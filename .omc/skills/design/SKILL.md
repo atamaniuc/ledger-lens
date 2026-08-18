@@ -77,7 +77,7 @@ content in DESIGN.md, and don't restate ADR reasoning in DESIGN.md either
 scripts/harness/new-design-section.sh "Mock Provider"
 # → empty skeleton section in .claude/DESIGN.md
 
-make design FEATURE="Mock Provider"
+task design FEATURE="Mock Provider"
 
 # update in place once real content exists (normal for this file — see
 # "DESIGN.md is a living document" above):
@@ -130,8 +130,8 @@ hiding an unresolved question inside a confident-sounding Overview.
   it inline in the Overview.
 - For architecture/security-sensitive designs (auth, RLS/RBAC, agent tool
   surface, cross-tenant data flow): get a second opinion before treating
-  the design as final — `make codex-architect PROMPT_FILE=.claude/DESIGN.md`
-  and/or `make codex-critic PROMPT_FILE=.claude/DESIGN.md`.
+  the design as final — `task codex-architect PROMPT_FILE=.claude/DESIGN.md`
+  and/or `task codex-critic PROMPT_FILE=.claude/DESIGN.md`.
 - Once approved, this is what `/omc-plan --consensus` reads (Phase 2,
   `CLAUDE.md`) to generate `tasks.md` — keep it accurate, since the plan
   is only as good as the design it's built from.

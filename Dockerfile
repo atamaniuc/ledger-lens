@@ -1,5 +1,10 @@
 # LedgerLens — the Next.js app, containerised.
 #
+# Two targets matter to compose.yaml: `dev` (hot reload, IDE-debuggable,
+# source bind-mounted) and `runner` (the production build, the deployed
+# artifact). `build` is an intermediate stage for `runner`, not used on its
+# own.
+#
 # The local Supabase stack is not built here: `supabase start` already runs
 # Postgres, Auth, PostgREST and the Edge Runtime in Docker, and a second
 # definition of those would be a copy that drifts. compose.yaml joins this
@@ -10,6 +15,46 @@ FROM oven/bun:1.3.14-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
+
+# --- dev ---------------------------------------------------------------------
+# The inner dev loop, containerised: source is bind-mounted by compose.yaml's
+# `dev` service, not copied here, so this stage builds once and every edit is
+# live without a rebuild. Runs on `deps` — the full toolchain, not the traced
+# `runner` stage below — since `bun run dev`, `bun test`, `tsc`, etc. all need
+# it. CMD here is `bun run dev` (package.json's script, which binds its
+# debug port to `127.0.0.1:6499`, not the `9230` in `EXPOSE` below — that
+# number describes compose.yaml's `command:` override, the actual way this
+# stage runs; a bare `docker run` of this image, without compose, gets
+# `package.json`'s own port instead) — the right default for `docker run`
+# without compose; compose.yaml overrides `command:` with an explicit
+# `0.0.0.0:9230` bind for the `dev` service specifically, since that's the
+# one meant to be attached to from the host. See ADR 0006.
+#
+# Real Node is installed alongside Bun for one reason: `next build` under
+# Bun segfaults on Alpine (see the `build` stage below — the same crash is
+# why that stage runs on `node:22-alpine`, not `deps`). `task build` in this
+# `dev` container needs the same escape hatch; the fallback `node` Bun ships
+# on its own `PATH` is Bun pretending to be Node, not a real fix.
+#
+# Not root: this container reads .env.local (the service-role key), publishes
+# an inspector, and bind-mounts the whole repo read-write — the same reason
+# `runner` below refuses root, applied here too. `oven/bun` already ships a
+# `bun` user (uid 1000); `chown` before switching so the image's own
+# `node_modules` (written as root by `bun install` in `deps`) is writable
+# once compose's named volume copies it in.
+FROM deps AS dev
+# `.next` doesn't exist in this stage — nothing has built here yet — so it's
+# created explicitly. A directory with no image content still gets a fresh
+# *root*-owned volume when compose's named volume first mounts over it
+# (there's nothing to inherit ownership from); `mkdir` before `chown` is
+# what makes that volume come up owned by `bun` instead. `node_modules`
+# doesn't need this — `bun install` in `deps` already gave it real content.
+RUN apk add --no-cache nodejs \
+ && mkdir -p /app/.next \
+ && chown -R bun:bun /app
+USER bun
+EXPOSE 3000 9230
+CMD ["bun", "run", "dev"]
 
 # --- build -------------------------------------------------------------------
 # Bun installs; Node builds. The Next.js compiler runs under Node here for the

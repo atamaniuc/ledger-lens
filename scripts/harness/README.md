@@ -2,7 +2,7 @@
 
 A set of small shell scripts that mechanically service the workflow defined in the root [`CLAUDE.md`](../../CLAUDE.md): PRD → Design/ADR (Superpowers) → tasks.md (OMC) → parallel execution via git worktree → second opinion from Codex → review. Each script isn't a "framework" — it's a thin wrapper around `git`/`omc ask` that just keeps you from forgetting a step or doing it by hand with a mistake (ADR numbering, PRD path, worktree path — always consistent).
 
-All scripts are already executable (`chmod +x`) and can be called either directly (`scripts/harness/<script>.sh ...`) or through the `Makefile` at the repo root (`make <target> ...`) — shorter to type and you don't need to remember exact filenames.
+All scripts are already executable (`chmod +x`) and can be called either directly (`scripts/harness/<script>.sh ...`) or through the `Taskfile.yml` tasks at the repo root (`task <name> ...`) — shorter to type and you don't need to remember exact filenames.
 
 **Important up front:** the scripts resolve the repo root relative to **their own path on disk**. If you're working inside a git worktree (see below), it has its own checkout of `scripts/harness/*`. Run the script **from the tree you're currently in** (`./scripts/harness/...` from the current tree's root) — don't reach into a script from a sibling tree via `../../scripts/...`. Hit this once during testing: the command ran fine, but wrote a PRD section into `main` instead of the isolated worktree. Not a bug in the script — a bug in how it was invoked, but a real footgun.
 
@@ -10,7 +10,7 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 
 ## Quick reference: which script, when
 
-| I want to | Script | Make target |
+| I want to | Script | Task target |
 |---|---|---|
 | Record an architecture decision | `new-adr.sh` | `task adr TITLE="..."` |
 | Open a PRD entry before starting design (Phase 0) | `new-prd-section.sh` | `task prd FEATURE="..."` |
@@ -39,7 +39,7 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 scripts/harness/new-adr.sh "cursor-based ingestion resume"
 # → .claude/adr/0001-cursor-based-ingestion-resume.md
 
-# via Makefile:
+# via Taskfile:
 task adr TITLE="cursor-based ingestion resume"
 ```
 

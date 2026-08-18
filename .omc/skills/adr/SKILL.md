@@ -60,7 +60,7 @@ collide easily by hand:
 scripts/harness/new-adr.sh "short decision title"
 # → .claude/adr/NNNN-short-decision-title.md
 
-make adr TITLE="short decision title"
+task adr TITLE="short decision title"
 
 # when this decision replaces an earlier one:
 scripts/harness/new-adr.sh "new decision title" --supersedes 0003
@@ -107,8 +107,8 @@ reason. "Not chosen" with no reason is not.
 - For architecture/security-sensitive decisions (auth, RLS/RBAC, agent
   tool surface, cross-tenant migrations, infra changes touching secrets):
   get a second opinion before treating the ADR as final —
-  `make codex-architect PROMPT_FILE=.claude/adr/NNNN-....md` and/or
-  `make codex-critic PROMPT_FILE=...`.
+  `task codex-architect PROMPT_FILE=.claude/adr/NNNN-....md` and/or
+  `task codex-critic PROMPT_FILE=...`.
 - If this decision changes something already stated in `.claude/PRD.md`
   or `.claude/DESIGN.md`, update those in the *same* change as the ADR —
   per `CLAUDE.md`, don't leave the PRD/design docs describing the old
