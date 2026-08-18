@@ -207,6 +207,43 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
 
 and re-run: the invoice count stays put and `rows_deduplicated` climbs.
 
+### In Postman
+
+The same checks as a collection, for when watching the traffic is more
+useful than a pass/fail line:
+
+```bash
+make postman-env     # writes postman/LedgerLens.local.postman_environment.json
+```
+
+Then in Postman: **Import** (⌘O) →  paste the contents of
+`postman/LedgerLens.postman_collection.json`, import, and repeat for the
+generated environment file. Select **LedgerLens — local** in the
+environment picker and use the **Collection Runner** — several requests
+call themselves in a loop via `pm.execution.setNextRequest`, which only
+works there, and later requests depend on variables earlier ones set.
+
+The environment file is generated rather than committed because it holds
+the local stack's `service_role` and `anon` keys. They are fixed,
+publicly documented development values, but a committed file with a key
+named `service_role` is a habit worth not forming. The template beside it
+is what's in git.
+
+To run it headless — useful for checking the collection still works after
+an API change:
+
+```bash
+bunx --bun newman run postman/LedgerLens.postman_collection.json \
+  -e postman/LedgerLens.local.postman_environment.json
+```
+
+The collection overlaps `scripts/smoke.sh` deliberately, but reaches one
+thing the shell version cannot: a real GoTrue sign-in, so RLS is
+exercised through a genuine JWT rather than an impersonated role. That
+difference is not academic — it is what caught the seed writing NULL into
+`auth.users.confirmation_token`, which made every sign-in fail with a 500
+while every `set local role` check kept passing.
+
 ### Automated: `scripts/smoke.sh`
 
 Everything above, asserted:

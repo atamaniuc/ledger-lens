@@ -40,6 +40,15 @@ both rejected valid URLs without userinfo and would have accepted
 matches it exactly, refusing anything that is not a recognisable postgres
 URL; ten URL forms were checked against it.
 
+**Postman collection — done.** `postman/`, 20 requests / 47 assertions
+across the same three stages, all green. It duplicates `scripts/smoke.sh`
+on purpose but is not redundant: it signs in through GoTrue for real, so
+RLS is exercised with a genuine JWT rather than `set local role`. That
+difference immediately paid for itself — the seed was writing NULL into
+`auth.users.confirmation_token`, which GoTrue scans into a Go `string`,
+so every sign-in failed with a 500 while every shell-side RLS check kept
+passing. Fixed in the seed with the reason recorded there.
+
 **Next: Stage 3 (Data Quality & Reconciliation).** Not started. The
 project's actual differentiator. Its headline input is already captured and
 banked — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md):

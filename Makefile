@@ -1,4 +1,4 @@
-.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check dev-up dev-down dev-reset dev-status smoke verify
+.PHONY: adr prd design worktree worktree-done codex-architect codex-critic codex-review check deno-check dev-up dev-down dev-reset dev-status smoke verify postman-env
 
 # Usage: make adr TITLE="cursor-based ingestion resume"
 adr:
@@ -90,3 +90,8 @@ smoke:
 verify:
 	@$(MAKE) --no-print-directory check
 	@scripts/smoke.sh
+
+# Regenerates the Postman environment from .env.local + `supabase status`.
+# The environment file itself is gitignored; the template beside it is not.
+postman-env:
+	@scripts/postman-env.sh

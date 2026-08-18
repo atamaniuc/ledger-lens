@@ -26,21 +26,36 @@ on conflict (id) do nothing;
 --
 -- bob is the negative control: querying Acme's rows as bob must return
 -- zero rows, not an error and not masked data.
+-- The token columns are set to '' rather than left NULL on purpose. They
+-- are nullable in the schema, but GoTrue scans them into a Go `string`,
+-- so a NULL makes every sign-in fail with a 500:
+--
+--   error finding user: sql: Scan error on column index 3, name
+--   "confirmation_token": converting NULL to string is unsupported
+--
+-- Nothing in the database complains, and RLS checks that impersonate a
+-- role directly (`set local role authenticated`) never touch GoTrue, so
+-- this stays invisible until something actually signs in.
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, created_at, updated_at,
-  raw_app_meta_data, raw_user_meta_data
+  raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change,
+  email_change_token_new, email_change_token_current,
+  phone_change, phone_change_token, reauthentication_token
 ) values
   ('00000000-0000-0000-0000-000000000000',
    '00000000-0000-4000-9000-000000000001', 'authenticated', 'authenticated',
    'alice@acme.test', crypt('password123', gen_salt('bf')),
    now(), now(), now(),
-   '{"provider":"email","providers":["email"]}', '{}'),
+   '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', '', '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000',
    '00000000-0000-4000-9000-000000000002', 'authenticated', 'authenticated',
    'bob@globex.test', crypt('password123', gen_salt('bf')),
    now(), now(), now(),
-   '{"provider":"email","providers":["email"]}', '{}')
+   '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', '', '', '', '', '')
 on conflict (id) do nothing;
 
 -- GoTrue requires a matching identity row before it will issue a token for
