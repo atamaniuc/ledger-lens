@@ -260,10 +260,13 @@ sequenceDiagram
   every run — invoiced 47,942,632 + quarantined 4,475,029 against the
   provider's independent 52,417,661.
 - **Runs locally:** the full stack (Next.js + Supabase in Docker, seeded
-  with two tenants) comes up with `make dev-up` + `bun run dev`, and
-  a Playwright suite asserts each stage end-to-end over HTTP — 32 tests
-  green. See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers
-  connecting IntelliJ IDEA/DataGrip to the database.
+  with two tenants) comes up with `task dev-up` + `task dev`, and a
+  Playwright suite asserts each stage end-to-end over HTTP — 38 tests
+  green, the webhook Edge Function included. `task` with no arguments
+  lists every local command; `task docker-up` runs the production build as
+  a container beside that stack ([ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)).
+  See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers connecting
+  IntelliJ IDEA/DataGrip to the database.
 - **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo
   root — a kanban-style board tracking every stage from here to Definition
   of Done, plus which agent/harness role did each step.

@@ -1,0 +1,45 @@
+# LedgerLens in Docker, next to the Supabase stack the CLI already runs.
+#
+#   task dev-up          # the Supabase stack (creates the network below)
+#   task docker-up       # this app, joined to it
+#
+# The stack itself is deliberately absent from this file. `supabase start`
+# owns those containers, their versions travel with supabase/config.toml, and
+# a second definition here would be a copy that silently drifts from the one
+# migrations and `db reset` are proven against — see ADR 0006.
+
+name: ledgerlens
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ledgerlens-app:local
+    container_name: ledgerlens_app
+    restart: unless-stopped
+    ports:
+      # Loopback only. This process holds the service-role key, and the
+      # default 0.0.0.0 bind would publish it to every device on the network
+      # the laptop happens to be on.
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    # Everything the app needs, from the same file the host processes read.
+    # Required, not optional: without it the routes reject every request for
+    # want of a service-role key, which would look like an app bug.
+    env_file:
+      - .env.local
+    environment:
+      # Inside the network the gateway is `kong`, not 127.0.0.1 — loopback in
+      # a container is the container itself. Overrides .env.local's value,
+      # which is written for processes running on the host.
+      SUPABASE_URL: http://kong:8000
+      NODE_ENV: production
+    networks:
+      - supabase
+
+networks:
+  # Created by `supabase start`. External, so `docker compose down` never
+  # takes the database's network with it.
+  supabase:
+    name: supabase_network_t1
+    external: true

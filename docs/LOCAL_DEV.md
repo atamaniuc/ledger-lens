@@ -17,31 +17,53 @@ non-secret by design, and a mistake there costs nothing.
 |---|---|---|
 | [Docker Desktop](https://docs.docker.com/desktop/) | runs the local Supabase stack | `docker info` |
 | [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) | starts/resets the stack, applies migrations | `supabase --version` |
-| [Bun](https://bun.sh) | package manager, dev server, test runner | `bun --version` |
+| [Bun](https://bun.sh) | package manager, dev server, unit test runner | `bun --version` |
 | `psql` | ad-hoc queries; the test suite talks to Postgres directly | `psql --version` |
-| [Deno](https://deno.land) *(optional)* | type-checks `supabase/functions/` — `make check` skips this gate loudly when absent | `deno --version` |
+| [Deno](https://deno.land) | type-checks `supabase/functions/`, which `tsc` cannot — `task check` skips this gate loudly when absent | `deno --version` |
+| [Task](https://taskfile.dev) | runs every command in this document | `task --version` |
+
+Everything is driven through [Task](https://taskfile.dev). Run `task` with
+no arguments for the full grouped list, `task --list` for the same set
+alphabetically, and `task completion` for the shell-completion setup.
 
 ---
 
 ## One-time setup
 
 ```bash
-bun install
-supabase start          # first run pulls several GB of images
+task install                             # bun install
+cp supabase/.env.example supabase/.env   # before the stack starts — see below
+task dev-up                              # starts the stack (first run pulls
+                                         # several GB), then applies every
+                                         # migration and the seed
+task env                                 # writes .env.local from the stack
 ```
 
-`supabase start` prints the local URLs and keys. Write them into
-`.env.local` (gitignored — see the template in `.env.example`):
+`task env` reads the stack's own URLs and keys and writes them out, so the
+service-role key is never hand-copied and cannot go stale. It refuses to
+overwrite an existing `.env.local`; delete the file first if you want it
+regenerated. The result looks like this (`.env.example` documents every
+variable, including the optional ones):
 
 ```bash
 # .env.local
 SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_SERVICE_ROLE_KEY=<the "service_role key" supabase start printed>
+SUPABASE_SERVICE_ROLE_KEY=<the "service_role key" the stack printed>
 INGESTION_TRIGGER_SECRET=local-dev-ingestion-secret
 WEBHOOK_SHARED_SECRET=local-dev-webhook-secret
+MOCK_PROVIDER_SEED=42
 ```
 
-Reprint those values at any time with `supabase status`.
+Reprint the stack's values at any time with `task dev-status`.
+
+`supabase/.env` is a different file doing a different job: it holds the
+secrets `supabase start` hands to the **Edge Functions container**, wired
+through `[edge_runtime.secrets]` in `supabase/config.toml`. It has to exist
+before the stack starts — the container reads its environment once — and
+`WEBHOOK_SHARED_SECRET` must be identical in both files. The caller reads it
+from `.env.local`; the function checks the one it was given here. If you
+wrote it after starting the stack, `task dev-down && task dev-start` picks
+it up without touching the data.
 
 The local `service_role` key is a fixed, publicly documented development
 key — it is not a secret and grants nothing outside your machine. The
@@ -49,11 +71,9 @@ hosted project's key is a real secret and must never appear in a file that
 git tracks. `.env.local` is gitignored precisely so the same variable name
 can hold either.
 
-Then load the schema and the seed data:
-
-```bash
-supabase db reset       # drops, re-applies every migration, runs seed.sql
-```
+`task dev-up` ends by running `supabase db reset` — it drops the database,
+re-applies every migration in order, and runs `supabase/seed.sql`. Run it on
+its own with `task dev-reset` after writing a migration.
 
 `db reset` is also the only automated check that the migrations apply
 cleanly from an empty database, in order. It earns its keep: the first
@@ -82,22 +102,39 @@ can name them.
 ## Daily loop
 
 ```bash
-supabase start          # if not already running
-bun run dev             # http://localhost:3000
+task dev-start          # if the stack is not already running (keeps data)
+task dev                # the Next.js dev server on http://localhost:3000
 ```
 
 ```bash
-make check              # typecheck + lint + unit tests (+ deno check)
-make e2e                # Playwright: the running app against a running database
-make verify             # both, in that order
-supabase stop           # when done; add --no-backup to discard local data
+task check              # typecheck + lint + unit tests + deno check
+task e2e                # Playwright: the running app against a running database
+task verify             # both, in that order
+task dev-down           # when done; `task dev-nuke` also discards local data
 ```
 
-`make check` and `make e2e` answer different questions. `make check`
-proves the pure logic is right, with no server and no database. `make e2e`
+`task check` and `task e2e` answer different questions. `task check`
+proves the pure logic is right, with no server and no database. `task e2e`
 proves the running app talks to a running Postgres correctly — HTTP status
 codes, RLS under a real JWT, idempotency across two actual runs. A stage
-is not verified until both are green, which is what `make verify` runs.
+is not verified until both are green, which is what `task verify` runs.
+
+`task` on its own prints every task, grouped and coloured; `task --list`
+prints the same set alphabetically. The destructive ones (`dev-up`,
+`dev-reset`, `dev-nuke`) prompt before running — pass `--yes` to skip that
+in a script. The ones that need a running stack check for it and say what
+to run instead of failing with a connection error. `task check:watch`
+re-runs the pure-logic gate on every save.
+
+Handy extras:
+
+```bash
+task psql               # a psql shell on the local database
+task studio             # Supabase Studio in the browser
+task dev-logs SERVICE=auth   # a stack container's logs (db, auth, rest, edge_runtime, kong)
+task e2e -- tests/rls.spec.ts
+task clean              # build output and test artifacts
+```
 
 ---
 
@@ -208,54 +245,84 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
 
 and re-run: the invoice count stays put and `rows_deduplicated` climbs.
 
-### In Postman
+### The webhook (Edge Function)
 
-The same checks as a collection, for when watching the traffic is more
-useful than a pass/fail line:
-
-```bash
-make postman-env     # writes postman/LedgerLens.local.postman_environment.json
-```
-
-Then in Postman: **Import** (⌘O) →  paste the contents of
-`postman/LedgerLens.postman_collection.json`, import, and repeat for the
-generated environment file. Select **LedgerLens — local** in the
-environment picker and use the **Collection Runner** — several requests
-call themselves in a loop via `pm.execution.setNextRequest`, which only
-works there, and later requests depend on variables earlier ones set.
-
-The environment file is generated rather than committed because it holds
-the local stack's `service_role` and `anon` keys. They are fixed,
-publicly documented development values, but a committed file with a key
-named `service_role` is a habit worth not forming. The template beside it
-is what's in git.
-
-To run it headless — useful for checking the collection still works after
-an API change:
+Stage 2's push path is a Deno Edge Function, served by the local stack's own
+`edge-runtime` container at `/functions/v1/provider-webhook`. Two credentials
+do two different jobs: the API gateway checks a Supabase key before routing
+at all, and the function checks `x-webhook-secret` before it writes anything.
 
 ```bash
-bunx --bun newman run postman/LedgerLens.postman_collection.json \
-  -e postman/LedgerLens.local.postman_environment.json
+set -a; . ./.env.local; set +a
+ANON_KEY="$(supabase status -o json | jq -r .ANON_KEY)"
+FUNCTIONS_URL="$(supabase status -o json | jq -r .FUNCTIONS_URL)"
+
+curl -sS -X POST "$FUNCTIONS_URL/provider-webhook" \
+  -H "authorization: Bearer $ANON_KEY" \
+  -H "x-webhook-secret: $WEBHOOK_SHARED_SECRET" \
+  -H 'content-type: application/json' \
+  -d '{
+    "org_id": "00000000-0000-4000-8000-000000000001",
+    "event": { "external_id": "inv-manual-1", "customer": "Acme Corp",
+               "amount": 4999, "currency": "USD", "status": "open",
+               "issued_at": "2026-08-15" }
+  }' | jq
 ```
 
-The collection overlaps the Playwright suite deliberately, but reaches one
-thing the shell version cannot: a real GoTrue sign-in, so RLS is
-exercised through a genuine JWT rather than an impersonated role. That
-difference is not academic — it is what caught the seed writing NULL into
-`auth.users.confirmation_token`, which made every sign-in fail with a 500
-while every `set local role` check kept passing. `tests/rls.spec.ts` now
-covers both paths for the same reason.
+The first call returns `"status":"succeeded"`, the second the same body with
+`"status":"duplicate"` and no second invoice — the push path calls the same
+`ingest_raw_event` routine the polling path does, so idempotency is one
+guarantee rather than two implementations of one. Send `"customer": null` to
+see `"status":"quarantined"`, and a wrong `x-webhook-secret` to see a 401
+that leaves no `pipeline_runs` row behind.
+
+If every call returns 401 with a correct secret, the container does not have
+one: `supabase/.env` is missing, or the stack was started before it existed.
+Write the file and `task dev-down && task dev-start`. To confirm:
+
+```bash
+docker exec supabase_edge_runtime_t1 env | grep -c WEBHOOK_SHARED_SECRET   # 1
+```
+
+`tests/stage2-webhook.spec.ts` asserts all of the above, including the two cases
+that are tedious by hand: that a rejected call writes nothing at all, and
+that the run is recorded as `kind='webhook'` rather than `'incremental'`
+(filed under the wrong kind, a cursorless webhook run resets the poller to
+offset 0).
+
+The function is excluded from `tsconfig.json` and from ESLint — `npm:`
+specifiers, Deno globals and `.ts` import extensions do not parse under the
+Next.js app's configuration — so `deno check` is what covers it, and
+`task check` runs it. If your IDE reports unresolved imports in
+`supabase/functions/`, that is the same split: enable its Deno support for
+that directory only, pointed at
+`supabase/functions/provider-webhook/deno.json`. In IntelliJ IDEA and
+WebStorm that is *Settings → Languages & Frameworks → Deno*.
 
 ### Automated: the Playwright suite
 
 Everything above, asserted:
 
 ```bash
-make e2e                                    # every spec
-make e2e ARGS=tests/stage3-data-quality.spec.ts
-bun run test:e2e:ui                         # the interactive runner
-make verify                                 # make check, then the suite
+task e2e                                    # every spec
+task e2e -- tests/stage3-data-quality.spec.ts
+task e2e:ui                                 # the interactive runner
+task e2e:report                             # the last HTML report
+task verify                                 # task check, then the suite
 ```
+
+Under the hood every one of those is `bunx playwright test`, which is also
+the direct form if you want the CLI's own flags:
+
+```bash
+bunx playwright test --grep reconciliation
+bunx playwright test tests/stage2-webhook.spec.ts --debug
+```
+
+`bunx` hands off to Playwright's own CLI, which runs under Node — the
+runtime the test runner and its browser drivers target. Nothing here needs
+Bun to execute the suite, and delegating avoids a class of failures that
+have nothing to do with this code.
 
 Playwright starts the dev server itself if one is not already running, and
 reuses yours if it is. `.env.local` is read by `playwright.config.ts`, so
@@ -267,8 +334,12 @@ defaults.
 | `tests/stage1-mock-provider.spec.ts` | Each chaos flag in isolation, and a cursor walk that reconciles against `/summary` |
 | `tests/stage2-ingestion.spec.ts` | Trigger auth, counter balance, idempotency, tenant-scoped idempotency, orphans, privilege grants |
 | `tests/stage3-data-quality.spec.ts` | All four checks, both green and red, plus the threshold boundaries |
+| `tests/stage2-webhook.spec.ts` | The Edge Function: accepted, deduplicated, quarantined, wrong secret, malformed body |
 | `tests/rls.spec.ts` | Tenant isolation through Postgres *and* through PostgREST as a signed-in user |
 
+`tests/helpers/stack.ts` reads the local stack's URLs and keys from
+`supabase status` rather than from a committed file, so a spec cannot pass
+against a stack that has moved ports or rotated its demo keys.
 `tests/helpers/db.ts` holds the database side: `whatIf()` runs a mutation
 inside a transaction that is always rolled back, which is how a check is
 proven able to go red without leaving the database changed, and `asUser()`
@@ -278,6 +349,13 @@ Every check is asserted both ways — that it passes on healthy data and
 that it fails on broken data. A check that cannot go red is decoration,
 and this suite has caught three of those in itself.
 
+RLS is likewise checked twice: by impersonating the `authenticated` role in
+Postgres, and by signing in through GoTrue for real. The second is not
+redundant — impersonation never goes near the auth service, and it was the
+sign-in path that caught the seed writing NULL into
+`auth.users.confirmation_token`, which made every real sign-in fail with a
+500 while every impersonated check kept passing.
+
 The database helpers refuse to run against anything but a loopback host.
 They truncate tables, and `DB_URL` is an overridable environment variable;
 the obvious way to "check the hosted project quickly" would otherwise
@@ -285,6 +363,44 @@ destroy real data.
 
 Each new stage adds a spec file. A stage that cannot be exercised from
 outside the process is a stage whose seams are in the wrong place.
+
+---
+
+## Running the app in Docker
+
+`task dev` runs the development server. `task docker-up` runs the thing that
+gets deployed: a production build, in a container, on the same Docker network
+the Supabase stack already created.
+
+```bash
+task dev-start          # the stack — this is what creates the network
+task docker-up          # build the image and start the app beside it
+task docker-logs        # tail it
+task docker-down        # stop and remove it (the stack is untouched)
+```
+
+Then <http://localhost:3000> serves the production build. `APP_PORT=3001 make
+docker-up` puts it somewhere else, which is what you want while `task dev` is
+already holding 3000.
+
+Two things are deliberately arranged this way:
+
+- **The stack is not in `compose.yaml`.** `supabase start` owns those twelve
+  containers and their versions travel with `supabase/config.toml`; a second
+  definition here would be a copy that drifts from the one migrations and
+  `db reset` are proven against. The network is declared `external`, so
+  `docker compose down` can never take the database with it. See
+  [ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
+- **`SUPABASE_URL` is overridden to `http://kong:8000`.** Inside the network
+  the gateway is a service name; `127.0.0.1` in a container is the container
+  itself. The rest of the environment comes from the same `.env.local` the
+  host process reads.
+
+The image builds in three stages: Bun installs dependencies, Node runs
+`next build`, and the runtime stage carries only `.next/standalone` — the
+traced server and nothing else — under a non-root user. The build runs under
+Node for the same reason the Playwright CLI does: it is the runtime that
+toolchain targets.
 
 ---
 
@@ -389,13 +505,16 @@ password of its own once `supabase link` has run.
 
 ## Resetting
 
+`task dev-up` and `task dev-reset` both drop the database. `task dev-start`
+is the one that brings a stopped stack back with its data intact.
+
 ```bash
-supabase db reset          # schema + seed back to a known state, data gone
-supabase stop              # stop containers, keep the data volume
-supabase stop --no-backup  # stop and discard local data entirely
+task dev-reset             # schema + seed back to a known state, data gone
+task dev-down              # stop containers, keep the data volume
+task dev-nuke              # stop and discard local data entirely
 ```
 
-`supabase db reset` is cheap and the right reflex whenever local data gets
+`task dev-reset` is cheap and the right reflex whenever local data gets
 into a state you cannot explain. Nothing in it is precious — that is the
 whole point of testing here rather than against the hosted project.
 
@@ -411,4 +530,9 @@ whole point of testing here rather than against the hosted project.
 | Ingestion run succeeds but writes nothing | the cursor is already at the end of the dataset | null out `cursor_to` (see above) or `supabase db reset` |
 | `psql: connection refused` on 54322 | stack is stopped | `supabase start` |
 | Port already in use on start | another Supabase project is running | `supabase stop` in that project, or change ports in `supabase/config.toml` |
-| `make check` says deno went unchecked | Deno is not installed | install Deno, or accept the gap knowingly — it is reported, not hidden |
+| `task check` says deno went unchecked | Deno is not installed | install Deno, or accept the gap knowingly — it is reported, not hidden |
+| The webhook returns 401 with the right secret | the Edge Functions container has no `WEBHOOK_SHARED_SECRET` | write `supabase/.env` from its template, then `task dev-down && task dev-start` |
+| `task docker-up`: `network supabase_network_t1 not found` | the Supabase stack is not running | `task dev-start` first — the stack creates that network |
+| The container starts but every database call fails | `.env.local` is missing, or was written after the container started | `task env`, then `task docker-up` again |
+| `supabase start` reports a container unhealthy | a slow or half-stopped previous run | re-run `task dev-start`; if it persists, `task dev-nuke` then `task dev-up` |
+| IDE shows unresolved imports in `supabase/functions/` | those files are Deno, and excluded from the app's tsconfig on purpose | enable the IDE's Deno support for that directory only (see the webhook section above) |

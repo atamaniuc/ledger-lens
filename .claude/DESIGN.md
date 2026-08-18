@@ -17,7 +17,7 @@ Scaffold a stage's section once its design is approved:
 
 ```bash
 scripts/harness/new-design-section.sh "<stage name>"
-make design FEATURE="<stage name>"
+task design FEATURE="<stage name>"
 ```
 ## Project Layout
 
@@ -110,9 +110,10 @@ moved into Postgres. Nothing else about the shape changed.
   Shared-secret auth, full body validation *before* any write, one
   `pipeline_runs` row with `kind='webhook'`, then the same
   `ingest_raw_event` call. One event per request, no pagination, no cursor.
-- `supabase/functions/provider-webhook/simulate.sh` — asserts four cases
-  (accepted / deduplicated / quarantined / rejected) and exits non-zero on
-  mismatch. It is a gate, not a demo — see the testing plan below.
+- `tests/stage2-webhook.spec.ts` — drives that function through the local API
+  gateway and asserts six cases (accepted / deduplicated / quarantined /
+  wrong secret / three malformed bodies), checking the database after each
+  one. It is a gate, not a demo — see the testing plan below.
 
 **Data flow:**
 
@@ -162,12 +163,13 @@ Every run also carries a `correlation_id` on both its log lines and its
   `external_id` is written, not discarded**; invalid event quarantined; an
   orphaned raw event completed rather than skipped; zero orphans left behind.
   This is the evidence behind US-03’s North Star metric.
-- `simulate.sh` for the webhook path, asserting outcomes.
-- Not covered: the route handler end-to-end (needs
-  `SUPABASE_SERVICE_ROLE_KEY`, absent in the build environment) and
-  `deno check` (Deno not installed). `make check` runs everything that is
-  available and says out loud what it skipped, rather than reporting a clean
-  pass over a gap.
+- `tests/stage2-webhook.spec.ts` for the push path: the same three outcomes the
+  polling path guarantees, plus the two rejection cases, plus the assertion
+  that a rejected call leaves no `pipeline_runs` row behind.
+- `deno check` covers the Edge Function, which `tsc` cannot: it is excluded
+  from `tsconfig.json` because of its `npm:` specifiers, Deno globals and
+  `.ts` import extensions. `task check` runs it and says out loud when Deno
+  is missing rather than reporting a clean pass over a gap.
 
 **Open questions / risks:**
 
@@ -179,8 +181,8 @@ Every run also carries a `correlation_id` on both its log lines and its
   advance from the same cursor. Harmless today (single tenant, manual
   trigger); needs an advisory lock before Stage 4’s cron can fire alongside a
   manual trigger.
-- The mock provider still cannot push, so the webhook is proven by
-  `simulate.sh` rather than driven end-to-end. Extending Stage 1 to push would
+- The mock provider still cannot push, so the webhook has no real upstream:
+  `tests/stage2-webhook.spec.ts` is what drives it. Extending Stage 1 to push would
   be scope drift into a finished stage.
 - The `expiredToken` chaos flag is now survivable rather than fatal: the route
   rotates its Bearer token on a 401. The flag is still exercised (the 401 does
@@ -290,7 +292,7 @@ ad-hoc invocation.
   run (reconciliation must be exactly 0); a forced stale `ingested_at`; a
   forced volume outlier; a quarantine row with a null `raw_event_id` driving
   reconciliation to `fail`.
-- `tests/stage3-data-quality.spec.ts` end-to-end, and a Postman folder.
+- `tests/stage3-data-quality.spec.ts` end-to-end.
 - RLS: a non-member reads zero `data_quality_results` rows.
 
 **Open questions / risks:**

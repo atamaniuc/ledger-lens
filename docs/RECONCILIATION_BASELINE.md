@@ -10,7 +10,7 @@ runtime toggle or rollback that would recreate one.
 Regenerate the "after" side any time with:
 
 ```bash
-bun run dev
+task dev
 bun run scripts/capture-reconciliation-baseline.ts
 ```
 

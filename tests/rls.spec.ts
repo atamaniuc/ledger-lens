@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { ingest } from "./helpers/api";
 import { ORG_A, ORG_B, BOB, asUser, sql } from "./helpers/db";
+import { localStack } from "./helpers/stack";
 
 // Tenant isolation, checked two ways.
 //
@@ -12,16 +12,11 @@ import { ORG_A, ORG_B, BOB, asUser, sql } from "./helpers/db";
 // which made every real sign-in fail with a 500 while every impersonated
 // check kept passing.
 
-// The local stack's anon key. Not a secret — it is a fixed, publicly
-// documented development value — but read from the running stack rather
-// than committed, so it cannot go stale.
 let anonKey: string;
 let supabaseUrl: string;
 
 test.beforeAll(async ({ request }) => {
-  const status = JSON.parse(execFileSync("supabase", ["status", "-o", "json"], { encoding: "utf8" }));
-  anonKey = process.env.SUPABASE_ANON_KEY ?? status.ANON_KEY;
-  supabaseUrl = status.API_URL;
+  ({ anonKey, apiUrl: supabaseUrl } = localStack());
 
   // The positive control below needs Globex to actually own some rows.
   // Depending on another spec file having run first would make this file

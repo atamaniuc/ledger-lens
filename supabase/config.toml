@@ -382,8 +382,13 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Secrets handed to the Edge Functions container by `supabase start`.
+# `env(...)` reads from the shell environment or from `supabase/.env`
+# (gitignored; `supabase/.env.example` is the template). Without this the
+# provider-webhook function has no shared secret and rejects every call,
+# which is correct behaviour but makes the function untestable locally.
+[edge_runtime.secrets]
+WEBHOOK_SHARED_SECRET = "env(WEBHOOK_SHARED_SECRET)"
 
 [analytics]
 enabled = true

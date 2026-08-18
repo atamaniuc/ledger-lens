@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Local secrets for `supabase start` (see .env.example beside it).
+.env

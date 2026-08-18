@@ -95,8 +95,8 @@ export function check(verdict: { results: CheckRow[] }, name: CheckRow["check_na
  *
  * The route reads each flag with searchParams.get(), which returns the FIRST
  * occurrence — so a flag cannot be re-enabled by appending it to an all-off
- * string. It has to be left out of that string entirely. Getting this wrong
- * silently disabled three chaos assertions in the shell version.
+ * string. It has to be left out of that string entirely — building the string by
+ * omission is what makes a single-flag assertion mean what it says.
  */
 export function flagsOffExcept(...keep: string[]): Record<string, string> {
   const all = [

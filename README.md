@@ -8,6 +8,7 @@
 
 ## Table of contents
 
+- [Running it locally](#running-it-locally)
 - [Project goal](#project-goal)
 - [Killer features](#killer-features)
 - [Architecture](#architecture)
@@ -19,6 +20,32 @@
 - [Trade-offs and honest limitations](#trade-offs-and-honest-limitations)
 - [Repository structure](#repository-structure)
 - [Project status](#project-status)
+
+---
+
+## Running it locally
+
+Needs Docker, [Task](https://taskfile.dev), the
+[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started),
+[Bun](https://bun.sh) and [Deno](https://deno.land).
+
+```bash
+task install            # dependencies
+cp supabase/.env.example supabase/.env   # the Edge Function's shared secret
+task dev-up             # local Supabase in Docker: migrations + two-tenant seed
+task env                # writes .env.local from the running stack
+task dev                # http://localhost:3000
+```
+
+```bash
+make                    # every target, grouped
+task verify             # typecheck, lint, unit tests, deno check, then Playwright
+task docker-up          # the production build, containerised, beside the stack
+```
+
+Full walkthrough — verifying a stage by hand, the curl recipes, connecting
+IntelliJ IDEA or DataGrip to the database — in
+[`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
 
 ---
 
@@ -265,7 +292,7 @@ flowchart TD
 - **Codex** — an explicit second model opinion, not a replacement for
   Claude's own Architect/Critic. Reached for on security/architecture-
   sensitive stages (`--architect codex --critic codex`) and on any diff via
-  `make codex-review`. [ADR 0001](.claude/adr/0001-infrastructure-as-code-with-pulumi.md)
+  `task codex-review`. [ADR 0001](.claude/adr/0001-infrastructure-as-code-with-pulumi.md)
   is itself an example of the process working — a decision reversed
   mid-project, documented as a superseding ADR rather than a silent edit.
 - **cavecrew** (`cavecrew-investigator` / `cavecrew-builder` /
@@ -274,13 +301,13 @@ flowchart TD
   a full OMC `executor`/`architect` subagent rather than being forced
   through a tool that will just refuse it.
 - **Git worktrees** — every parallel `tasks.md` item gets its own isolated
-  worktree (`make worktree BRANCH=...`), because two agents writing the
+  worktree (`task worktree BRANCH=...`), because two agents writing the
   same tree at once silently corrupts migrations and lockfiles. Migrations
   themselves stay strictly sequential even across worktrees — one at a
   time, no exceptions.
 
-**The harness scripts** (`scripts/harness/*.sh`, also reachable via
-`Makefile` targets) mechanize the parts of this pipeline that are easy to
+**The harness scripts** (`scripts/harness/*.sh`, also reachable as
+`Taskfile.yml` tasks) mechanize the parts of this pipeline that are easy to
 get subtly wrong by hand: ADR numbering, PRD section structure, worktree
 paths, and the Codex call shape. None of them push, merge, or delete a
 branch without an explicit separate step — destructive or public actions
@@ -317,7 +344,7 @@ setup cost.
 State lives in Pulumi Cloud's free tier, not a local file in the repo.
 Secrets go through `pulumi config set --secret`, never as plaintext.
 
-**CI** runs `make evals` on every PR — the same command locally and in
+**CI** runs `task evals` on every PR — the same command locally and in
 CI, so there's no "works on my machine" drift — and blocks merges below
 threshold. CI does **not** run `pulumi up`; infra changes deploy from a
 developer machine after `pulumi preview` has been reviewed, never
@@ -347,7 +374,9 @@ so here they are, not hidden in a changelog:
 ```
 CLAUDE.md                    Workflow rules — the actual source of truth
 README.md                    This file
-Makefile                     make targets wrapping scripts/harness/
+Taskfile.yml                 Every local command, grouped — `task` lists them
+Dockerfile                   Production image for the Next.js app
+compose.yaml                 That image, joined to the local Supabase network
 .claude/
   PRD.md                     Product requirements — one section per stage
   DESIGN.md                  Approved architecture (created per Phase 1)
@@ -359,12 +388,9 @@ docs/
   DEPLOYMENT.md              Deploy plan, env vars, CI, readiness checklist
   RECONCILIATION_BASELINE.md The before/after drift measurement
 tests/                       Playwright end-to-end suite, one spec per stage
-  helpers/                   Typed API wrappers and the database helpers
-postman/
-  *.postman_collection.json  The same checks as a Postman collection
-  *.template.json            Environment template; the real one is generated
+  helpers/                   Typed API wrappers, database and local-stack helpers
 scripts/
-  postman-env.sh             Generates the Postman environment from the local stack
+  write-env-local.sh         Writes .env.local from the running local stack
   harness/                   The meta-harness scripts + their own README
 supabase/
   migrations/                Schema + RLS, applied in order by `supabase db reset`
@@ -404,15 +430,17 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   **Reconciliation baseline banked:** drift +2.65% before idempotency,
   exactly 0 after — see [`docs/RECONCILIATION_BASELINE.md`](docs/RECONCILIATION_BASELINE.md).
 - ✅ **Local verification loop** — the whole stack runs on one machine
-  (`make dev-up`, `bun run dev`) against a seeded two-tenant local
-  Postgres, and a Playwright suite asserts each stage end-to-end over
-  HTTP: 32 tests, all green, every check proven able to fail as well as
-  to pass. The same ground is covered by a Postman
-  collection (`postman/`, 47 assertions over 20 requests) for when
-  watching the traffic beats a pass/fail line — and it reaches one thing
-  the shell suite cannot, a real GoTrue sign-in, so RLS is exercised
-  through a genuine JWT. Setup, curl recipes, and IDE database
-  connection in [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
+  (`task dev-up`, `task dev`) against a seeded two-tenant local Postgres,
+  and a Playwright suite asserts each stage end-to-end over HTTP: 38
+  tests, all green, every check proven able to fail as well as to pass.
+  RLS is exercised twice over — once by impersonating the `authenticated`
+  role in Postgres, once through a genuine GoTrue sign-in, because only
+  the second one goes near the auth service. The app also builds and runs
+  as a container beside that stack (`task docker-up`,
+  [ADR 0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)),
+  so the production artifact is exercised locally rather than first on the
+  deploy target. Setup, curl recipes, and IDE database connection in
+  [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
 - ✅ **Stage 3 — Data Quality & Reconciliation** — done. Four checks
   (freshness, volume, uniqueness, reconciliation) in one Postgres
   function, one transaction, recorded per `run_id`, with a verdict

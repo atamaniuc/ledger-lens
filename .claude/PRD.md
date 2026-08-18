@@ -361,7 +361,7 @@ A regression in retrieval quality, citation validity, or safety behavior gets ca
 recall@5, JSON-schema validity rate, citation-validity rate, abstention rate on unanswerable cases, LLM-as-judge groundedness score, cost, p95 latency — all computed and versioned.
 
 **Counter-metrics:**
-`make evals` never diverges from what CI runs — no "works locally, fails in CI" surprise.
+`task evals` never diverges from what CI runs — no "works locally, fails in CI" surprise.
 
 ### Functional Requirements
 
@@ -370,7 +370,7 @@ recall@5, JSON-schema validity rate, citation-validity rate, abstention rate on 
 | US-01 | As a maintainer, I want a versioned eval dataset, so regressions are measured against a fixed bar, not a moving one. | P0 | `evals/dataset.jsonl` has at least 20 cases spanning `metric`, `lookup`, `retrieval`, `unanswerable`, `injection` types. |
 | US-02 | As a maintainer, I want a single script that scores everything, so I don't have to manually check each dimension. | P0 | `evals/run.py` computes recall@5, JSON validity, citation validity, abstention rate, LLM-as-judge groundedness, cost, p95 latency. |
 | US-03 | As CI, I want a hard threshold, so a regression fails the build instead of just producing a warning. | P0 | Explicit versioned thresholds (recall@5 ≥ 0.8, citation validity ≥ 0.95, 100% correct abstention on `should_refuse`/injection cases); run exits non-zero when breached. |
-| US-04 | As a developer, I want to run the exact CI check locally, so I know before I push whether I broke something. | P0 | `make evals` runs the identical command CI runs. |
+| US-04 | As a developer, I want to run the exact CI check locally, so I know before I push whether I broke something. | P0 | `task evals` runs the identical command CI runs. |
 
 ### Non-Functional Requirements & Constraints
 

@@ -1,0 +1,351 @@
+# LedgerLens — one entry point for everything local.
+#
+#   task                list every task, grouped
+#   task dev-up         the local Supabase stack, migrations and seed applied
+#   task verify         the full gate: pure logic, then the running system
+#   task check:watch    re-run the pure-logic gate on every save
+#
+# Shell completion: `task completion` prints what to add to your shell rc.
+# Task is the only runner here on purpose — one definition, in one file,
+# with descriptions the tool itself prints, preconditions that say what to
+# do next, prompts on the destructive tasks, and file-watching. A second
+# runner wrapping the same commands would be a copy that drifts.
+
+version: "3"
+
+silent: true
+
+vars:
+  # The local stack's fixed development credentials. Not secrets: this
+  # database listens on loopback only and the password is published in
+  # Supabase's own documentation.
+  DB_URL: '{{.DB_URL | default "postgresql://postgres:postgres@127.0.0.1:54322/postgres"}}'
+  # Container names are suffixed with the Supabase project id, which lives
+  # in config.toml rather than being the directory name.
+  PROJECT_ID:
+    sh: awk -F'"' '/^project_id/ { print $2 }' supabase/config.toml
+
+tasks:
+  default:
+    desc: List every task, grouped
+    cmds: [task: help]
+
+  help:
+    desc: List every task, grouped
+    cmds:
+      - |
+        if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+          b=$'\033[1m'; d=$'\033[2m'; c=$'\033[36m'; y=$'\033[33m'; r=$'\033[0m'
+        else b=; d=; c=; y=; r=; fi
+        printf '%s\n' "${b}LedgerLens${r} ${d}— task <name>${r}"
+        printf '\n%s\n' "${y}Setup${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          install    "Install JavaScript dependencies" \
+          env        "Write .env.local from the running stack" \
+          completion "Print shell-completion setup"
+        printf '\n%s\n' "${y}Local stack (Supabase in Docker)${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          dev-up     "Start from scratch — DROPS all local data, then re-seeds" \
+          dev-start  "Start the stack, keeping whatever is in the database" \
+          dev-reset  "Rebuild the database — DROPS all local data, then re-seeds" \
+          dev-down   "Stop the stack, keeping the data volume" \
+          dev-nuke   "Stop the stack and discard all local data" \
+          dev-status "Print local URLs and keys" \
+          dev-logs   "Tail a container's logs (SERVICE=db|auth|rest|edge_runtime|kong)" \
+          psql       "Open a psql shell on the local database" \
+          studio     "Open Supabase Studio in the browser"
+        printf '\n%s\n' "${y}App${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          dev          "Run the Next.js dev server on http://localhost:3000" \
+          build        "Production build" \
+          start        "Serve the production build" \
+          docker-build "Build the app image" \
+          docker-up    "Start the app container on the stack's network" \
+          docker-down  "Stop and remove the app container" \
+          docker-logs  "Tail the app container's logs" \
+          docker-ps    "Show the app container's state" \
+          docker-sh    "Open a shell inside the running app container"
+        printf '\n%s\n' "${y}Checks${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          check       "Pure-logic gate: typecheck, lint, unit tests, deno check" \
+          check:watch "Re-run that gate on every save" \
+          typecheck   "TypeScript, app and tests" \
+          lint        "ESLint" \
+          test        "Unit tests" \
+          deno-check  "Type-check the Edge Functions (excluded from tsconfig)" \
+          e2e         "Playwright (task e2e -- tests/rls.spec.ts)" \
+          e2e:ui      "Playwright's interactive runner" \
+          e2e:report  "Open the last Playwright HTML report" \
+          verify      "The full gate: check, then the end-to-end suite"
+        printf '\n%s\n' "${y}Documents and process${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          adr             'New ADR (TITLE="cursor-based ingestion resume")' \
+          prd             'New PRD section (FEATURE="Ingestion cursor resume")' \
+          design          'New DESIGN section (FEATURE="Ingestion cursor resume")' \
+          worktree        "New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])" \
+          worktree-done   "Merge back and clean up a worktree (BRANCH=…)" \
+          codex-architect "Second-model architecture pass (PROMPT_FILE=…)" \
+          codex-critic    "Second-model critique pass (PROMPT_FILE=…)" \
+          codex-review    "Second-model review of the diff ([REF=main])"
+        printf '\n%s\n' "${y}Housekeeping${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          clean "Remove build output and test artifacts"
+        printf '\n%s%s%s\n\n' "$d" "task --list also works, and lists these alphabetically." "$r"
+
+  completion:
+    desc: Print shell-completion setup
+    cmds:
+      - |
+        printf 'zsh  — add to ~/.zshrc:\n'
+        printf '  eval "$(task --completion zsh)"\n\n'
+        printf 'bash — add to ~/.bashrc:\n'
+        printf '  eval "$(task --completion bash)"\n\n'
+        printf 'fish — run once:\n'
+        printf '  task --completion fish > ~/.config/fish/completions/task.fish\n'
+
+  # --- setup ---------------------------------------------------------------
+
+  install:
+    desc: Install JavaScript dependencies
+    cmds: [bun install]
+    sources: ["package.json", "bun.lock"]
+    generates: ["node_modules/.bin/next"]
+
+  env:
+    desc: Write .env.local from the running stack (refuses to overwrite)
+    cmds: [./scripts/write-env-local.sh]
+
+  # --- local stack ---------------------------------------------------------
+
+  dev-up:
+    desc: Start the stack from scratch — DROPS all local data, then re-seeds
+    deps: [docker-running]
+    prompt: This drops every row in the local database and re-seeds. Continue?
+    cmds:
+      - supabase start
+      - task: dev-reset
+
+  dev-start:
+    desc: Start the stack, keeping whatever is in the database
+    deps: [docker-running]
+    cmds: [supabase start]
+
+  dev-reset:
+    desc: Rebuild the database — DROPS all local data, then re-seeds
+    prompt: This drops every row in the local database and re-seeds. Continue?
+    cmds: [supabase db reset]
+
+  dev-down:
+    desc: Stop the stack, keeping the data volume
+    cmds: [supabase stop]
+
+  dev-nuke:
+    desc: Stop the stack and discard all local data
+    prompt: This discards the local database entirely. Continue?
+    cmds: [supabase stop --no-backup]
+
+  dev-status:
+    desc: Print local URLs and keys
+    cmds: [supabase status]
+
+  dev-logs:
+    desc: Tail a container's logs (SERVICE=db|auth|rest|edge_runtime|kong)
+    interactive: true
+    cmds: ['docker logs -f supabase_{{.SERVICE | default "db"}}_{{.PROJECT_ID}}']
+
+  psql:
+    desc: Open a psql shell on the local database
+    interactive: true
+    cmds: ['psql "{{.DB_URL}}"']
+
+  studio:
+    desc: Open Supabase Studio in the browser
+    cmds: ['open http://127.0.0.1:54323 2>/dev/null || echo "http://127.0.0.1:54323"']
+
+  # --- app -----------------------------------------------------------------
+
+  dev:
+    desc: Run the Next.js dev server on http://localhost:3000
+    deps: [stack-running]
+    interactive: true
+    cmds: [bun run dev]
+
+  build:
+    desc: Production build
+    cmds: [bun run build]
+
+  start:
+    desc: Serve the production build
+    interactive: true
+    cmds: [bun run start]
+
+  docker-build:
+    desc: Build the app image
+    deps: [docker-running]
+    cmds: [docker compose build app]
+
+  docker-up:
+    desc: Start the app container on the stack's network
+    deps: [stack-running]
+    cmds:
+      - docker compose up -d --build app
+      - 'echo "http://localhost:${APP_PORT:-3000}"'
+
+  docker-down:
+    desc: Stop and remove the app container
+    cmds: [docker compose down]
+
+  docker-logs:
+    desc: Tail the app container's logs
+    interactive: true
+    cmds: [docker compose logs -f app]
+
+  docker-ps:
+    desc: Show the app container's state
+    cmds: [docker compose ps]
+
+  docker-sh:
+    desc: Open a shell inside the running app container
+    interactive: true
+    cmds: [docker compose exec app sh]
+
+  # --- checks --------------------------------------------------------------
+
+  check:
+    desc: "Pure-logic gate: typecheck, lint, unit tests, deno check"
+    cmds:
+      - task: typecheck
+      - task: lint
+      - task: test
+      - task: deno-check
+
+  check:watch:
+    desc: Re-run the pure-logic gate on every save
+    watch: true
+    sources:
+      - "app/**/*.ts"
+      - "app/**/*.tsx"
+      - "lib/**/*.ts"
+      - "supabase/functions/**/*.ts"
+    cmds: [{ task: check }]
+
+  typecheck:
+    desc: TypeScript, app and tests
+    cmds: [bun run typecheck]
+
+  lint:
+    desc: ESLint
+    cmds: [bun run lint]
+
+  test:
+    desc: Unit tests
+    cmds: [bun run test]
+
+  # supabase/functions/ is excluded from tsconfig.json and ESLint (Deno
+  # runtime: npm: specifiers, Deno globals, .ts import extensions), so
+  # `task typecheck` does not cover it. This is the compensating gate —
+  # without it those files would be checked by nothing at all.
+  #
+  # Skipping is loud but survivable on a developer's machine. It must not be
+  # survivable in CI, where a skipped gate is indistinguishable from a
+  # passed one in the log everyone reads.
+  deno-check:
+    desc: Type-check the Edge Functions (excluded from tsconfig)
+    cmds:
+      - |
+        if command -v deno >/dev/null 2>&1; then
+          deno check --allow-import supabase/functions/provider-webhook/index.ts
+        elif [ -n "${CI:-}" ]; then
+          echo "deno not installed, and CI is set — refusing to report a pass over an unchecked Edge Function." >&2
+          exit 1
+        else
+          echo "deno not installed — supabase/functions/ went unchecked. Install Deno to close this gap: https://deno.land"
+        fi
+
+  e2e:
+    desc: "Playwright against the running app and database (task e2e -- tests/rls.spec.ts)"
+    deps: [stack-running]
+    cmds: ["bunx playwright test {{.CLI_ARGS}}"]
+
+  e2e:ui:
+    desc: Playwright's interactive runner
+    deps: [stack-running]
+    interactive: true
+    cmds: [bunx playwright test --ui]
+
+  e2e:report:
+    desc: Open the last Playwright HTML report
+    cmds: [bunx playwright show-report]
+
+  verify:
+    desc: "The full gate: check, then the end-to-end suite"
+    deps: [stack-running]
+    cmds:
+      - task: check
+      - bunx playwright test
+
+  # --- documents and process ----------------------------------------------
+
+  adr:
+    desc: 'New ADR (TITLE="cursor-based ingestion resume")'
+    requires: { vars: [TITLE] }
+    cmds: ['./scripts/harness/new-adr.sh "{{.TITLE}}"']
+
+  prd:
+    desc: 'New PRD section (FEATURE="Ingestion cursor resume")'
+    requires: { vars: [FEATURE] }
+    cmds: ['./scripts/harness/new-prd-section.sh "{{.FEATURE}}"']
+
+  design:
+    desc: 'New DESIGN section (FEATURE="Ingestion cursor resume")'
+    requires: { vars: [FEATURE] }
+    cmds: ['./scripts/harness/new-design-section.sh "{{.FEATURE}}"']
+
+  worktree:
+    desc: New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])
+    requires: { vars: [BRANCH] }
+    cmds: ['./scripts/harness/new-worktree.sh "{{.BRANCH}}" "{{.BASE}}"']
+
+  worktree-done:
+    desc: Merge back and clean up a worktree (BRANCH=stage-4-dashboard)
+    requires: { vars: [BRANCH] }
+    cmds: ['./scripts/harness/finish-worktree.sh "{{.BRANCH}}"']
+
+  codex-architect:
+    desc: Second-model architecture pass (PROMPT_FILE=.claude/DESIGN.md)
+    requires: { vars: [PROMPT_FILE] }
+    cmds: ['./scripts/harness/ask-codex.sh architect "{{.PROMPT_FILE}}"']
+
+  codex-critic:
+    desc: Second-model critique pass (PROMPT_FILE=.claude/DESIGN.md)
+    requires: { vars: [PROMPT_FILE] }
+    cmds: ['./scripts/harness/ask-codex.sh critic "{{.PROMPT_FILE}}"']
+
+  codex-review:
+    desc: Second-model review of the diff ([REF=main])
+    cmds: ['./scripts/harness/codex-review.sh {{.REF}}']
+
+  # --- housekeeping --------------------------------------------------------
+
+  clean:
+    desc: Remove build output and test artifacts
+    cmds: [rm -rf .next test-results playwright-report blob-report tsconfig.tsbuildinfo]
+
+  # --- guards --------------------------------------------------------------
+  # Preconditions with a sentence that says what to do, rather than a command
+  # failing several layers down with a connection error.
+
+  docker-running:
+    internal: true
+    preconditions:
+      - sh: docker info >/dev/null 2>&1
+        msg: "Docker is not running — start Docker Desktop and try again."
+
+  stack-running:
+    internal: true
+    deps: [docker-running]
+    preconditions:
+      - sh: supabase status >/dev/null 2>&1
+        msg: "The local Supabase stack is not running — `task dev-start` (or `task dev-up` for a clean one)."
+      - sh: test -f .env.local
+        msg: "No .env.local — `task env` writes one from the running stack."

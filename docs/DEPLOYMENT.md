@@ -28,12 +28,21 @@ file committed to the repo. Stack config (`Pulumi.<stack>.yaml`) is
 committed; actual secrets go through `pulumi config set --secret`
 (encrypted at rest), never as plaintext in the repo.
 
-## Why no standalone Docker Compose
+## What Docker Compose does and does not cover
 
-`supabase start` already runs Postgres + pgvector + Auth + Realtime in
-Docker under the hood for local dev; a separate compose file on top would
-just duplicate that. (This is unrelated to the Pulumi decision above —
-Compose is a local-dev tool, Pulumi is for the deployed infra.)
+`compose.yaml` covers the Next.js app only: a production image, joined to
+the network `supabase start` already created, so the deployed artifact gets
+exercised locally instead of first on the deploy target (`task docker-up`).
+
+It deliberately does **not** define Postgres, Auth, PostgREST or the Edge
+Runtime. `supabase start` owns those containers, their versions travel with
+`supabase/config.toml`, and the schema is proven against exactly that stack
+by `supabase db reset`; a second definition would be a copy that drifts.
+Full reasoning in [ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
+
+Compose is a local-development tool here and stays one — Vercel builds and
+runs the deployed app, not this image. Unrelated to the Pulumi decision
+above, which is for the deployed infrastructure.
 
 ## Target platforms (all free tier)
 
@@ -114,16 +123,16 @@ pulumi up          # provisions/updates Vercel project + env vars,
                     # runs supabase db push, runs functions deploy
 ```
 
-Equivalent Makefile targets to be added alongside the `infra/` program
-(`make infra-preview`, `make infra-up`, `make infra-destroy`) — not added
+Equivalent tasks to be added to `Taskfile.yml` alongside the `infra/` program
+(`task infra-preview`, `task infra-up`, `task infra-destroy`) — not added
 yet because there is no `infra/` program for them to call; adding
-non-functional targets ahead of the code they drive would just be dead
+non-functional tasks ahead of the code they drive would just be dead
 config. Wire them in during the Stage 1/2 implementation pass, same as the
 app-level targets.
 
 ## CI
 
-GitHub Actions runs `make evals` (once it exists) on every PR — see the
+GitHub Actions runs `task evals` (once it exists) on every PR — see the
 Evals PRD entry in `.claude/PRD.md` for the thresholds that gate the merge.
 Same command locally and in CI, so there's no drift between "passes on my
 machine" and "passes in CI." CI does not run `pulumi up` — infra changes
@@ -139,5 +148,5 @@ Before pushing/deploying at any point in this project's life:
 - [ ] `.gitignore` still excludes `interview-preps/`, `.worktrees/`, `node_modules/`, `.next/`, `.env*`
 - [ ] Committed docs (`docs/`, `.claude/PRD.md`, `README*.md`) are self-contained — no load-bearing link into the gitignored `interview-preps/` zone
 - [ ] `pulumi preview` reviewed before `pulumi up` — no un-reviewed infra diff ever applied blind
-- [ ] `make codex-review` (or `code-reviewer`) has run clean on the diff being pushed, per the Delegation Ladder in `CLAUDE.md`
+- [ ] `task codex-review` (or `code-reviewer`) has run clean on the diff being pushed, per the Delegation Ladder in `CLAUDE.md`
 - [ ] RLS verified per Definition of Done item 4 before any migration touching a new table ships

@@ -1,0 +1,37 @@
+# Anything not needed to build and run the app. Two jobs: a smaller image,
+# and no chance of a local secret or a personal file ending up inside one.
+
+node_modules
+.next
+.git
+.github
+.idea
+.claude
+.omc
+.agents
+.worktrees
+tests
+test-results
+playwright-report
+blob-report
+playwright.config.ts
+interview-preps
+docs
+scripts
+
+# The database side is the Supabase CLI's, not the image's — and this
+# directory holds supabase/.env, the Edge Functions container's secret.
+supabase
+
+# Every dotenv file at any depth. The app service reads .env.local at run
+# time through compose's env_file; nothing is baked in.
+**/.env
+**/.env.*
+
+Dockerfile
+compose.yaml
+Taskfile.yml
+tsconfig.tsbuildinfo
+*.log
+*.md
+.DS_Store

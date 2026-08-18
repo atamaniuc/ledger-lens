@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { authed, check, checkQuality, ingest, type CheckRow } from "./helpers/api";
+import { check, checkQuality, ingest, type CheckRow } from "./helpers/api";
 import { ORG_A, ORG_B, sql, whatIf } from "./helpers/db";
 import type postgres from "postgres";
 

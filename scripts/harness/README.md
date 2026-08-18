@@ -12,13 +12,13 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 
 | I want to | Script | Make target |
 |---|---|---|
-| Record an architecture decision | `new-adr.sh` | `make adr TITLE="..."` |
-| Open a PRD entry before starting design (Phase 0) | `new-prd-section.sh` | `make prd FEATURE="..."` |
-| Write/update the approved architecture (Phase 1) | `new-design-section.sh` | `make design FEATURE="..."` |
-| Start work on a `tasks.md` item, isolated | `new-worktree.sh` | `make worktree BRANCH=...` |
-| Finish a task, clean up its worktree | `finish-worktree.sh` | `make worktree-done BRANCH=...` |
-| Get a second opinion from Codex (architect/critic) | `ask-codex.sh` | `make codex-architect PROMPT_FILE=...` / `make codex-critic PROMPT_FILE=...` |
-| Run the current diff past Codex as a reviewer | `codex-review.sh` | `make codex-review [REF=...]` |
+| Record an architecture decision | `new-adr.sh` | `task adr TITLE="..."` |
+| Open a PRD entry before starting design (Phase 0) | `new-prd-section.sh` | `task prd FEATURE="..."` |
+| Write/update the approved architecture (Phase 1) | `new-design-section.sh` | `task design FEATURE="..."` |
+| Start work on a `tasks.md` item, isolated | `new-worktree.sh` | `task worktree BRANCH=...` |
+| Finish a task, clean up its worktree | `finish-worktree.sh` | `task worktree-done BRANCH=...` |
+| Get a second opinion from Codex (architect/critic) | `ask-codex.sh` | `task codex-architect PROMPT_FILE=...` / `task codex-critic PROMPT_FILE=...` |
+| Run the current diff past Codex as a reviewer | `codex-review.sh` | `task codex-review [REF=...]` |
 
 ---
 
@@ -40,7 +40,7 @@ scripts/harness/new-adr.sh "cursor-based ingestion resume"
 # → .claude/adr/0001-cursor-based-ingestion-resume.md
 
 # via Makefile:
-make adr TITLE="cursor-based ingestion resume"
+task adr TITLE="cursor-based ingestion resume"
 ```
 
 **Replacing/superseding an old decision** (CLAUDE.md Definition of Done, item 7 — an old ADR is never silently edited, it gets marked superseded):
@@ -71,7 +71,7 @@ This appends a reminder line to the new ADR ("mark ADR 0003 as `Superseded by 00
 scripts/harness/new-prd-section.sh "Mock Provider"
 # → empty "## Mock Provider" skeleton in .claude/PRD.md
 
-make prd FEATURE="Mock Provider"
+task prd FEATURE="Mock Provider"
 
 # replace with real content, e.g. from a heredoc:
 scripts/harness/new-prd-section.sh --force "Mock Provider" <<'EOF'
@@ -120,7 +120,7 @@ EOF
 scripts/harness/new-design-section.sh "Mock Provider"
 # → empty "## Mock Provider" skeleton in .claude/DESIGN.md
 
-make design FEATURE="Mock Provider"
+task design FEATURE="Mock Provider"
 
 scripts/harness/new-design-section.sh --force "Mock Provider" <<'EOF'
 **PRD:** .claude/PRD.md#mock-provider
@@ -152,7 +152,7 @@ scripts/harness/new-worktree.sh stage-3-reconciliation
 scripts/harness/new-worktree.sh stage-3-reconciliation develop
 # → same branch, but off develop instead of the current branch
 
-make worktree BRANCH=stage-3-reconciliation
+task worktree BRANCH=stage-3-reconciliation
 ```
 
 Then just:
@@ -181,7 +181,7 @@ cd .worktrees/stage-3-reconciliation
 **Usage:**
 ```bash
 scripts/harness/finish-worktree.sh stage-3-reconciliation
-make worktree-done BRANCH=stage-3-reconciliation
+task worktree-done BRANCH=stage-3-reconciliation
 
 # delete the branch as a separate, deliberate step, once it's actually merged:
 git branch -d stage-3-reconciliation
@@ -206,8 +206,8 @@ scripts/harness/ask-codex.sh architect .claude/DESIGN.md
 scripts/harness/ask-codex.sh critic .claude/DESIGN.md
 git diff main... | scripts/harness/ask-codex.sh code-reviewer -
 
-make codex-architect PROMPT_FILE=.claude/DESIGN.md
-make codex-critic PROMPT_FILE=.claude/DESIGN.md
+task codex-architect PROMPT_FILE=.claude/DESIGN.md
+task codex-critic PROMPT_FILE=.claude/DESIGN.md
 ```
 
 `role` is validated by `omc ask` against a fixed roster of agent-prompt files — `architect`, `critic`, `code-reviewer`, `analyst`, `code-simplifier`, `debugger`, `designer`, `document-specialist`, `executor`, `explore`, `git-master`, `planner`, `qa-tester`, `scientist`, `security-reviewer`, `test-engineer`, `tracer`, `verifier`, `writer`. Anything outside that list is rejected outright (confirmed by running it — `review` is not in the roster, `code-reviewer` is).
@@ -229,8 +229,8 @@ make codex-critic PROMPT_FILE=.claude/DESIGN.md
 scripts/harness/codex-review.sh          # diff against HEAD (uncommitted)
 scripts/harness/codex-review.sh main     # current branch's diff against main
 
-make codex-review
-make codex-review REF=main
+task codex-review
+task codex-review REF=main
 ```
 
 ---
@@ -241,28 +241,28 @@ How this chains together in practice (manually verified on `stage-1-mock-provide
 
 ```bash
 # Phase 0 — justify why
-make prd FEATURE="Mock Provider"
+task prd FEATURE="Mock Provider"
 # → fill in .claude/PRD.md by hand / via the planner agent
 
 # Phase 1 — design it
 # /superpowers:brainstorming in Claude Code walks through 2-3 approaches
-make design FEATURE="Mock Provider"    # write the approved architecture
-make adr TITLE="chaos-flag mock provider design"
+task design FEATURE="Mock Provider"    # write the approved architecture
+task adr TITLE="chaos-flag mock provider design"
 # optional — second opinion before treating the design as final:
-make codex-architect PROMPT_FILE=.claude/DESIGN.md
+task codex-architect PROMPT_FILE=.claude/DESIGN.md
 
 # Phase 2 — plan and execute
 # /omc-plan --consensus --architect codex --critic codex → tasks.md
 
 # Parallel execution — isolation per task
-make worktree BRANCH=stage-1-mock-provider
+task worktree BRANCH=stage-1-mock-provider
 cd .worktrees/stage-1-mock-provider
 #   ...write code, commit INSIDE the worktree, using its own relative path
 #   ./scripts/harness/... (not ../../scripts/...!)
-make codex-review                # or scripts/harness/codex-review.sh
+task codex-review                # or scripts/harness/codex-review.sh
 cd ../..
 git merge --ff-only stage-1-mock-provider
-make worktree-done BRANCH=stage-1-mock-provider
+task worktree-done BRANCH=stage-1-mock-provider
 git branch -d stage-1-mock-provider
 ```
 
