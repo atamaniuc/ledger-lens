@@ -263,8 +263,11 @@ sequenceDiagram
   with two tenants) comes up with `task dev-up` + `task dev`, and a
   Playwright suite asserts each stage end-to-end over HTTP — 38 tests
   green, the webhook Edge Function included. `task` with no arguments
-  lists every local command; `task docker-up` runs the production build as
-  a container beside that stack ([ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)).
+  lists every local command. The app's own toolchain is containerised as
+  well — `dev`, `build`, `typecheck`, `lint`, `test` run inside the same
+  Linux/Bun image that ships, with hot reload and a debugger IntelliJ can
+  attach to; `task docker-up` runs the production build beside that stack
+  ([ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)).
   See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers connecting
   IntelliJ IDEA/DataGrip to the database.
 - **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo

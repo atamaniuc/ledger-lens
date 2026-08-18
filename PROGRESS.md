@@ -70,13 +70,34 @@ local: `task` with no arguments prints every task, grouped and coloured,
 the shell, the destructive ones prompt before running, the ones that need a
 running stack say so instead of failing with a connection error, and
 `task check:watch` re-runs the pure-logic gate on every save. `task env` writes `.env.local` from the running stack instead
-of leaving the service-role key to be hand-copied. The Next.js app now also
-builds and runs as a production container beside the Supabase stack
-(`task docker-up`, ADR 0006) — the stack itself stays with the Supabase
-CLI, and the network is declared external so `docker compose down` cannot
-take the database with it. That containerised path immediately earned its
-keep: Bun segfaults running `next build` under Alpine, so the build stage
-runs Node.
+of leaving the service-role key to be hand-copied.
+
+The whole toolchain now runs in Docker, not just the deployed artifact:
+`task dev`/`build`/`start`/`typecheck`/`lint`/`test` all execute inside the
+`dev` container against the same Linux/Bun environment that ships, with the
+source bind-mounted for hot reload and an IDE-attachable debugger on
+`localhost:9230`; `task docker-up` still runs the production image beside
+the stack (ADR 0006). The stack itself stays with the Supabase CLI, and the
+network is declared external so `docker compose down` cannot take the
+database with it. Containerising earned its keep twice over — Bun segfaults
+running `next build` under Alpine (so both build paths run real Node), and
+the debug script as originally written opened no inspector at all, because
+Bun ignores `NODE_OPTIONS` and `bun run` drops a `--inspect` given to the
+wrapper process. Costs recorded rather than smoothed over: every
+containerised task now needs the stack running, and `task check` takes ~40s
+against ~8s bare on the host.
+
+`lib/supabase/database.types.ts` is generated from the local schema and
+gated — `task types` regenerates, `task types-check` (part of `task verify`)
+fails when the file and the schema disagree. Reviewed by `code-reviewer`:
+1 HIGH, 7 MEDIUM, 5 LOW, all fixed. The HIGH was real and mine — a named
+Docker volume is populated from the image only while empty, so `--build`
+never refreshes `node_modules` after a `bun add`, which would have let the
+gates pass against a frozen dependency tree; `task dev-volumes-reset` is
+the actual remedy, and the docs that claimed otherwise were corrected.
+Fixing it surfaced a second one on retest: the `dev` container ran as root
+holding the service-role key, and switching it to a non-root user exposed a
+root-owned `.next` volume that had to be created in the image first.
 
 **The webhook Edge Function is now covered by the end-to-end suite.**
 `tests/stage2-webhook.spec.ts` drives it through the local API gateway and asserts
@@ -136,6 +157,7 @@ _(empty — Stage 3 passed review, moved to Done)_
 | **Stage 2 — Ingestion & Transform** (polling route + webhook Edge Function, ADR 0003/0004) | worktree:stage-2-ingestion-route + worktree:stage-2-webhook (parallel) + main (schema, fixes) + code-reviewer | Two agents in isolated worktrees, merged and reviewed as one diff. Review: 2 CRITICAL + 4 HIGH + 5 MEDIUM, all addressed — tenant-scoped idempotency key (a **spec** defect the PRD itself specified), non-atomic raw/downstream writes leaving permanent orphans, cursor regressing to null on a drained dataset, webhook poisoning the polling cursor, unauthenticated trigger writing to any `org_id`, one bad record aborting the whole run. Also captured the reconciliation baseline PRD Stage 3 US-04 required during this stage, which surfaced and fixed a Stage 1 PRNG-determinism bug that made zero drift unreachable. |
 | **Stage 3 — Data Quality & Reconciliation** (`run_data_quality_checks`, `/api/data-quality/run`, ADR 0005) | main + cavecrew-reviewer | Four checks in one Postgres function, one transaction, recorded per `run_id`; a verdict attached to every ingestion run without a scheduler. Two false positives were found and fixed during implementation rather than shipped: the volume baseline measured `rows_written`, so a fully deduplicated re-run — the most ordinary thing this pipeline does — scored −100% and failed; and an ad-hoc invocation with no `run_id` was treated as a zero-row batch and failed the same check. Both now abstain with a stated reason. The new table also inherited Postgres' default ACL (TRUNCATE/REFERENCES/TRIGGER for `anon`), which the Stage 2 privilege guard in the end-to-end suite caught immediately — exactly the divergence that guard was added for. |
 | **Local developer experience & webhook coverage** (`Taskfile.yml`, `Dockerfile`, `compose.yaml`, `tests/stage2-webhook.spec.ts`, ADR 0006) | main + cavecrew-reviewer | One grouped, self-documenting command surface — `task` prints it, prompts before anything destructive, and states its preconditions in a sentence. The app now builds and runs as a production container on the Supabase stack's own network — the stack stays with the Supabase CLI, and the network is external so `docker compose down` cannot take the database with it. Running the real build in a container found what the dev server never would: Bun segfaults on `next build` under Alpine, so the build stage runs Node. The Edge Function is finally reachable from tests — its shared secret now arrives through `[edge_runtime.secrets]` — and six cases assert it, including that a rejected call writes nothing at all. Deno installed, so `task check`'s `deno check` gate stopped being a printed apology. |
+| **Containerised dev loop, working debugger, generated types** (`Dockerfile` `dev` stage, `compose.yaml` `dev` service, `Taskfile.yml`, `scripts/gen-types.sh`, ADR 0006 rewritten in place) | main + code-reviewer | The toolchain moved into the container, not just the deployed artifact: `dev`/`build`/`start`/`typecheck`/`lint`/`test` all run against the Linux/Bun environment that ships, source bind-mounted, IDE debugger attachable on 9230. Three defects found by moving it there rather than reasoning about it: `next build` segfaults under Bun on Alpine (real Node installed for that one command); the debug script opened no inspector at all, since Bun ignores `NODE_OPTIONS` and `bun run` drops a `--inspect` given to the wrapper — `BUN_INSPECT` fails differently, inherited by both processes into an `EADDRINUSE`; and `tsc` needs Next's generated route types, which a fresh volume lacks. Review found 1 HIGH + 7 MEDIUM + 5 LOW, all fixed: the HIGH was a named volume never refreshing `node_modules` from a rebuilt image, which would have let every gate pass against a frozen dependency tree — `task dev-volumes-reset` is the remedy, and the docs claiming `--build` sufficed were wrong. Retesting the non-root fix that followed exposed a root-owned `.next` volume, fixed by creating the directory in the image first. Also wired the orphaned `scripts/gen-types.sh` into `task types`/`types-check`, and cleared the last `make` references left from the Taskfile migration. |
 
 ---
 

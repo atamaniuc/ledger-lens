@@ -438,11 +438,14 @@ and tracked live in [`PROGRESS.md`](PROGRESS.md):
   tests, all green, every check proven able to fail as well as to pass.
   RLS is exercised twice over — once by impersonating the `authenticated`
   role in Postgres, once through a genuine GoTrue sign-in, because only
-  the second one goes near the auth service. The app also builds and runs
-  as a container beside that stack (`task docker-up`,
-  [ADR 0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)),
-  so the production artifact is exercised locally rather than first on the
-  deploy target. Setup, curl recipes, and IDE database connection in
+  the second one goes near the auth service. The toolchain itself runs in
+  Docker too — `dev`, `build`, `typecheck`, `lint`, `test` all execute in
+  the same Linux/Bun environment that ships, with hot reload and an
+  IDE-attachable debugger, and `task docker-up` runs the production image
+  beside the stack
+  ([ADR 0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)),
+  so the deployed artifact is exercised locally rather than first on the
+  deploy target. Setup, curl recipes, and IDE debug/database connection in
   [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
 - ✅ **Stage 3 — Data Quality & Reconciliation** — done. Four checks
   (freshness, volume, uniqueness, reconciliation) in one Postgres
