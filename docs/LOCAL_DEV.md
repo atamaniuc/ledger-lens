@@ -319,7 +319,10 @@ select grantee, table_name, privilege_type
 ```
 
 `scripts/smoke.sh 2` asserts the same thing locally, so the two can be
-compared directly.
+compared directly. `supabase db dump -f before.sql` before a push and
+again after gives a diffable record of what actually changed — more
+reliable than reading the migration and assuming, and it needs no
+password of its own once `supabase link` has run.
 
 ---
 
