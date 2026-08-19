@@ -20,6 +20,33 @@ export type { ListInvoicesResult, ListedInvoice } from "./list-invoices";
 export type { SearchDocumentsResult, SearchedChunk } from "./search-documents";
 export type { CustomerEmailDraft } from "./draft-customer-email";
 
+// Two rules about the published tool schemas, both learned the hard way from
+// running Stage 6's eval set against Groq — which, unlike Anthropic,
+// validates tool arguments against the schema *server-side* before the call
+// ever reaches this process. A violation there is not a tool error the model
+// can read and correct; it is a 400 that ends the turn.
+//
+// **1. Every optional parameter is `.nullish()`, not `.optional()`.** Models
+// routinely fill an omitted optional with an explicit `null`, and a schema
+// that says `{"type":"string"}` rejects that. `get_revenue_summary` failed on
+// every metric case while working perfectly on Anthropic. The tools already
+// read their arguments with `??` and truthiness, so `null` and absent meant
+// the same thing here; only the published schema disagreed.
+//
+// **2. Value bounds live in the tool body, not in the schema.** `search_documents`
+// declared `limit` as at most 8; a model asked for 10 and the request was
+// rejected outright. The bound is ours to enforce and it still is — clamped
+// in `./clamp.ts`, with the limit stated in the parameter's description so
+// the model knows it. What changed is the failure mode: a clamp or a tool
+// error the model can retry, instead of a dead turn. The same applies to
+// string lengths and to the date format, which is now checked in the body and
+// reported by name.
+//
+// The types stay in the schema. `limit` is still a number and `status` is
+// still one of four values — those are what the schema is for, and a model
+// that gets them wrong has misunderstood the tool rather than overshot a
+// bound.
+
 export const TOOLS: readonly AgentTool[] = [
   getRevenueSummary,
   listInvoices,

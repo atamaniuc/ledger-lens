@@ -1,23 +1,21 @@
 import { z } from "zod";
+import { clamp } from "./clamp";
 import type { AgentTool } from "./types";
 
 const MAX_ROWS = 20;
 
 const input = z.object({
-  status: z.enum(["draft", "open", "paid", "void"]).optional(),
+  status: z.enum(["draft", "open", "paid", "void"]).nullish(),
+  // Value bounds live in the body rather than the schema — see ./index.ts.
   customer: z
     .string()
-    .min(1)
-    .max(120)
-    .optional()
+    .nullish()
     .describe("Case-insensitive substring match on the customer name."),
-  external_id: z.string().min(1).max(120).optional().describe("Exact invoice identifier."),
+  external_id: z.string().nullish().describe("Exact invoice identifier."),
   limit: z
     .number()
     .int()
-    .min(1)
-    .max(MAX_ROWS)
-    .optional()
+    .nullish()
     .describe(`How many invoices to return, at most ${MAX_ROWS}. Defaults to 10.`),
 });
 
@@ -50,7 +48,7 @@ export const listInvoices: AgentTool<ListInvoicesInput, ListInvoicesResult> = {
   input,
 
   async execute({ supabase }, args) {
-    const limit = args.limit ?? 10;
+    const limit = clamp(args.limit ?? 10, 1, MAX_ROWS);
 
     let query = supabase
       .from("invoices")

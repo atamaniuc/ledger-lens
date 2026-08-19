@@ -50,7 +50,7 @@ describe("resolveProvider", () => {
     const resolved = resolveProvider();
     expect(resolved?.spec.name).toBe("groq");
     expect(resolved?.baseUrl).toBe("https://api.groq.com/openai/v1");
-    expect(resolved?.model).toBe("llama-3.3-70b-versatile");
+    expect(resolved?.model).toBe("openai/gpt-oss-20b");
   });
 
   it("honours an explicit LLM_PROVIDER over the order", () => {
@@ -88,6 +88,6 @@ describe("resolveProvider", () => {
 
   it("summarises the choice as provider/model", () => {
     only({ GROQ_API_KEY: "g" });
-    expect(providerSummary()).toBe("groq/llama-3.3-70b-versatile");
+    expect(providerSummary()).toBe("groq/openai/gpt-oss-20b");
   });
 });

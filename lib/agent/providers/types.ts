@@ -28,10 +28,18 @@ export interface ModelClient {
 
 export class ModelError extends Error {
   readonly status?: number;
+  /**
+   * How long the provider asked us to wait, from `Retry-After`. Free tiers
+   * rate-limit by tokens per minute and say exactly when to come back — a
+   * batch job like the eval runner should honour that; a user waiting on a
+   * page should not, which is why this is carried rather than slept on here.
+   */
+  readonly retryAfterMs?: number;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, retryAfterMs?: number) {
     super(message);
     this.name = "ModelError";
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
 }

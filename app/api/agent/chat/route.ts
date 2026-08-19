@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgentTurn } from "@/lib/agent/loop";
-import { createModelClient, providerSummary } from "@/lib/agent/providers";
+import { ModelError, createModelClient, providerSummary } from "@/lib/agent/providers";
 import { createClient } from "@/lib/supabase/server-client";
 
 // Stage 5's chat entry point. ADR 0009: the agent runs under the calling
@@ -111,7 +111,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ correlation_id: correlationId, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(JSON.stringify({ correlation_id: correlationId, event: "agent_turn_failed", error: message }));
+    console.error(
+      JSON.stringify({ correlation_id: correlationId, event: "agent_turn_failed", error: message }),
+    );
+
+    // A provider fault is not the same thing as a bug here, and collapsing
+    // both into "the copilot could not answer that" is what made a free
+    // tier's token-per-minute limit look like a broken deployment. The
+    // provider's own message is operator-facing detail — it carries a status
+    // and a wait, never a credential.
+    if (error instanceof ModelError) {
+      const rateLimited = error.status === 429;
+      return NextResponse.json(
+        {
+          error: rateLimited
+            ? "the copilot is rate-limited by its model provider right now"
+            : "the copilot's model provider rejected the request",
+          detail: error.message,
+          ...(error.retryAfterMs
+            ? { retry_after_seconds: Math.ceil(error.retryAfterMs / 1000) }
+            : {}),
+          correlation_id: correlationId,
+        },
+        { status: rateLimited ? 429 : 502 },
+      );
+    }
+
     return NextResponse.json(
       { error: "the copilot could not answer that", correlation_id: correlationId },
       { status: 500 },

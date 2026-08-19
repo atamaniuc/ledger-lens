@@ -58,9 +58,10 @@ describe("runTool", () => {
     await expect(runTool(context({}), "send_email", {})).rejects.toThrow(ToolExecutionError);
   });
 
-  it("rejects arguments the schema does not allow, before any query runs", async () => {
+  it("rejects arguments of the wrong type, before any query runs", async () => {
     // A model can emit anything. The schema is what decides whether it
-    // reaches Postgres.
+    // reaches Postgres — for *types*. Values out of range are a different
+    // case, asserted below.
     let queried = false;
     const supabase = {
       from() {
@@ -72,10 +73,35 @@ describe("runTool", () => {
     await expect(
       runTool(context(supabase), "list_invoices", { status: "deleted" }),
     ).rejects.toThrow(ToolExecutionError);
-    await expect(runTool(context(supabase), "list_invoices", { limit: 500 })).rejects.toThrow(
-      ToolExecutionError,
-    );
+    await expect(
+      runTool(context(supabase), "list_invoices", { limit: "ten" }),
+    ).rejects.toThrow(ToolExecutionError);
     expect(queried).toBe(false);
+  });
+
+  it("clamps a limit past the cap instead of rejecting the call", async () => {
+    // The bound still holds — it is enforced in the tool body. What changed
+    // is the failure mode: a provider that validates the schema server-side
+    // turns an overshoot into a 400 that ends the turn, so the cap moved
+    // out of the published schema and into ./clamp.ts.
+    let requested: number | undefined;
+    const builder = {
+      select: () => builder,
+      order: () => builder,
+      eq: () => builder,
+      ilike: () => builder,
+      limit: (value: number) => {
+        requested = value;
+        return builder;
+      },
+      then: (resolve: (v: unknown) => void) => resolve({ data: [], error: null }),
+    };
+    const supabase = { from: () => builder };
+
+    await runTool(context(supabase), "list_invoices", { limit: 500 });
+
+    // 20 rows plus the one-row probe the tool uses to report truncation.
+    expect(requested).toBe(21);
   });
 
   it("passes validated arguments through to the tool", async () => {
@@ -132,4 +158,61 @@ describe("runTool", () => {
       expect(Object.keys(properties)).not.toContain("organization_id");
     }
   });
+});
+
+describe("tool schemas as a provider sees them", () => {
+  // Groq (and other OpenAI-compatible providers) validate tool arguments
+  // against the published schema before the call reaches this process. A
+  // model filling an omitted optional with an explicit `null` is routine, so
+  // a schema that only permits the base type turns a working tool into a 400
+  // — which is exactly what happened, on every `get_revenue_summary` case,
+  // while the same tool worked on Anthropic.
+  const optionalFields: Record<string, string[]> = {
+    get_revenue_summary: ["status", "issued_from", "issued_to"],
+    list_invoices: ["status", "customer", "external_id", "limit"],
+    search_documents: ["limit"],
+    draft_customer_email: ["note"],
+  };
+
+  it("publishes no value bound a strict provider could reject a call over", () => {
+    // Bounds belong in the body (./clamp.ts), where exceeding one is a clamp
+    // or a correctable tool error. In the schema, a provider that validates
+    // server-side turns the same overshoot into a 400 that ends the turn —
+    // which is exactly what a model asking for `limit: 10` did.
+    const published = JSON.stringify(toolDefinitions().map((tool) => tool.input_schema));
+
+    for (const keyword of ["maxLength", "minLength", "pattern"]) {
+      expect(published, keyword).not.toContain(`"${keyword}"`);
+    }
+
+    // `minimum`/`maximum` survive only as Zod's safe-integer sentinels, which
+    // no model overshoots. Any *authored* numeric bound would appear here as
+    // some other value.
+    for (const bound of published.match(/"(?:minimum|maximum)":(-?\d+)/g) ?? []) {
+      expect(Math.abs(Number(bound.split(":")[1]))).toBe(Number.MAX_SAFE_INTEGER);
+    }
+
+    // The types are still declared — that is what the schema is for.
+    expect(published).toContain('"enum"');
+    expect(published).toContain('"integer"');
+  });
+
+  for (const definition of toolDefinitions()) {
+    it(`${definition.name} accepts null for every optional parameter`, () => {
+      const schema = definition.input_schema as {
+        properties: Record<string, unknown>;
+        required?: string[];
+      };
+
+      for (const field of optionalFields[definition.name] ?? []) {
+        expect(schema.required ?? []).not.toContain(field);
+
+        // Rendered as a union with null — `anyOf`, `oneOf` or a type array,
+        // depending on the JSON Schema target. Asserted on the serialised
+        // shape rather than the keyword, because the keyword is Zod's choice
+        // and the provider only cares that null is permitted.
+        expect(JSON.stringify(schema.properties[field]), field).toContain('"null"');
+      }
+    });
+  }
 });

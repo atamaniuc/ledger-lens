@@ -27,8 +27,15 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   // never heard of, and the two cases have to stay distinguishable: a null in
   // `llm_calls.cost_cents` is an accounting gap to chase, a 0 is a fact.
   // Rate limits, not money, are what bounds these.
-  "llama-3.3-70b-versatile": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  //
+  // This is the list of models the project has actually been run on, not a
+  // registry of everything a provider offers. Pointing `GROQ_MODEL` at
+  // something else is fine and costs a null in the column, which is the
+  // honest answer to "what did that turn cost".
+  "openai/gpt-oss-20b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "openai/gpt-oss-120b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "moonshotai/kimi-k2-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "qwen/qwen3.6-27b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "meta/llama-3.3-70b-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "nvidia/llama-3.3-nemotron-super-49b-v1.5": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
 };

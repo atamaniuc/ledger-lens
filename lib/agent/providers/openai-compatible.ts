@@ -165,6 +165,26 @@ function toAnthropicMessage(body: OpenAiResponse, model: string): Anthropic.Mess
   } as unknown as Anthropic.Message;
 }
 
+/**
+ * When the provider says to come back, in milliseconds.
+ *
+ * Read from the `Retry-After` header first, and from the error text second —
+ * Groq's free tier puts "Please try again in 22.5075s" in the message and does
+ * not always send the header, and a caller that has to regex an error string
+ * is a caller that will not bother.
+ */
+function retryAfterMs(response: Response, body: OpenAiResponse | null): number | undefined {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return Math.ceil(seconds * 1000);
+  }
+
+  const match = /try again in ([\d.]+)s/i.exec(body?.error?.message ?? "");
+  if (match) return Math.ceil(Number(match[1]) * 1000);
+  return undefined;
+}
+
 export interface OpenAiCompatibleConfig {
   provider: string;
   baseUrl: string;
@@ -206,9 +226,16 @@ export function openAiCompatibleClient(config: OpenAiCompatibleConfig): ModelCli
       const body = (await response.json().catch(() => null)) as OpenAiResponse | null;
 
       if (!response.ok) {
+        // A 404 here is almost always a model name, not a bad URL, and the
+        // provider's own message does not say which variable to change.
+        const hint =
+          response.status === 404
+            ? ` — set ${config.provider.toUpperCase()}_MODEL to a model this account can reach`
+            : "";
         throw new ModelError(
-          `${config.provider} returned ${response.status}: ${body?.error?.message ?? "no detail"}`,
+          `${config.provider} returned ${response.status}: ${body?.error?.message ?? "no detail"}${hint}`,
           response.status,
+          retryAfterMs(response, body),
         );
       }
       if (!body) throw new ModelError(`${config.provider} returned a body that is not JSON`);

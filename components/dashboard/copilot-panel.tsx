@@ -47,6 +47,20 @@ class TurnError extends Error {
   }
 }
 
+/**
+ * The model provider said to come back later. Its own state, because "wait
+ * twenty seconds" and "something went wrong" are different instructions to a
+ * reader, and free tiers make the first one routine.
+ */
+class RateLimitedError extends Error {
+  readonly retryAfterSeconds: number | null;
+
+  constructor(message: string, retryAfterSeconds: number | null) {
+    super(message);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 function errorOf(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
     const { error } = body as { error?: unknown };
@@ -84,6 +98,16 @@ async function ask(question: string): Promise<AgentResponse> {
 
   if (response.status === 503) {
     throw new UnconfiguredError(errorOf(body, "the copilot is not configured"));
+  }
+  if (response.status === 429) {
+    const seconds =
+      typeof body === "object" && body !== null
+        ? (body as { retry_after_seconds?: unknown }).retry_after_seconds
+        : undefined;
+    throw new RateLimitedError(
+      errorOf(body, "the copilot is rate-limited right now"),
+      typeof seconds === "number" ? seconds : null,
+    );
   }
   if (!response.ok) {
     throw new TurnError(
@@ -134,6 +158,7 @@ export function CopilotPanel() {
   }
 
   const unconfigured = turn.error instanceof UnconfiguredError;
+  const rateLimited = turn.error instanceof RateLimitedError;
 
   return (
     <Panel title="Copilot" testId="copilot">
@@ -192,7 +217,16 @@ export function CopilotPanel() {
           </p>
         )}
 
-        {turn.isError && !unconfigured && (
+        {rateLimited && (
+          <p data-testid="copilot-rate-limited" className="text-sm text-status-warn">
+            {turn.error?.message}
+            {turn.error instanceof RateLimitedError && turn.error.retryAfterSeconds
+              ? ` — try again in about ${turn.error.retryAfterSeconds} seconds.`
+              : " — try again shortly."}
+          </p>
+        )}
+
+        {turn.isError && !unconfigured && !rateLimited && (
           <div data-testid="copilot-error">
             <PanelError message={turn.error.message} />
             {turn.error instanceof TurnError && turn.error.correlationId && (

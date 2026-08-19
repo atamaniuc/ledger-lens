@@ -1,17 +1,19 @@
 import { z } from "zod";
 import { searchChunks } from "../../rag/search";
+import { clamp } from "./clamp";
 import type { AgentTool } from "./types";
 
 const MAX_RESULTS = 8;
 
 const input = z.object({
-  query: z.string().min(1).max(500).describe("A natural-language question or an exact identifier."),
+  query: z.string().describe("A natural-language question or an exact identifier."),
+  // No `.min()`/`.max()` here on purpose — see the note in ./index.ts. The
+  // bound is enforced below, where exceeding it is a clamp rather than a
+  // rejected request.
   limit: z
     .number()
     .int()
-    .min(1)
-    .max(MAX_RESULTS)
-    .optional()
+    .nullish()
     .describe(`How many chunks to return, at most ${MAX_RESULTS}. Defaults to 5.`),
 });
 
@@ -45,7 +47,7 @@ export const searchDocuments: AgentTool<SearchDocumentsInput, SearchDocumentsRes
     // ADR 0008's function is SECURITY INVOKER, so this search sees exactly
     // what the caller's own dashboard would.
     const chunks = await searchChunks(supabase, args.query, {
-      matchLimit: args.limit ?? 5,
+      matchLimit: clamp(args.limit ?? 5, 1, MAX_RESULTS),
       correlationId,
     });
 

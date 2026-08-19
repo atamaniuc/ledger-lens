@@ -52,6 +52,12 @@ while every impersonated check kept passing.
   the local stack, which does have them, reports no schema errors. Deploying
   Stage 5 and re-running advisors is the first close-out item that needs a
   hosted database.
+- **The full eval set, 2026-08-19, `groq/openai/gpt-oss-20b`:** recall@5 1.00
+  (8/8), abstention 1.00 (5/5), injection safety 1.00 (2/2), tool choice 1.00
+  (5/5), citation validity 1.00 (5/5). Every case scored; the run took 55s,
+  most of it waiting out the free tier's token-per-minute limit. This is one
+  model on one day — the point of versioning `evals/thresholds.json` is that
+  the next number is compared against this one rather than against a memory.
 - **Retrieval recall@5 = 1.00 (5/5), every target at rank 1.** Measured in Batch
   E, before the agent existed, so that ADR 0008's model choice could be reversed
   cheaply if it failed. Five hand-written queries is a floor, not a measurement —
@@ -76,12 +82,21 @@ Carried forward deliberately, not dropped:
   stories to shared components. The four states a story would have shown —
   default, loading, empty, error — are each asserted in the end-to-end suite
   against the real page instead.
-- **No turn has run against a real model here.** This environment has no
-  provider key set. Since the provider abstraction landed that is one variable
-  away and need not cost anything — `GROQ_API_KEY` or `NVIDIA_API_KEY` (free
-  tiers, OpenAI-compatible) work as well as `ANTHROPIC_API_KEY` — but nothing
-  in this repository has yet spoken to a model.
-  The loop is tested against a stubbed model and a real
+- **Free-tier rate limits bound the copilot, not cost.** Each step resends the
+  system prompt and four tool schemas — about 2.7k input tokens — so two
+  questions in a row on Groq's free tier return a 429. It is surfaced as a 429
+  with the provider's own wait time rather than a generic failure, but the
+  limit is real, and a reasoning model makes it much worse: `qwen3.6-27b`
+  spent 4,672 output tokens on one answer against an 8,000 TPM limit, nearly
+  all of it thinking that gets discarded.
+- **Citation verification is not a groundedness check.** It proves every cited
+  id was retrieved; it says nothing about a claim made *without* a citation.
+  Observed live: a small model answered "no invoices are currently overdue"
+  without calling `list_invoices`, and the answer verified cleanly because its
+  other half was cited. The eval set's tool-choice metric is what catches this.
+- **The NVIDIA NIM path has never been called.** There is no NVIDIA key here,
+  so unlike Groq its default model is unverified.
+- The loop is also tested against a stubbed model and a real
   database — which is the right way round for the safety claims, since every one
   of them is about capability rather than wording — and the route's own spec
   branches on the variable and currently asserts the 503 path. What is *not*
@@ -294,6 +309,36 @@ tier and quietly answered on a paid one leaves no trace but a model name on
 rows nobody reads. And free-tier models are priced at zero in the table rather
 than left unknown, so `cost_cents` keeps its distinction: `null` is an
 accounting gap, `0` is a fact.
+
+**The copilot, running for real.** The eval set paid for itself the first time
+it was pointed at a provider that was not Anthropic. Groq validates tool
+arguments against the published JSON Schema *server-side*, before the call
+reaches this process, and a violation there is not a tool error the model can
+read and correct — it is a 400 that ends the turn. Two defects fell out, both
+invisible against Anthropic, which does no such validation.
+
+First, models routinely fill an omitted optional parameter with an explicit
+`null`, and `{"type":"string"}` rejects that; `get_revenue_summary` failed on
+every metric case. The tools already read their arguments with `??` and
+truthiness, so `null` and absent meant the same thing here — only the
+published schema disagreed. Every optional is `.nullish()` now.
+
+Second, and more interesting: `search_documents` published `limit` as at most
+8, a model asked for 10, and the request was rejected outright. The rule that
+came out of it is that **types belong in the schema and value bounds belong in
+the tool body**. The bound is ours to enforce and still is — clamped in
+`lib/agent/tools/clamp.ts`, with the limit stated in the parameter description
+— but the failure mode changed from a dead turn to a clamp or a correctable
+tool error. A test asserts no `maxLength`, `minLength` or `pattern` reaches a
+published schema.
+
+Two more things worth the line. The route was collapsing every provider fault
+into "the copilot could not answer that", so a free tier's rate limit looked
+exactly like a broken deployment; a 429 now surfaces as a 429 with the
+provider's own wait. And the shipped Groq default was `llama-3.3-70b-versatile`,
+written from memory — it does not exist, and returned 404. Defaults are now
+checked against the provider's own model list, and a 404 names the variable to
+change.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

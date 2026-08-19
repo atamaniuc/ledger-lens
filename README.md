@@ -153,19 +153,32 @@ graded another, which is a gate people learn to override; the other two are
 reporting, not regression protection. The four deterministic metrics
 (recall@5, abstention, injection safety, citation validity) are what gate.
 
-**No turn has run against a real model here.** No provider key is set in this
-development environment, so nothing in the repository has yet spoken to a
-model. The agent loop is tested against a stubbed model and a real database —
-the right way round, since every safety claim is about capability rather than
-wording — and the eval runner reports its model-dependent metrics as `skip`,
-never as passes.
+**The copilot has run for real, on a free tier.** `groq/openai/gpt-oss-20b`
+scores 1.00 on all five eval metrics (recall@5 8/8, abstention 5/5, injection
+2/2, tool choice 5/5, citation validity 5/5). One model on one day — the
+numbers are versioned in `evals/thresholds.json` so the next run is compared
+against them rather than against a memory.
 
-Fixing it costs one environment variable, and it does not have to cost money:
-`GROQ_API_KEY` or `NVIDIA_API_KEY` (both free tiers, both OpenAI-compatible)
-work as well as `ANTHROPIC_API_KEY`. See `.env.example`. What is *not* claimed
-is that answer quality is equal across them — `task evals` is the instrument
-for that, and its tool-choice and citation-validity metrics are exactly the
-ones that will move.
+**Free-tier rate limits are the binding constraint, not cost.** The agent
+resends its system prompt and four tool schemas on every step, about 2.7k
+input tokens per call, so a two-step turn is a large share of a free tier's
+tokens-per-minute budget. Asking two questions in a row on Groq's free tier
+returns a 429 — surfaced as a 429 with the provider's own wait time, not as a
+generic failure. A *reasoning* model makes it much worse: `qwen3.6-27b` spent
+4,672 output tokens on one answer, nearly all of it thinking that gets
+discarded, against an 8,000 TPM limit.
+
+**Citation verification does not prove an answer is grounded.** It proves
+every id the answer cites was really retrieved. An answer that asserts
+something *without* citing it passes — observed live: a small model answered
+"no invoices are currently overdue" without calling `list_invoices` at all,
+while its cited half verified cleanly. The eval set's tool-choice metric is
+what catches that, and it is per-model.
+
+**Answer quality is not claimed to be equal across providers.** `task evals`
+is the instrument: point `LLM_PROVIDER` at one and run it. The four
+deterministic metrics are provider-independent by construction; tool choice
+and citation validity are exactly the ones that move.
 
 **The CI workflow has never executed.** This repository has no git remote, so
 `.github/workflows/ci.yml` is written but unrun.

@@ -13,15 +13,16 @@ import type { AgentTool } from "./types";
 // The draft is assembled here rather than by the model so that the figures in
 // it come from the database, not from the conversation.
 
+const MAX_NOTE_CHARS = 500;
+
 const input = z.object({
-  external_id: z.string().min(1).max(120).describe("The invoice the email is about."),
+  external_id: z.string().describe("The invoice the email is about."),
   purpose: z
     .enum(["payment_reminder", "dispute_acknowledgement", "receipt_confirmation"])
     .describe("What the email is for."),
   note: z
     .string()
-    .max(500)
-    .optional()
+    .nullish()
     .describe("One sentence of context to include, in the sender's own words."),
 });
 
@@ -86,7 +87,9 @@ export const draftCustomerEmail: AgentTool<DraftCustomerEmailInput, CustomerEmai
     if (!data) throw new Error(`no invoice ${args.external_id} is visible to you`);
 
     const amount = formatMoney(data.amount_cents, data.currency);
-    const note = args.note ? `\n\n${args.note}` : "";
+    // Truncated here rather than rejected by the schema (see ./index.ts):
+    // a draft with a shortened note is more useful than a dead turn.
+    const note = args.note ? `\n\n${args.note.slice(0, MAX_NOTE_CHARS)}` : "";
 
     const body =
       `${OPENING[args.purpose](data.customer)}${note}\n\n` +

@@ -1,21 +1,23 @@
 import { z } from "zod";
 import { deriveMetrics } from "../../dashboard/metrics";
+import { isoDate } from "./clamp";
 import type { AgentTool } from "./types";
 
 const input = z.object({
   status: z
     .enum(["draft", "open", "paid", "void"])
-    .optional()
+    .nullish()
     .describe("Only count invoices in this status. Omit for every status."),
+  // The date format is checked in the body, not by the schema — see
+  // ./index.ts. A malformed date should come back to the model as a tool
+  // error it can correct, not as a rejected request that ends the turn.
   issued_from: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
+    .nullish()
     .describe("Only count invoices issued on or after this date (YYYY-MM-DD)."),
   issued_to: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
+    .nullish()
     .describe("Only count invoices issued on or before this date (YYYY-MM-DD)."),
 });
 
@@ -51,8 +53,8 @@ export const getRevenueSummary: AgentTool<RevenueSummaryInput, RevenueSummary> =
     // same way it scopes the dashboard tile that shows the same number.
     let query = supabase.from("invoices").select("amount_cents, currency");
     if (args.status) query = query.eq("status", args.status);
-    if (args.issued_from) query = query.gte("issued_at", args.issued_from);
-    if (args.issued_to) query = query.lte("issued_at", args.issued_to);
+    if (args.issued_from) query = query.gte("issued_at", isoDate(args.issued_from, "issued_from"));
+    if (args.issued_to) query = query.lte("issued_at", isoDate(args.issued_to, "issued_to"));
 
     const { data, error } = await query;
     if (error) throw new Error(`get_revenue_summary failed: ${error.message}`);

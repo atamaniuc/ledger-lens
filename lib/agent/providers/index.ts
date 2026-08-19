@@ -43,15 +43,25 @@ const PROVIDERS: ProviderSpec[] = [
     name: "groq",
     keyVar: "GROQ_API_KEY",
     baseUrl: "https://api.groq.com/openai/v1",
-    // Tool calling is not optional here — an agent whose model cannot call a
-    // function has no way to reach any data. Both defaults below support it.
-    defaultModel: "llama-3.3-70b-versatile",
+    // Verified against Groq's catalogue on 2026-08-19: the smallest
+    // general-purpose model there that supports tool calling, which is not
+    // optional — an agent whose model cannot call a function has no way to
+    // reach any data.
+    //
+    // Catalogues move. A 404 here means this default is gone; set GROQ_MODEL
+    // and `curl https://api.groq.com/openai/v1/models` lists what is left.
+    // (This default replaced `llama-3.3-70b-versatile`, which was written
+    // from memory and does not exist.)
+    defaultModel: "openai/gpt-oss-20b",
     modelVar: "GROQ_MODEL",
   },
   {
     name: "nvidia",
     keyVar: "NVIDIA_API_KEY",
     baseUrl: "https://integrate.api.nvidia.com/v1",
+    // Unverified: there is no NVIDIA key in this development environment, so
+    // unlike the Groq default above this one has never been called. Set
+    // NVIDIA_MODEL if it 404s.
     defaultModel: "meta/llama-3.3-70b-instruct",
     modelVar: "NVIDIA_MODEL",
   },
