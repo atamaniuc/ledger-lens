@@ -55,7 +55,7 @@ the fixture; the magic-link round trip completes against Mailpit; a grep for
       filtered channels, and the reason — the verdict is written after
       `closeRun()`, so a bridge watching only `pipeline_runs` refreshes before
       the verdict exists and never again.
-- [ ] **T5** `supabase/migrations/<ts>_stage4_publish_dashboard_tables_to_realtime.sql`
+- [x] **T5** `supabase/migrations/<ts>_stage4_publish_dashboard_tables_to_realtime.sql`
       adding both tables to `supabase_realtime`. `REPLICA IDENTITY` stays
       `DEFAULT`. Load `supabase:supabase-postgres-best-practices` before
       writing the SQL.

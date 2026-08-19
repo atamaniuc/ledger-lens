@@ -1,0 +1,33 @@
+-- Stage 4 (Dashboard): put the two tables the live panel watches into the
+-- `supabase_realtime` publication.
+--
+-- ADR 0007 and its 2026-08-19 amendment carry the reasoning. In short:
+--
+--   * `pipeline_runs` alone is not enough. The data quality verdict is
+--     written after `closeRun()` returns, so a bridge watching only
+--     `pipeline_runs` refreshes at the moment a run closes — before the
+--     verdict exists — and never again. `data_quality_results` has to be
+--     published too or the Data Health panel stays one run behind forever.
+--
+--   * The subscription filters to INSERT and UPDATE and never `*`. RLS is
+--     not applied to DELETE events, because Postgres cannot verify access to
+--     a row that no longer exists, so a `*` subscription would broadcast
+--     other tenants' primary keys. Nothing in this project deletes from
+--     either table, which makes the exclusion free today; a later change
+--     that wants delete events has to solve the leak rather than widen the
+--     filter. That constraint lives in the client subscription, not here —
+--     a publication cannot express it — which is why the test asserting the
+--     event list exists alongside the one asserting this table list.
+--
+-- REPLICA IDENTITY stays DEFAULT. It is what the `new` record on INSERT and
+-- UPDATE needs; FULL would write the entire pre-image of every row into the
+-- WAL to deliver `old` records that nothing here reads.
+--
+-- No grant changes. Realtime authorises a subscriber with the same RLS
+-- policies and the same `authenticated` SELECT grant that a normal read
+-- goes through (migration 20260818094500), so publishing a table adds no
+-- privilege — it only makes changes to rows the caller could already read
+-- available as they happen.
+
+alter publication supabase_realtime add table public.pipeline_runs;
+alter publication supabase_realtime add table public.data_quality_results;
