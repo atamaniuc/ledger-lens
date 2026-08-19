@@ -68,15 +68,15 @@ baseline (security clean, performance 10 INFO `unused_index`).
 
 ## Batch B2 — Read contracts (one commit)
 
-- [ ] **T6a** `lib/dashboard/queries.ts` — freshness from
+- [x] **T6a** `lib/dashboard/queries.ts` — freshness from
       `max(raw_events.ingested_at)`; metrics over `invoices`; Data Health
       selects the newest **closed** run visible to the user *regardless of
       whether it has results*, then left-joins its checks taking the newest
       row per `(run_id, check_name)` via `distinct on`. A check with no row is
       *missing*, which is not the same as failing.
-- [ ] **T6b** Invoice cursor `(issued_at desc, id desc)` with search-param
+- [x] **T6b** Invoice cursor `(issued_at desc, id desc)` with search-param
       transport; lineage payload (`run_id` plus the `raw_event_id` set).
-- [ ] **T7** Pure functions + unit tests in `lib/dashboard/`: freshness at the
+- [x] **T7** Pure functions + unit tests in `lib/dashboard/`: freshness at the
       2h boundary, metric derivations, status roll-up reusing `worstStatus`
       from `lib/data-quality/constants.ts`.
 
