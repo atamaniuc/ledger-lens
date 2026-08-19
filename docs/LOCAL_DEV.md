@@ -120,6 +120,9 @@ task dev-start          # if the stack is not already running (keeps data)
 task dev                # the Next.js dev server on http://localhost:3000
 ```
 
+The app runs on this machine, not in a container. Docker is needed for the
+Supabase stack behind it — `task dev` says so if the stack is down.
+
 ```bash
 task check              # typecheck + lint + unit tests + deno check
 task types-check        # database.types.ts still matches the schema
@@ -129,27 +132,24 @@ task dev-down           # when done; `task dev-nuke` also discards local data
 ```
 
 `task check` and `task e2e` answer different questions. `task check` proves
-the pure logic is right — typecheck, lint, and unit tests all run inside the
-`dev` container (Bun and Linux, matching what's deployed) rather than
-whatever the host happens to have installed, plus `deno-check`, which stays
-on the host (the image has no Deno). `task e2e` proves the running app talks
-to a running Postgres correctly — HTTP status codes, RLS under a real JWT,
-idempotency across two actual runs; it runs on the host, since the image
-doesn't carry Playwright's browser binaries. `task types-check` needs the
-stack too (to introspect the schema), which is why it's a `verify` step
-rather than a `check` one. A stage is not verified until all three are
-green, which is what `task verify` runs.
+the pure logic is right — typecheck, lint, unit tests and `deno check`, all
+on this machine, needing **nothing running**: no Docker, no Supabase stack.
+It takes about 14 seconds, which is why `task check:watch` re-running it on
+every save is practical. `task e2e` proves the running app talks to a
+running Postgres correctly — HTTP status codes, RLS under a real JWT,
+idempotency across two actual runs — so it needs the stack and the app.
+`task types-check` needs the stack too, to introspect the schema, which is
+why it belongs to `verify` rather than to `check`. A stage is not verified
+until all three are green, which is what `task verify` runs.
 
-**Everything containerised needs the stack running first**, even `task
-typecheck` — `docker compose run`'s `dev` service joins
-`supabase_network_t1`, which only exists once `supabase start` has created
-it, whether or not the command itself touches the database. `task
-check:watch` re-runs the pure-logic gate on every save, now as three
-separate `docker compose run` containers instead of three in-process calls —
-measured, `task check` takes ~40s containerised against ~8s for the same
-three commands run bare on the host. A real cost, not "a few seconds,"
-accepted for `tsc`/`eslint`/`bun test` running against the exact environment
-that gets deployed rather than whatever's on the host.
+Which runtime does what, since there are four and it is otherwise a guess:
+
+| Runtime | Used for |
+|---|---|
+| Docker | The Supabase stack, and nothing else that is required |
+| Bun | Installing dependencies, unit tests, and running the lint/typecheck scripts |
+| Node 22+ | `task dev`'s debuggable server, `task build`, `task start` |
+| Deno | `supabase/functions/**` only — `task deno-check` |
 
 `task` on its own prints every task, grouped and coloured; `task --list`
 prints the same set alphabetically. The destructive ones (`dev-up`,
@@ -406,146 +406,128 @@ outside the process is a stage whose seams are in the wrong place.
 
 ---
 
-## Running the app in Docker
+## The optional container smoke check
 
-There is one dev loop and one deployed artifact, both containerised — no
-host bun/next process is part of the normal flow anymore:
-
-| Mode | Command | What it's for |
-|---|---|---|
-| Dev loop | `task dev` (foreground) / `task docker-dev` (same thing, detached) | Hot reload + IDE debug (`localhost:9230`), inside the same image and network the deployed app uses. `task typecheck`/`lint`/`test`/`build`/`start` all run here too, each as a one-off `docker compose run`. |
-| Deployed artifact | `task docker-up` | The actual production build — traced `.next/standalone`, non-root user, no dev toolchain inside it at all. |
+The app is developed on this machine. The container image below is a
+separate, occasional check — not a mode of working.
 
 ```bash
-task dev-start          # the stack — creates the network everything below needs
-task dev                # hot reload + debug, foreground (Ctrl+C stops it)
-task docker-dev-sh      # a shell inside a running `dev` container
-task docker-dev-down    # stop and remove it, if started via docker-dev
-```
-
-```bash
-task docker-up          # the production build, containerised
+task docker-build       # build the production image (no stack needed)
+task docker-up          # run it on the stack's network
 task docker-logs        # tail it
+task docker-ps          # is it up
+task docker-sh          # a shell inside it
 task docker-down        # stop and remove it (the stack is untouched)
 ```
 
-Only one of `task dev`/`task docker-dev` and `task docker-up` should hold
-port 3000 at a time. `APP_PORT=3001 task docker-up` moves one aside.
+What it is good for: the production build, running in Linux, under a
+non-root user, with only the traced `.next/standalone` output present. That
+catches container-shaped mistakes — the recurring one being `127.0.0.1`,
+which inside a container means the container, not the machine.
 
-Several things are deliberately arranged this way:
+What it is **not**: the environment Vercel runs. Vercel builds and serves
+the deployed app from Next.js's own output, so a green run here proves the
+build works in *a* container and nothing stronger. See
+[ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
 
-- **The stack is not in `compose.yaml`.** `supabase start` owns those twelve
-  containers and their versions travel with `supabase/config.toml`; a second
-  definition here would be a copy that drifts from the one migrations and
+Only one of `task dev` and `task docker-up` should hold port 3000 at a time.
+`APP_PORT=3001 task docker-up` moves one aside.
+
+Two details worth knowing:
+
+- **The Supabase stack is not in `compose.yaml`.** `supabase start` owns
+  those containers and their versions travel with `supabase/config.toml`; a
+  second definition would be a copy that drifts from the one migrations and
   `db reset` are proven against. The network is declared `external`, so
-  `docker compose down` can never take the database with it. See
-  [ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
-- **`SUPABASE_URL` is overridden to `http://kong:8000`** for both the `dev`
-  and the `app` service. Inside the network the gateway is a service name;
-  `127.0.0.1` in a container is the container itself. The rest of the
-  environment comes from the same `.env.local` the host process reads.
-- **`dev` bind-mounts the source; `app` does not.** `compose.yaml`'s `dev`
-  service mounts `.` straight into the container — two *named* volumes
-  (not anonymous) shadow the container's own `node_modules` and `.next`, so
-  the host's (macOS) versions never overwrite the Linux-built native deps
-  (`sharp`, `unrs-resolver`) the image already installed, and so `task
-  build`'s output is still there for `task start` to read even though
-  they're two separate `docker compose run` invocations. `app`'s job is the
-  opposite: what runs there is exactly what `docker build` traced and
-  copied in, nothing live. ADR 0006 originally rejected the bind-mounted
-  form "for now" — adopted once IDE-attach debugging needed a reachable
-  inspector port and running the toolchain identically in-container became
-  worth the bind-mount's slower I/O on macOS. Named, not anonymous, has its
-  own cost: a named volume is populated from the image only while empty, so
-  `bun add`ing a dependency on the host needs `task dev-volumes-reset` — a
-  rebuilt image alone does not reach an already-populated volume.
-- **`dev` runs as a non-root user; both containers hold the same secret
-  either way.** Same reasoning `runner` already states for itself — the
-  service-role key is present, so a process escape shouldn't also be a root
-  shell — extended here since `dev` adds a published inspector and a
-  read-write mount of the whole repo on top. That mount is broader than
-  what the image ever contains: `.dockerignore` excludes `.git`,
-  `supabase/.env`, and `interview-preps/` from the *build*, but all three
-  are reachable at runtime through the bind mount. Accepted for a
-  local-only container; wouldn't be if this image ever left the machine.
-- **`task build` runs under real Node, not Bun, inside the `dev`
-  container.** `next build` segfaults under Bun on Alpine — the same crash
-  that's why the production `build` Dockerfile stage runs on
-  `node:22-alpine` rather than the Bun-based `deps`. The `dev` stage
-  installs real Node (`apk add nodejs`) specifically for this one command;
-  `typecheck`/`lint`/`test`/`start` all run fine under Bun.
-- **`typecheck` runs `next typegen` first.** `tsc` depends on ambient types
-  (`LayoutProps`, etc.) Next.js generates into `.next/types/**` as a side
-  effect of `next dev`/`next build` — since the named `.next` volume can
-  start empty, `typecheck` generates them itself rather than assuming
-  something else already ran first.
+  `docker compose down` can never take the database with it.
+- **`SUPABASE_URL` is overridden to `http://kong:8000`** for the `app`
+  service, because inside the network the gateway is a service name. The
+  rest of the environment comes from the same `.env.local` this machine's
+  processes read.
 
-The image has four stages relevant here: `deps` (Bun installs dependencies,
-real Node added on top for `dev`), `dev` (built on `deps`, no source copy —
-bind-mounted instead), and `build`/`runner` (Node runs `next build` for the
-*deployed* image, then the runtime stage carries only `.next/standalone`,
-traced, under a non-root user).
+The image has three stages: `deps` (Bun installs from `bun.lock`), `build`
+(Node 22 runs `next build` — `next build` segfaults under Bun on Alpine),
+and `runner` (Node 22 serving `.next/standalone` as a non-root user, with
+neither Bun nor the full dependency tree present).
 
 ---
 
 ## Debugging in IntelliJ IDEA
 
-Two debug targets, two different ports, on purpose — so both can run and be
-attached to at the same time without a clash:
+Two debug targets, two different ports, so both can be attached to at once
+without a clash:
 
 | Target | Command | Attach to |
 |---|---|---|
-| Next.js app | `task dev` / `task docker-dev` | `localhost:9230` — `compose.yaml` runs `bun --inspect=0.0.0.0:9230 node_modules/next/dist/bin/next dev` inside the `dev` container, published loopback-only |
-| Edge Function (`provider-webhook`) | `task dev-start` (running whenever the stack is up) | `localhost:8083` — `inspector_port` in `supabase/config.toml` |
-
-A raw `bun run dev` still works if you ever run it directly on the host,
-bypassing Task entirely (not the normal flow) — `package.json`'s own script
-listens on `127.0.0.1:6499`, Bun's own default inspector port, deliberately
-different from `9230` so the two would never collide if both happened to run
-at once.
+| Next.js app | `task dev` | `127.0.0.1:9231` — see the note below on why not 9230 |
+| Edge Function (`provider-webhook`) | `task dev-start` (running whenever the stack is up) | `127.0.0.1:8083` — `inspector_port` in `supabase/config.toml` |
 
 *Run → Edit Configurations → + → Attach to Node.js/Chrome*, **Host**
-`localhost` (or `127.0.0.1` — see the note below if `localhost` doesn't
-connect), **Port** whichever of the above applies. Set a breakpoint,
-trigger the route (curl, the browser, or a Playwright spec), and it hits —
-`task docker-dev`'s loopback-only port publish makes the container
-indistinguishable from a host process at the network level.
+`127.0.0.1`, **Port** whichever of the two applies. Set a breakpoint, trigger
+the route (curl, the browser, or a Playwright spec), and it hits.
 
-**Why `package.json`'s script looks the way it does:**
-`bun --inspect=127.0.0.1:6499 node_modules/next/dist/bin/next dev`, not the
-more obvious `NODE_OPTIONS='--inspect' next dev`. The obvious form does
-nothing under Bun — `NODE_OPTIONS` is a Node convention Bun's own inspector
-doesn't read, confirmed empirically (no port ever opens, host or container).
-The `--inspect` flag also has to apply to `next`'s own file path, not to
-`bun run dev`: `bun run <script>` re-executes the script line as a new
-process, which drops a `--inspect` CLI flag given to the outer `bun`
-invocation. `6499` is Bun's own default inspector port (`ws://localhost:...`
-if you omit the host/port entirely) — pinned here to `127.0.0.1` explicitly
-because Bun's bare default binds IPv6 loopback only, which some tools
-(including a plain `curl http://localhost:6499`, depending on resolver
-order) fail to reach even though it's working correctly.
+**Why 9231 and not 9230.** `task dev` runs
+`node --inspect=127.0.0.1:9230 node_modules/next/dist/bin/next dev`, which
+puts an inspector on the `next` **CLI** process. Next then forks the server
+that actually handles requests and hands it the next free port, printing it
+on startup:
 
-`task docker-dev` needs a different mechanism for the same reason
-`NODE_OPTIONS` doesn't work: `compose.yaml` can't just override an
-environment variable, because neither `NODE_OPTIONS` nor `BUN_INSPECT`
-(Bun's own env-var form) survives the `bun run` → script indirection
-without breaking — `BUN_INSPECT` gets inherited by *both* the wrapper
-process and the script it spawns, so both try to bind the same port and the
-second one crashes (`EADDRINUSE`). `compose.yaml` instead overrides the
-whole `command:` to invoke `next`'s file path directly under
-`bun --inspect=0.0.0.0:...`, the same shape as `package.json`'s script, just
-with a different bind address — one process, the flag actually takes.
+```
+- Debugger port: 9231
+```
 
-The Edge Function's inspector is the same V8 protocol Deno exposes for any
-target; it's separate from the IDE's Deno *language* support (import
-resolution, `deno.json` — see the webhook section above), which doesn't set
-up debugging on its own.
+Route handlers and Server Components run in that child. Attaching to 9230
+connects to the launcher, which never serves a request, and every breakpoint
+stays grey. Both ports answer `/json/list`, so the IDE will happily connect
+to the wrong one — check the titles if in doubt:
 
-`0.0.0.0` only ever appears in `compose.yaml`'s override, never in
-`package.json`. Putting it in the script itself would bind a **host** `bun
-run dev` to `0.0.0.0` too, putting a code-execution-capable debugger on
-whatever network the laptop is on — Docker's loopback-only port publish is
-what makes `0.0.0.0` safe *inside* the `dev` container specifically.
+```bash
+curl -s http://127.0.0.1:9230/json/list   # …/next/dist/bin/next        — the launcher
+curl -s http://127.0.0.1:9231/json/list   # …/server/lib/start-server.js — the server
+```
+
+A `Starting inspector on 127.0.0.1:9231 failed: address already in use` line
+in the startup output is expected noise: a third Next worker asks for the
+same port and does without one. The server's inspector is unaffected.
+
+**Why `task dev` runs Node and not Bun.** IntelliJ's Node.js attach
+configuration finds its target by asking the inspector for `/json/list`.
+Bun's inspector answers `/json/version` — advertising CDP 1.3 — but returns
+an **empty** `/json/list`, so the IDE has nothing to attach to. Node's V8
+inspector is the protocol that configuration actually speaks. Checked
+directly rather than inferred:
+
+```bash
+node --inspect=127.0.0.1:9241 -e "setTimeout(()=>{},4000)" &
+curl -s http://127.0.0.1:9241/json/list      # one target, with a webSocketDebuggerUrl
+
+bun  --inspect=127.0.0.1:9242 -e "setTimeout(()=>{},4000)" &
+curl -s http://127.0.0.1:9242/json/list      # empty
+```
+
+`task dev:bun` runs the same dev server under Bun for when start-up speed
+matters more than a debugger. Its inspector is reachable from Bun's own
+tooling (the URL it prints on start), just not from IntelliJ's Node.js
+attach. `package.json`'s `dev` script — what `task dev:bun` and Playwright's
+`webServer` both run — binds `127.0.0.1:6499`, Bun's default inspector port,
+deliberately different from `9230` so the two never collide.
+
+That script is `bun --inspect=127.0.0.1:6499 node_modules/next/dist/bin/next dev`
+rather than the more obvious `NODE_OPTIONS='--inspect' next dev`, and the
+reason is worth keeping: `NODE_OPTIONS` is a Node convention Bun's inspector
+does not read, so the obvious form opens no port at all. The flag also has to
+apply to `next`'s own file path — `bun run <script>` re-executes the script
+line as a new process and drops a `--inspect` given to the outer `bun`.
+`BUN_INSPECT`, the env-var form, fails differently: both the wrapper and the
+script it spawns inherit it, so the second one dies with `EADDRINUSE`.
+
+Both inspectors bind loopback only. A debugger is a code-execution channel;
+`0.0.0.0` would publish one to whatever network the laptop is on.
+
+The Edge Function's inspector is the V8 protocol Deno exposes for any
+target, separate from the IDE's Deno *language* support (import resolution,
+`deno.json` — see the webhook section above), which does not set up
+debugging on its own.
 
 ---
 
@@ -670,7 +652,7 @@ whole point of testing here rather than against the hosted project.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `supabase start` hangs or errors immediately | Docker Desktop is not running | start Docker, wait for the whale icon, retry |
-| Route returns `SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set` | `.env.local` missing or the dev container started before it existed | write `.env.local`, restart `task dev` |
+| Route returns `SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set` | `.env.local` is missing, or the server started before it existed | `task env`, then restart `task dev` |
 | `POST /api/ingestion/run` returns 401 with the header set | `INGESTION_TRIGGER_SECRET` differs between `.env.local` and your shell | re-source `.env.local`, restart the dev server |
 | Ingestion run succeeds but writes nothing | the cursor is already at the end of the dataset | null out `cursor_to` (see above) or `supabase db reset` |
 | `psql: connection refused` on 54322 | stack is stopped | `supabase start` |
@@ -681,9 +663,9 @@ whole point of testing here rather than against the hosted project.
 | The container starts but every database call fails | `.env.local` is missing, or was written after the container started | `task env`, then `task docker-up` again |
 | `supabase start` reports a container unhealthy | a slow or half-stopped previous run | re-run `task dev-start`; if it persists, `task dev-nuke` then `task dev-up` |
 | IDE shows unresolved imports in `supabase/functions/` | those files are Deno, and excluded from the app's tsconfig on purpose | enable the IDE's Deno support for that directory only (see the webhook section above) |
-| `task dev`/`task docker-dev` fails to bind port 3000 | `task docker-up` is already holding it, or a previous `dev` container is still up | `task docker-dev-down`, or `APP_PORT=3001 task dev` |
-| IDE can't attach on 9230 | `task dev`/`task docker-dev` isn't running | `task docker-ps` to confirm it's up; see "Debugging in IntelliJ IDEA" |
-| `task typecheck`/`lint`/`test`/`build` fails with `network supabase_network_t1 not found` | the stack isn't running — these are now containerised and need the network `supabase start` creates, even though they touch no database | `task dev-start` first |
-| `task dev`/`docker-dev`/`typecheck`/etc. run stale code after `bun add <package>` on the host | the container's `node_modules` is a *named* volume — populated from the image only while empty, so rebuilding the image (`--build`) does **not** refresh it once it has content | `task dev-volumes-reset`, then start again |
-| `task start` fails with `port is already allocated` | it publishes the app port explicitly; something else (`task dev`/`docker-dev`) already holds it | `task docker-dev-down` first, or `APP_PORT=3001 task start` |
+| `task dev` fails to bind port 3000 | `task docker-up` or another dev server already holds it | `task docker-down`, or `APP_PORT=3001 task dev` |
+| IDE cannot attach, or breakpoints stay grey | attached to 9230 (the `next` launcher) instead of 9231 (the server), or `task dev:bun` is running — Bun's inspector returns an empty `/json/list` | attach to 9231 under `task dev`; see "Debugging in IntelliJ IDEA" |
+| `task build` refuses to run | Node is missing, or older than 22 | install Node 22 or newer — the build and the runtime image both need it |
+| `git status` shows `next-env.d.ts` changed and you did not touch it | `next typegen` and `next dev` write different type paths into it, so it flips depending on which ran last | harmless; `git checkout -- next-env.d.ts` |
+| `task start` fails to bind port 3000 | `task dev` or `task docker-up` already holds it | stop that one, or `APP_PORT=3001 task start` |
 | `task types-check` fails | `lib/supabase/database.types.ts` is stale against the schema | `task types`, review the diff, commit it |

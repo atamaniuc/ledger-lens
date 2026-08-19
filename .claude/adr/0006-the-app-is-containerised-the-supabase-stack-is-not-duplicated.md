@@ -1,238 +1,169 @@
-# 0006: the app is containerised; the Supabase stack is not duplicated
+# 0006: Docker runs the Supabase stack; the app runs on the developer's machine
 
 Status: Accepted
 
 ## Context
 
-Local development already depends on Docker: `supabase start` runs Postgres,
-GoTrue, PostgREST, Kong and the Deno Edge Runtime as twelve containers, with
-their image versions pinned by the Supabase CLI and their configuration by
-`supabase/config.toml`. The Next.js app, however, ran only as a host process
-(`bun run dev`), which left three gaps:
+Four runtimes are involved in developing LedgerLens, and each one is there
+for a different reason.
 
-- **The production artifact was never exercised locally.** `bun run dev` runs
-  the development server. Nothing in the local loop ever built and started
-  the thing that gets deployed, so the first execution of a production build
-  happened on the deploy target.
-- **Container-specific failures were invisible.** `SUPABASE_URL` is
-  `http://127.0.0.1:54321` for a host process and `http://kong:8000` for a
-  container; loopback inside a container is the container. That class of
-  configuration error can only be found by running in one.
-- **"Docker is already here" was true but unused.** The dependency was paid
-  for and only the database side benefited from it.
+- **Docker** runs the local Supabase stack. `supabase start` brings up
+  Postgres, GoTrue, PostgREST, Kong and the Deno Edge Runtime as a dozen
+  containers whose image versions are pinned by the Supabase CLI and whose
+  configuration travels in `supabase/config.toml`. Migrations, `db reset`,
+  the seed and the advisor baseline are all proven against exactly that
+  stack.
+- **Bun** is the package manager (`bun.lock`), the unit-test runner
+  (`bun test`), and what `lint` and `typecheck` invoke.
+- **Node** builds and serves the production app. Vercel runs the deployed
+  app on Node, and `next build` is a Node toolchain.
+- **Deno** exists for `supabase/functions/**` and nothing else. The webhook
+  is a Supabase Edge Function, deployed by `supabase functions deploy` onto
+  the same open-source `edge-runtime` that `supabase start` runs locally, so
+  the local and deployed engines match without any extra effort.
 
-The obvious move — write a Compose file for the whole system — has a real
-cost. It would mean a second definition of Postgres, Auth and PostgREST
-alongside the CLI's, with their own image tags and their own initialisation.
-Migrations, `db reset`, the seed and the advisor checks are all proven
-against the CLI's stack; a parallel definition would be a copy that drifts,
-and the drift would be discovered as a test passing locally and failing
-against the hosted project. `docs/DEPLOYMENT.md` previously recorded this as
-a reason to have no Compose file at all, which threw out the app-side
-benefit along with the duplication.
-
-A second gap, found once the production image existed: nothing let IntelliJ
-IDEA attach a debugger to code running the way the deployed artifact runs,
-and there was no containerised way to run `bun run dev`, `bun test`, or
-`tsc` at all — only the host process or the traced production build, nothing
-in between. The Edge Functions side already had no such gap: `supabase
-start`'s own `edge_runtime` container runs the same open-source
-`edge-runtime` that `docs/DEPLOYMENT.md`'s Pulumi program later deploys to
-via `supabase functions deploy` on Supabase's hosted platform. `supabase
-functions serve` — a separate, lighter CLI-only path — was never adopted
-specifically to keep that parity; it doesn't need `supabase start`'s
-container at all, and using it would mean the Deno side runs on a different
-engine locally than it does in prod.
+The question this ADR answers is where the *app* runs during development.
+Two things need deciding: whether the Next.js dev loop and its checks run in
+a container, and whether a container image of the app is worth keeping at
+all.
 
 ## Decision
 
-Compose covers the app and nothing else.
+**Docker's job is the Supabase stack. Everything else about developing the
+app happens on the machine.**
 
-- `Dockerfile` builds the Next.js app as a production image: Bun installs
-  dependencies, Node runs `next build`, and the runtime stage carries only
-  `.next/standalone` under a non-root user.
-- `compose.yaml` defines two services, both joined to `supabase_network_t1`
-  as an **external** network. `supabase start` creates that network and owns
-  every container on it; `docker compose down` cannot take the database with
-  it.
-  - `app` — the production image, `.next/standalone` traced and copied in at
-    build time. What `task docker-up` runs; the pre-deploy exercise of the
-    actual artifact, per the rest of this ADR.
-  - `dev` — built on the `Dockerfile`'s `deps` stage, no source copied in;
-    `compose.yaml` bind-mounts the repository root instead, so an edit is
-    live without a rebuild. Two **named** volumes (not anonymous) shadow the
-    container's own `node_modules` and `.next`, so the host's (macOS)
-    versions never overwrite the Linux-built native deps (`sharp`,
-    `unrs-resolver`) the image already installed — named rather than
-    anonymous specifically because this service is not only the long-running
-    dev server: `task typecheck`/`lint`/`test`/`build`/`start` each run as
-    their own one-off `docker compose run --rm dev ...`, and a named volume
-    is the same volume across those separate invocations (an anonymous one
-    would be recreated, and its contents discarded, on every single run —
-    losing `task build`'s `.next` output before `task start` could read it).
-    Named over anonymous is a trade, not a strict improvement: a named
-    volume is populated from the image only while it's empty, so a rebuilt
-    image does **not** refresh an already-populated one — `bun add` on the
-    host needs `task dev-volumes-reset` to actually reach the container, not
-    just `--build`.
-    `compose.yaml` overrides the container's `command:` to `bun
-    --inspect=0.0.0.0:9230 node_modules/next/dist/bin/next dev` — **only for
-    this service's default (`up`) command**; `package.json`'s own `dev`
-    script is `bun --inspect=127.0.0.1:6499 ...` (loopback) — fixed in the
-    same pass as this rewrite, from a `NODE_OPTIONS='--inspect' next dev`
-    that opened no inspector at all under Bun — so a host `bun run dev`, run
-    directly and bypassing Task, never binds a debugger to the LAN. The
-    override isn't an env var: Bun ignores `NODE_OPTIONS` (a
-    Node convention, not honored for Bun's own inspector), and `BUN_INSPECT`
-    gets inherited by both the `bun run` wrapper process and the script it
-    spawns, so both try to bind the same port and the second one crashes
-    with `EADDRINUSE` — confirmed empirically, not assumed. Running `next` by
-    file path under a single `bun --inspect=...` invocation is what actually
-    works. Both the app port and the debug port publish loopback-only
-    (`127.0.0.1:...`), same reasoning as `app`'s port. What `task dev`
-    (foreground) and `task docker-dev` (detached) both run.
-- Every `bun run <script>` task in `Taskfile.yml` — `dev`, `build`, `start`,
-  `typecheck`, `lint`, `test` — now executes inside the `dev` container
-  rather than on the host, for the same reason `docker-up` exercises the
-  production image rather than trusting a host build: what runs should be
-  what's deployed, not whatever the host toolchain happens to produce. Two
-  wrinkles this surfaced, both fixed rather than worked around:
-  - `next build` segfaults under Bun on Alpine — the exact crash the
-    production `build` Dockerfile stage already avoids by running on
-    `node:22-alpine`. The `dev` stage now installs real Node
-    (`apk add nodejs`) alongside Bun specifically so `task build` can invoke
-    it directly; every other containerised task runs fine under Bun.
-  - `tsc --noEmit` depends on ambient types (`LayoutProps`, etc.) that
-    Next.js generates into `.next/types/**` as a side effect of `next
-    dev`/`next build` having run — since the named `.next` volume can start
-    empty (a fresh clone, or after `docker volume rm`), `task typecheck` runs
-    `next typegen` (generates just the types, no full build) first rather
-    than assuming something else already populated it.
-  Deno (`deno-check`) and Playwright (`e2e`) are the two tasks that stay on
-  the host: the image has neither Deno nor Playwright's browser binaries,
-  and adding either is future scope, not something this change silently
-  attempted.
-- Inside the network both services reach the gateway as `http://kong:8000`,
-  set in `compose.yaml` rather than in `.env.local`, which is written for
-  host processes.
-- The stack itself stays with the Supabase CLI. `task dev-up` starts it,
-  `task dev`/`task docker-up` start the app beside it, and neither Compose
-  service defines the stack's own containers.
+- `task dev` runs `next dev` under Node with the V8 inspector bound to
+  `127.0.0.1:9230`. Node rather than Bun for one measured reason: Bun's
+  inspector answers `/json/version` but returns an empty `/json/list`, and
+  `/json/list` is where IntelliJ IDEA's "Attach to Node.js/Chrome"
+  configuration enumerates targets — so it finds nothing to attach to.
+  Node's V8 inspector is the protocol that configuration actually speaks.
+  `task dev:bun` keeps the Bun dev server for when start-up speed matters
+  more than a debugger.
+  The IDE attaches to **9231**, not 9230: the flag binds the `next` CLI
+  process, and Next forks the server that handles requests onto the next
+  free port. Both answer `/json/list`, so attaching to the wrong one
+  connects successfully and hits no breakpoint — documented in
+  `docs/LOCAL_DEV.md` with the command that tells them apart.
+- `task typecheck`, `task lint`, `task test` and therefore `task check` run
+  on the machine and require **nothing to be running** — no Docker, no
+  Supabase stack. `task check` takes about 14 seconds.
+- `task build` runs `node node_modules/next/dist/bin/next build`, guarded by
+  a precondition that Node is present and at least major version 22. Bun is
+  not used for the build: `next build` under Bun segfaults on Alpine, found
+  when the production image was first built, and Node is what both Vercel
+  and the runtime image run regardless.
+- `task e2e` (Playwright), `task types` and `task types-check` keep needing
+  the stack, because they genuinely talk to it. Playwright runs on the
+  machine.
+- The production image stays, and is **optional**. `Dockerfile` has three
+  stages — Bun installs, Node builds, and a traced `.next/standalone` runs
+  under a non-root user — and `compose.yaml` defines one service, `app`,
+  joined to `supabase_network_t1` as an **external** network so
+  `docker compose down` can never take the database with it. `task
+  docker-up` is a smoke check: it proves the production build works inside
+  Linux, where container-shaped mistakes such as `127.0.0.1` meaning the
+  container rather than the host will surface.
 
-`Taskfile.yml` is the single command surface for all of this — one runner,
-one definition. Task rather than Make because what this project needs from a
-runner is exactly what Make has no vocabulary for: descriptions the tool
-itself prints (`task`, `task --list`), a prompt before a task that drops the
-database, preconditions that say "the stack is not running — `task
-dev-start`" instead of surfacing a connection error four layers down,
-argument forwarding (`task e2e -- tests/rls.spec.ts`), file-watching
-(`task check:watch`), and completion the runner generates for every shell.
-Keeping both and having one delegate to the other was tried and discarded:
-two files describing one set of commands is a copy that drifts, and the
-second front end earned nothing that the first did not already do.
+**This image is not a stand-in for production.** Vercel builds and serves
+the deployed app from Next.js's own output. Running the image proves the
+build works in *a* container — a smaller and honestly weaker claim than
+parity, and it is the only claim made for it.
+
+There is no dev container, no bind-mounted source, no named `node_modules`
+or `.next` volumes, and no containerised checks.
+
+`Taskfile.yml` remains the single command surface. Task rather than Make
+because what this project needs is exactly what Make has no vocabulary for:
+descriptions the tool prints itself (`task`, `task --list`), a prompt before
+anything that drops the database, preconditions that say "the stack is not
+running — `task dev-start`" instead of a connection error four layers down,
+argument forwarding (`task e2e -- tests/rls.spec.ts`), file watching, and
+shell completion it generates itself.
 
 ## Consequences
 
-- The production build is exercised on every `task docker-up`, and the
-  standalone output is a real artifact rather than a deploy-time hope. It
-  caught the first container-specific bug immediately: Bun segfaults running
-  `next build` under Alpine, which is why the build stage runs Node.
-- `next.config.ts` now sets `output: "standalone"`. It changes what
-  `bun run build` emits and nothing about `bun run dev`.
-- Task is now a hard prerequisite where Make was already on every machine.
-  A real cost, paid knowingly: the alternative was a runner that cannot
-  describe its own tasks, cannot ask before dropping a database, and cannot
-  state a precondition — which is most of what makes this surface usable by
-  someone who has not read the file.
-- Every containerised task now needs the local stack running, even ones that
-  touch no database — `docker compose run`'s `dev` service joins
-  `supabase_network_t1`, which only exists once `supabase start` has created
-  it. `task typecheck` used to need nothing; now it needs `task dev-start`
-  first. `check:watch` pays a real, measured cost on every save: `task
-  check` (typecheck+lint+test, containerised) took ~40s against ~8s for the
-  same three run bare on the host — mostly three separate `docker compose
-  run` container starts. Accepted knowingly, not smoothed over as "a few
-  seconds" — the alternative was "logic" checks that don't actually run in
-  the environment being shipped.
-- Two ways to run the app locally (`dev`/`docker-dev`, `docker-up`) means two
-  ways for `.env.local` to be wrong. Mitigated by both Compose services
-  reading the same `.env.local` the host process reads, with only
-  `SUPABASE_URL` overridden.
-- Compose is a local-development tool here and stays that way. Deployment is
-  still Vercel via Pulumi (ADR 0001); this image is not what Vercel runs, and
-  the two could drift. Accepted knowingly: the alternative is deploying a
-  container to a platform whose free tier is built around the framework's own
-  build output.
-- `docs/DEPLOYMENT.md`'s "Why no standalone Docker Compose" section is
-  replaced by a narrower statement of what Compose does and does not cover.
-- Two Dockerfile targets (`dev`, `runner`) and two Compose services are now
-  maintained instead of one. A dependency added via a host-side `bun add`
-  needs `task dev-volumes-reset`, not just a rebuild — `--build` refreshes
-  the *image*, but the named `node_modules` volume, once populated, is not
-  re-copied from a rebuilt image. Found by testing the claim rather than
-  trusting it: an image rebuilt with a changed dependency, run against the
-  same named volume, still served the old one.
-- The `dev` service runs as a non-root `bun` user (the `runner` stage's own
-  reasoning — this container holds `.env.local`'s service-role key, applies
-  here too) but its bind mount is broader than the image's build context:
-  `.git`, `supabase/.env`, and gitignored `interview-preps/` are all
-  reachable inside it, none of which the image itself ever contains
-  (`.dockerignore` excludes all three from the build). Accepted for a
-  local-only dev container; would not be accepted for anything that left
-  this machine.
-- `task check` running in Docker is a future constraint on CI, not just
-  local dev: once CI exists (none yet — see `PROGRESS.md`), it will need
-  Docker-in-Docker and a running local Supabase stack to run a `typecheck`,
-  not just a Bun runtime. Not designed for yet, flagged so it isn't a
-  surprise later.
-- The Edge Runtime parity with prod (Context, above) was always true; it's
-  now written down instead of being an implicit consequence of never having
-  adopted `supabase functions serve`.
+- The inner loop costs nothing it does not have to. `task check` is ~14s and
+  needs no stack, so it is cheap enough to run on every save through
+  `task check:watch`. A developer can typecheck, lint and unit-test a clone
+  with Docker closed.
+- **The production build is no longer exercised on every run of the app.**
+  It happens when someone runs `task docker-build` or `task docker-up`, and
+  nothing forces that. This is the real cost of the decision, and it is
+  accepted: a container that is not the deploy target was buying a weaker
+  guarantee than its price in daily friction. The guarantee that matters —
+  that the build succeeds — belongs in CI, which does not exist yet
+  (`PROGRESS.md`).
+- **Host and deploy toolchains can diverge.** Bun on macOS is not Bun on
+  Linux, and the machine's Node is not Vercel's. `task build` on real Node
+  and the optional image are the two places that gap is checkable; neither
+  is mandatory. Stated rather than smoothed over.
+- CI, when it exists, needs Bun, Node 22 and Deno — not Docker-in-Docker and
+  not a running Supabase stack — to run `task check`. That is a materially
+  easier CI job than the containerised arrangement would have required.
+- Two runtimes now run the dev server (`task dev` on Node, `task dev:bun` on
+  Bun), which is one more way for behaviour to differ between developers.
+  Bounded deliberately: the Node path is the default and the documented one,
+  and Bun's is an explicitly named alternative rather than a silent fallback.
+- `next typegen` writes `next-env.d.ts` with a different types path than
+  `next dev` does, so the file flips between two committed states depending
+  on which ran last. A generated file that dirties `git status` is a
+  papercut, not a defect; noted so it is recognised rather than
+  investigated twice.
+- `next.config.ts` keeps `output: "standalone"`. It shapes what a build
+  emits for the image and changes nothing about `next dev`.
+- Task is a hard prerequisite where Make would already be on every machine.
+  Paid knowingly for the list above.
+- The stack still needs Docker, so Docker remains a prerequisite for
+  anything that touches the database — `task dev`, `task e2e`,
+  `task types-check`, `task verify`. What changed is that the *checks* no
+  longer do.
 
 ## Alternatives considered
 
-**A full Compose stack, replacing `supabase start`.** Rejected. It would
-duplicate twelve container definitions whose versions currently travel with
-the CLI, and the schema is proven by `supabase db reset` against exactly
-that stack. Self-hosting Supabase in Compose is a supported path, but it buys
-nothing here and would put the tested-and-deployed database configuration a
-copy away from the one developers run.
+**Containerise the dev loop and every check — the previous version of this
+decision.** Rejected after living with it. The argument for it was real:
+running checks in the deployed environment catches host/Linux divergence,
+and it did catch one thing (the `next build` segfault under Bun on Alpine).
+The costs turned out to dominate. Every check required the Supabase stack to
+be running, because the `dev` service joined `supabase_network_t1` — a
+`typecheck` that touches no database could not run without a database.
+`task check` measured ~40s containerised against ~14s on the machine, paid
+again on every save under `check:watch`. And the named `node_modules` volume
+only populates from the image while empty, so `bun add` on the machine did
+not reach the container without a separate volume reset — a failure mode
+where every gate passes against a frozen dependency tree. The one bug the
+arrangement caught is now covered by `task build` running on real Node.
 
-**Compose for the app, on its own bridge network, reaching Postgres through
+**A full Compose stack replacing `supabase start`.** Rejected. It would
+duplicate a dozen container definitions whose versions travel with the CLI,
+and the schema is proven by `supabase db reset` against exactly that stack.
+Self-hosting Supabase in Compose is supported, but here it would put the
+tested-and-deployed database configuration a copy away from the one
+developers run.
+
+**Compose for the app on its own bridge network, reaching Postgres through
 the published host ports.** Rejected. It works on Docker Desktop through
 `host.docker.internal` and breaks on plain Linux, and it routes container
 traffic out to the host and back for no gain over joining the network that
 already exists.
 
-**No container for the app; keep `bun run dev` as the only local mode.** The
-status quo before this ADR's first version. Rejected because it leaves the
-production build unexercised until deploy, which is where the expensive
-failures live.
+**Drop the app image entirely.** Tempting, and nearly right: the image is
+not the deploy target, so it cannot prove production works. Kept because it
+is nearly free once it is not in the daily path — three Dockerfile stages
+and one Compose service — and because the class of bug it catches is one
+nothing else here catches, `127.0.0.1` resolving to the wrong host being the
+recurring example.
 
-**Keep the bind-mounted `dev` target as `docker-up`'s only local companion,
-without IDE debug wiring.** Considered when `dev` was added: the container
-alone (hot reload, no host toolchain drift) without also solving the
-inspector-port problem. Rejected — a dev container you can't attach a
-debugger to just trades one gap (no production-build exercise) for another
-(no IDE debugging in the environment you're actually testing), and the fix
-(a `command:` override, loopback-only publish) was cheap enough — once the
-right invocation was found — that skipping it bought nothing.
+**Run `task dev` on Bun and accept no IDE debugger.** Rejected on evidence
+rather than preference: Bun's inspector returns an empty `/json/list`, so
+IntelliJ's Node.js attach finds no target. Bun keeps every other role it
+had — install, unit tests, lint and typecheck runner — and `task dev:bun`
+keeps the faster start-up available by name.
 
-**`supabase functions serve` instead of `supabase start`'s bundled
-`edge_runtime` container.** Considered when writing down the Edge Runtime
-parity reasoning (Context, above) — never actually adopted, but worth
-recording why. Rejected: it doesn't run inside `supabase start`'s Docker
-stack at all, so it's a second, unproven code path relative to what prod
-(`supabase functions deploy`, same `edge-runtime` engine) actually runs.
-
-**Containerise only the long-running `dev` server; leave `typecheck`,
-`lint`, `test`, `build`, and `start` calling `bun run <script>` on the
-host.** The initial shape of this change — revised in the same pass, not as
-a later reversal. Rejected: the whole point of the `dev` image is that
-Bun-on-Linux is what's deployed, and a host toolchain (Bun-on-macOS here)
-can silently diverge from it — which is exactly what the `next build`
-segfault surfaced the moment `build` was actually moved into the container;
-a host run would never have caught it. The costs are real and stated above
-(every containerised task now needs the stack running, `check:watch` is
-slower) rather than smoothed over, but they're the same category of cost
-`docker-up` already pays for the exact same reason.
+**`supabase functions serve` instead of the stack's bundled `edge_runtime`
+container.** Rejected, and recorded because the reasoning is easy to lose:
+`serve` does not run inside `supabase start`'s stack at all, so it would be
+a second code path relative to what `supabase functions deploy` runs in
+production. The bundled container is the same `edge-runtime` engine as the
+deployed one, which is parity worth keeping for free.

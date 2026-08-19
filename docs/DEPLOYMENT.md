@@ -28,25 +28,36 @@ file committed to the repo. Stack config (`Pulumi.<stack>.yaml`) is
 committed; actual secrets go through `pulumi config set --secret`
 (encrypted at rest), never as plaintext in the repo.
 
-## What Docker Compose does and does not cover
+## Where Docker is and is not used
 
-`compose.yaml` covers the Next.js app only, in two modes, both joined to the
-network `supabase start` already created: a production image (`task
-docker-up`), so the deployed artifact gets exercised locally instead of
-first on the deploy target, and a bind-mounted dev image with hot reload and
-an IDE-attachable debugger (`task docker-dev`), for catching container-
-specific bugs without giving up the inner loop. See
+Docker is required for one thing: the local Supabase stack. `supabase start`
+owns those containers, their versions travel with `supabase/config.toml`, and
+the schema is proven against exactly that stack by `supabase db reset`. A
+second definition of Postgres, Auth, PostgREST or the Edge Runtime would be a
+copy that drifts, so `compose.yaml` deliberately defines none of them.
+
+Everything else about developing the app happens on the developer's machine:
+`task dev`, every check, and the Playwright suite. See
 [ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
 
-It deliberately does **not** define Postgres, Auth, PostgREST or the Edge
-Runtime. `supabase start` owns those containers, their versions travel with
-`supabase/config.toml`, and the schema is proven against exactly that stack
-by `supabase db reset`; a second definition would be a copy that drifts.
-Full reasoning in [ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
+`compose.yaml` defines one service, `app` — the production image, joined to
+the network `supabase start` already created. It is an **optional smoke
+check** (`task docker-build`, `task docker-up`), useful for catching
+container-shaped mistakes such as `127.0.0.1` resolving to the container
+rather than the host.
 
-Compose is a local-development tool here and stays one — Vercel builds and
-runs the deployed app, not this image. Unrelated to the Pulumi decision
-above, which is for the deployed infrastructure.
+It is not the deployed environment and does not stand in for one. **Vercel
+builds and serves the deployed app from Next.js's own output, not from this
+image**, so a green `task docker-up` proves the build works in *a* container
+and nothing more than that.
+
+Which runtime does what, since the deploy story spans three of them:
+
+| Runtime | Where it is used |
+|---|---|
+| Node 22+ | `next build` and the Next.js server — locally, in the image, and on Vercel |
+| Bun | Dependency install (`bun.lock`), unit tests, and the lint/typecheck scripts — local only |
+| Deno | `supabase/functions/**` only, local and deployed — the same `edge-runtime` engine in both |
 
 ## Target platforms (all free tier)
 

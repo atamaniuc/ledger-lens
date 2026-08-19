@@ -109,11 +109,13 @@ check. Both now abstain with a stated reason. Every check is asserted both ways 
 that it passes on healthy data *and* that it can go red. A check that cannot go
 red is decoration.
 
-**Local dev loop.** Containerising earned its keep three times: Bun segfaults
-running `next build` under Alpine (both build paths run real Node); the debug
-script opened no inspector at all, because Bun ignores `NODE_OPTIONS` and
-`bun run` drops a `--inspect` given to the wrapper process; and a named Docker
-volume is populated from the image only while empty, so `--build` never refreshes
-`node_modules` after a `bun add` — every gate would have passed against a frozen
-dependency tree. `task dev-volumes-reset` is the remedy. Cost recorded rather than
-smoothed over: `task check` takes ~40s in the container against ~8s bare.
+**Local dev loop.** Briefly containerised end to end, then pulled back to the
+machine — ADR 0006 records both the reasoning and what the container round trip
+was worth. Three findings survive it. `next build` segfaults under Bun on
+Alpine, which is why the build runs on real Node in both places it happens.
+Bun ignores `NODE_OPTIONS` and `bun run` drops a `--inspect` given to the
+wrapper process, so the first debug script opened no inspector at all; and
+Bun's inspector returns an empty `/json/list`, so IntelliJ's Node.js attach
+cannot see it — `task dev` runs Node for that reason. Containerised checks cost
+~40s against ~14s on the machine and required the Supabase stack for a
+typecheck that touches no database, which is what ended the experiment.

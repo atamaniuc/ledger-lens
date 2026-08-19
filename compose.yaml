@@ -1,74 +1,26 @@
-# LedgerLens in Docker, next to the Supabase stack the CLI already runs.
+# An optional container smoke check for the Next.js app.
 #
-#   task dev-up          # the Supabase stack (creates the network below)
-#   task docker-dev      # this app, hot reload + IDE debug, joined to it
-#   task docker-up       # this app, the production build, joined to it
+#   task dev-up        # the Supabase stack (creates the network below)
+#   task docker-up     # this app's production image, joined to it
 #
-# The stack itself is deliberately absent from this file. `supabase start`
-# owns those containers, their versions travel with supabase/config.toml, and
-# a second definition here would be a copy that silently drifts from the one
-# migrations and `db reset` are proven against — see ADR 0006.
+# This is not the development loop. `task dev` runs the app on your machine,
+# and so do every check and the Playwright suite — see ADR 0006. What this
+# file is for is running the production build once inside Linux, where
+# container-shaped mistakes show up: `127.0.0.1` meaning the container rather
+# than the host is the one that keeps happening.
+#
+# It is also not a stand-in for production. Vercel builds and runs the
+# deployed app from Next.js's own output; this image only proves the build
+# works in a container, which is a smaller claim.
+#
+# The Supabase stack is deliberately absent. `supabase start` owns those
+# containers, their versions travel with supabase/config.toml, and a second
+# definition here would be a copy that silently drifts from the one
+# migrations and `db reset` are proven against.
 
 name: ledgerlens
 
 services:
-  dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: dev
-    image: ledgerlens-app:dev
-    container_name: ledgerlens_dev
-    volumes:
-      # Source is live-mounted for hot reload. The two named volumes shadow
-      # the container's own `node_modules` and `.next` so the host's (macOS)
-      # bind mount never overwrites the Linux-built native deps (`sharp`,
-      # `unrs-resolver`) the `dev` image stage already installed. Named, not
-      # anonymous: `task typecheck`/`lint`/`test`/`build`/`start` each run as
-      # a separate one-off `docker compose run --rm dev ...` — a named
-      # volume is the same volume across those separate invocations, so
-      # `task build`'s `.next` output is still there for `task start` to
-      # read; an anonymous one would be recreated (and discarded) per run.
-      # Trade-off, stated plainly: unlike an anonymous volume, a named one is
-      # populated from the image only while it's empty — an image rebuild
-      # (`--build`, on every task here) does NOT refresh an already-populated
-      # volume. After `bun add`/a lockfile change, `task dev-volumes-reset`
-      # is the actual remedy; `--build` alone is not.
-      - .:/app
-      - dev_node_modules:/app/node_modules
-      - dev_next:/app/.next
-    ports:
-      # Loopback only, same reasoning as `app` below — plus the debugger:
-      # 0.0.0.0 without this prefix would put a code-execution-capable
-      # inspector on the network the laptop happens to be on.
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
-      - "127.0.0.1:${DEBUG_PORT:-9230}:9230"
-    env_file:
-      - .env.local
-    environment:
-      SUPABASE_URL: http://kong:8000
-    # Overrides package.json's own `dev` script — same command, but bound to
-    # 0.0.0.0 for this container only. `bun run dev` would keep the script's
-    # own `--inspect=127.0.0.1:...`, which binds the *container's* loopback —
-    # unreachable through Docker's port-publish, which forwards to the
-    # container's external interface. `NODE_OPTIONS` and `BUN_INSPECT` don't
-    # work as an override here: Bun ignores `NODE_OPTIONS` (a Node
-    # convention), and `BUN_INSPECT` gets inherited by both the `bun run`
-    # wrapper process and the script it spawns, so both try to bind the same
-    # port and the second one crashes with EADDRINUSE. The command below
-    # runs `next` by its file path directly under `bun --inspect=...` — one
-    # process, the flag actually applies, confirmed empirically.
-    # The inspector's bind address is the fixed container-side port (9230),
-    # not the `${DEBUG_PORT}` variable — that variable only ever changes the
-    # *host*-side publish above. Binding the variable here was a real bug:
-    # `DEBUG_PORT=9999` would publish 127.0.0.1:9999, forwarding to container
-    # port 9230 (the `ports:` target never changes), while the inspector
-    # itself listened on 9999 *inside* the container — nothing reachable on
-    # either end. Same reasoning as `app`'s `PORT=3000` env var never moving.
-    command: ["bun", "--inspect=0.0.0.0:9230", "node_modules/next/dist/bin/next", "dev"]
-    networks:
-      - supabase
-
   app:
     build:
       context: .
@@ -89,7 +41,7 @@ services:
     environment:
       # Inside the network the gateway is `kong`, not 127.0.0.1 — loopback in
       # a container is the container itself. Overrides .env.local's value,
-      # which is written for processes running on the host.
+      # which is written for processes running on this machine.
       SUPABASE_URL: http://kong:8000
       NODE_ENV: production
     networks:
@@ -104,7 +56,3 @@ networks:
   supabase:
     name: supabase_network_t1
     external: true
-
-volumes:
-  dev_node_modules:
-  dev_next:

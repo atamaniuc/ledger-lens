@@ -2,8 +2,13 @@
 #
 #   task                list every task, grouped
 #   task dev-up         the local Supabase stack, migrations and seed applied
+#   task dev            the Next.js dev server, on this machine
+#   task check          typecheck, lint, unit tests, deno check — nothing needs to be running
 #   task verify         the full gate: pure logic, then the running system
-#   task check:watch    re-run the pure-logic gate on every save
+#
+# Docker is required for one thing: the Supabase stack, which `supabase start`
+# owns. The app itself is developed, checked and tested on this machine. See
+# ADR 0006.
 #
 # Shell completion: `task completion` prints what to add to your shell rc.
 # Task is the only runner here on purpose — one definition, in one file,
@@ -54,32 +59,31 @@ tasks:
           dev-logs   "Tail a container's logs (SERVICE=db|auth|rest|edge_runtime|kong)" \
           psql       "Open a psql shell on the local database" \
           studio     "Open Supabase Studio in the browser"
-        printf '\n%s\n' "${y}App — containerised, needs the stack running${r}"
+        printf '\n%s\n' "${y}App — runs on this machine${r}"
         printf "  ${c}%-16s${r} %s\n" \
-          dev            "Next.js dev server, hot reload + IDE debug (Ctrl+C stops it)" \
-          build          "Production build" \
-          start          "Serve the production build (task build first)" \
-          docker-build   "Build the app image" \
-          docker-dev     "Same as dev, but stays running in the background" \
-          docker-dev-sh  "Shell inside the running dev container" \
-          docker-dev-down "Stop and remove the dev container" \
-          dev-volumes-reset "Drop cached node_modules/.next (after bun add)" \
-          docker-up      "Start the app container on the stack's network" \
-          docker-down    "Stop and remove both containers (dev, app)" \
-          docker-logs    "Tail the app container's logs" \
-          docker-ps      "Show container state (dev, app)" \
-          docker-sh      "Open a shell inside the running app container"
-        printf '\n%s\n' "${y}Checks — containerised except deno-check and e2e${r}"
+          dev       "Next.js dev server on Node, IDE debugger on 9231 (needs the stack)" \
+          dev:bun   "Same, on Bun — faster to start, no IntelliJ attach" \
+          build     "Production build on Node 22+ (needs nothing running)" \
+          start     "Serve the production build (task build first; needs the stack)"
+        printf '\n%s\n' "${y}Container smoke check — optional, not the dev loop${r}"
+        printf "  ${c}%-16s${r} %s\n" \
+          docker-build "Build the production app image" \
+          docker-up    "Run that image on the stack's network" \
+          docker-down  "Stop and remove it" \
+          docker-logs  "Tail its logs" \
+          docker-ps    "Show its state" \
+          docker-sh    "Open a shell inside it"
+        printf '\n%s\n' "${y}Checks — all on this machine, no Docker${r}"
         printf "  ${c}%-16s${r} %s\n" \
           check       "Pure-logic gate: typecheck, lint, unit tests, deno check" \
-          check:watch "Re-run that gate on every save (a few seconds slower now — see below)" \
+          check:watch "Re-run that gate on every save" \
           typecheck   "TypeScript, app and tests" \
           lint        "ESLint" \
           test        "Unit tests" \
-          deno-check  "Type-check the Edge Functions — host Deno, not containerised" \
+          deno-check  "Type-check the Edge Functions (Deno, supabase/functions only)" \
           types       "Regenerate lib/supabase/database.types.ts from the local schema" \
           types-check "Fail if database.types.ts is stale (needs the stack — part of verify)" \
-          e2e         "Playwright, host — no browser binaries in the image (task e2e -- tests/rls.spec.ts)" \
+          e2e         "Playwright against the running app (task e2e -- tests/rls.spec.ts)" \
           e2e:ui      "Playwright's interactive runner" \
           e2e:report  "Open the last Playwright HTML report" \
           verify      "The full gate: check, types-check, then the end-to-end suite"
@@ -168,100 +172,73 @@ tasks:
     cmds: ['open http://127.0.0.1:54323 2>/dev/null || echo "http://127.0.0.1:54323"']
 
   # --- app -----------------------------------------------------------------
+  #
+  # The app runs on this machine. Docker's job here is the Supabase stack and
+  # nothing else — see ADR 0006. The container image below is a smoke check
+  # you run when you want one, not the way anything is developed.
 
-  # Every `bun run <script>` task in this file now runs inside the `dev`
-  # container (compose.yaml), not on the host — `next`, `tsc`, `eslint`,
-  # `bun test` all execute against the same Linux/Bun environment the
-  # deployed image uses, source live-mounted so nothing needs rebuilding
-  # between runs. The trade-offs, measured, not guessed:
-  #   - Every one of these needs the local stack running (`dev`'s network is
-  #     `supabase_network_t1`, created by `supabase start` — even a pure
-  #     `typecheck` that touches no database still needs that network to
-  #     exist).
-  #   - `task check` (typecheck+lint+test, containerised) measured ~40s
-  #     against ~8s for the same three run bare on the host — most of that is
-  #     three separate `docker compose run` container starts. `check:watch`
-  #     pays this on every save. Real cost, accepted for running the actual
-  #     deploy environment rather than whatever's on the host.
-  #   - `node_modules`/`.next` are named volumes (below), which persist
-  #     across the separate `run` invocations these tasks make — but a named
-  #     volume is only populated from the image while *empty*; rebuilding the
-  #     image (`--build`) does not refresh one that already has content. If
-  #     `bun.lock` changes, `task dev-volumes-reset` is what actually picks
-  #     it up.
-  # Playwright (`e2e`) stays on the host — the image has no browser binaries
-  # installed, and Alpine's Playwright support is unofficial; adding that is
-  # future scope, not silently done here.
+  # Node, not Bun, and the reason is the debugger. Bun's inspector answers
+  # /json/version but returns an empty /json/list, which is the endpoint
+  # IntelliJ IDEA's "Attach to Node.js/Chrome" enumerates targets from — so
+  # it finds nothing to attach to. Node's V8 inspector is what that
+  # configuration actually speaks. `next dev` loads .env.local itself.
+  # `dev:bun` is below for when start-up speed matters more than a debugger.
+  #
+  # Two inspectors end up listening, and the difference matters. The flag
+  # below binds the `next` CLI process on DEBUG_PORT; Next then forks the
+  # server that actually handles requests and gives it the next free port,
+  # printing it as "Debugger port:" on startup — 9231 by default. Breakpoints
+  # in route handlers and Server Components live in that child, so that is
+  # the port to attach to. DEBUG_PORT itself gets you the launcher, which
+  # serves no request.
   dev:
-    desc: Next.js dev server, hot reload + IDE debug, containerised (Ctrl+C stops it)
+    desc: "Next.js dev server on Node, IDE debugger on 9231 (Ctrl+C stops it)"
     deps: [stack-running]
     interactive: true
-    cmds: [docker compose up --build dev]
+    cmds:
+      - node --inspect=127.0.0.1:${DEBUG_PORT:-9230} node_modules/next/dist/bin/next dev
 
-  # `next build` under Bun segfaults on Alpine — same crash the production
-  # `build` Dockerfile stage exists to avoid, confirmed here too. The `dev`
-  # image installs real Node (see Dockerfile) specifically for this one
-  # command; everything else in this file runs fine under Bun.
+  dev:bun:
+    desc: "Next.js dev server on Bun — faster to start, no IntelliJ attach"
+    deps: [stack-running]
+    interactive: true
+    cmds: [bun run dev]
+
+  # Node, not Bun: `next build` under Bun segfaults on Alpine, found when the
+  # production image was first built, and Node is what Vercel and the runtime
+  # image run anyway. Needs no stack — a build touches no database.
   build:
-    desc: Production build (containerised)
-    deps: [stack-running]
-    cmds: [docker compose run --rm --build -T dev node node_modules/next/dist/bin/next build]
+    desc: Production build (Node 22+)
+    deps: [node-22]
+    cmds: [node node_modules/next/dist/bin/next build]
 
-  # `--service-ports` (compose's usual way to publish a service's declared
-  # ports on `run`) was tried and reverted: it publishes *both* declared
-  # ports, including the debug one — which nothing is listening on here,
-  # since this runs `bun run start`, not the dev command — and collides if
-  # `task dev`/`docker-dev` already holds 3000. Publishing only the app port
-  # explicitly avoids both.
   start:
-    desc: Serve the production build (containerised — run `task build` first)
-    deps: [stack-running]
+    desc: Serve the production build (run `task build` first)
+    deps: [node-22, stack-running]
     interactive: true
-    cmds: ['docker compose run --rm --build -p "127.0.0.1:${APP_PORT:-3000}:3000" dev bun run start']
+    cmds: [node node_modules/next/dist/bin/next start]
+
+  # --- container smoke check -------------------------------------------------
+  #
+  # Optional. The image is a Linux/Node sanity check on the production build —
+  # it catches container-shaped mistakes such as `127.0.0.1` meaning the
+  # container rather than the host. It is not what Vercel runs, so it proves
+  # the build works in *a* container, not that it works in production.
 
   docker-build:
-    desc: Build the app image
+    desc: Build the production app image
     deps: [docker-running]
     cmds: [docker compose build app]
 
-  # Same as `dev` above, detached — leaves it running so you can also use
-  # `docker-dev-sh` in another terminal without giving up the first one.
-  docker-dev:
-    desc: Same as `dev`, but stays running in the background
-    deps: [stack-running]
-    cmds:
-      - docker compose up -d --build dev
-      - 'echo "http://localhost:${APP_PORT:-3000}  (debug: 127.0.0.1:${DEBUG_PORT:-9230})"'
-
-  docker-dev-sh:
-    desc: Shell inside the running dev container (bun test, tsc, next, ...)
-    interactive: true
-    cmds: [docker compose exec dev sh]
-
-  docker-dev-down:
-    desc: Stop and remove the dev container
-    cmds: [docker compose stop dev, docker compose rm -f dev]
-
-  # The actual fix for stale `node_modules` after `bun add`/a lockfile
-  # change — `--build` alone does NOT do this (see the comment above `dev`).
-  # A named volume is populated from the image only while empty; this drops
-  # it so the next container start repopulates from the freshly built image.
-  dev-volumes-reset:
-    desc: Drop the dev container's node_modules/.next volumes (after bun add)
-    prompt: This discards the dev container's cached node_modules and .next. Continue?
-    cmds:
-      - docker compose rm -sf dev
-      - docker volume rm -f ledgerlens_dev_node_modules ledgerlens_dev_next
-
   docker-up:
-    desc: Start the app container on the stack's network
+    desc: Run that image on the stack's network
     deps: [stack-running]
     cmds:
       - docker compose up -d --build app
       - 'echo "http://localhost:${APP_PORT:-3000}"'
 
   docker-down:
-    desc: Stop and remove both containers (dev, if running, and app)
+    desc: Stop and remove the app container
     cmds: [docker compose down]
 
   docker-logs:
@@ -270,7 +247,7 @@ tasks:
     cmds: [docker compose logs -f app]
 
   docker-ps:
-    desc: Show container state (dev, if running, and app)
+    desc: Show the app container's state
     cmds: [docker compose ps]
 
   docker-sh:
@@ -280,6 +257,9 @@ tasks:
 
   # --- checks --------------------------------------------------------------
 
+  # Fast, and needs nothing running: no Docker, no Supabase stack. That is the
+  # point of it — a gate you avoid because it takes 40 seconds is a gate that
+  # runs before the commit instead of during the edit.
   check:
     desc: "Pure-logic gate: typecheck, lint, unit tests, deno check"
     cmds:
@@ -299,32 +279,23 @@ tasks:
     cmds: [{ task: check }]
 
   # `tsc` needs `.next/types/**` to exist first — Next.js generates the
-  # route/layout ambient types (`LayoutProps`, etc.) there, normally as a
-  # side effect of `next dev`/`next build` having run at least once. The
-  # named `.next` volume starts empty, so `next typegen` (fast, no full
-  # build) runs first rather than assuming `task dev`/`task build` already
-  # populated it.
-  #
-  # No `--build` on these three, unlike `dev`/`build`/`start`: measured, it
-  # adds ~4s per invocation for a cache-hit rebuild that buys nothing anyway
-  # — a named volume doesn't refresh from a rebuilt image once populated (see
-  # `dev-volumes-reset`), so `--build` here was paying a real `check:watch`
-  # cost for a staleness problem it doesn't actually solve.
+  # route/layout ambient types (`LayoutProps`, etc.) there as a side effect of
+  # `next dev`/`next build` having run at least once. A fresh clone has
+  # neither, so `next typegen` (fast, no full build) runs first rather than
+  # assuming something else already populated it.
   typecheck:
-    desc: TypeScript, app and tests (containerised)
-    deps: [stack-running]
+    desc: TypeScript, app and tests
     cmds:
-      - docker compose run --rm -T dev sh -c 'node_modules/next/dist/bin/next typegen && bun run typecheck'
+      - node_modules/next/dist/bin/next typegen
+      - bun run typecheck
 
   lint:
-    desc: ESLint (containerised)
-    deps: [stack-running]
-    cmds: [docker compose run --rm -T dev bun run lint]
+    desc: ESLint
+    cmds: [bun run lint]
 
   test:
-    desc: Unit tests (containerised)
-    deps: [stack-running]
-    cmds: [docker compose run --rm -T dev bun run test]
+    desc: Unit tests
+    cmds: [bun run test]
 
   # supabase/functions/ is excluded from tsconfig.json and ESLint (Deno
   # runtime: npm: specifiers, Deno globals, .ts import extensions), so
@@ -425,6 +396,17 @@ tasks:
   # --- guards --------------------------------------------------------------
   # Preconditions with a sentence that says what to do, rather than a command
   # failing several layers down with a connection error.
+
+  # Node runs the production build and the debuggable dev server. 22 is the
+  # floor Next.js 16 supports; the message names the version found so a
+  # mismatch is one line to read rather than a stack trace to interpret.
+  node-22:
+    internal: true
+    preconditions:
+      - sh: command -v node >/dev/null 2>&1
+        msg: "Node is not installed — Next.js needs Node 22 or newer to build. https://nodejs.org"
+      - sh: '[ "$(node -p "process.versions.node.split(\".\")[0]")" -ge 22 ]'
+        msg: "Node 22 or newer is required for the production build (found $(node --version 2>/dev/null))."
 
   docker-running:
     internal: true

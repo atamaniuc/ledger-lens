@@ -2,7 +2,7 @@
 
 **An AI copilot over financial data you can actually trust.**
 
-Next.js · Supabase/Postgres · pgvector · Pulumi · Bun.
+Next.js · Supabase/Postgres · pgvector · Pulumi · Bun · Node.
 Current state and what is next: [`PROGRESS.md`](PROGRESS.md).
 
 ---
@@ -29,23 +29,33 @@ reliable data pipelines, and safe agentic AI.
 
 ## Running it locally
 
-Needs Docker, [Task](https://taskfile.dev), the
+Needs [Task](https://taskfile.dev), the
 [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started),
-[Bun](https://bun.sh) and [Deno](https://deno.land).
+[Bun](https://bun.sh), [Node 22+](https://nodejs.org),
+[Deno](https://deno.land), and Docker — Docker for the Supabase stack, which
+is the only thing that runs in a container.
 
 ```bash
 task install                             # dependencies
 cp supabase/.env.example supabase/.env   # the Edge Function's shared secret
 task dev-up                              # local Supabase in Docker: migrations + two-tenant seed
 task env                                 # writes .env.local from the running stack
-task dev                                 # http://localhost:3000 — hot reload, containerised
+task dev                                 # http://localhost:3000 — hot reload, IDE debugger on 9231
 ```
 
 ```bash
 task                    # every command, grouped
-task verify             # typecheck, lint, unit, deno check, types-check, then Playwright
-task docker-up          # the production build, containerised, beside the stack
+task check              # typecheck, lint, unit tests, deno check — needs nothing running
+task verify             # that, plus types-check and the Playwright suite
+task docker-up          # optional: the production image, beside the stack
 ```
+
+The app, its checks and the Playwright suite all run on your machine. Bun
+installs dependencies and runs the unit tests, Node 22 builds and serves,
+Deno covers `supabase/functions/` alone, and Docker runs the Supabase stack.
+The app's container image is an occasional smoke check, not a development
+environment, and not what Vercel runs —
+[ADR 0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md).
 
 Verifying a stage by hand, curl recipes, IDE debugger and database
 connections: [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
@@ -143,7 +153,7 @@ Current known limitations are tracked in [`PROGRESS.md`](PROGRESS.md#known-limit
 | AI | Anthropic or OpenAI API, hybrid RAG (vector + full-text, RRF), 4-tool scoped agent |
 | Background work | Postgres queue (`SKIP LOCKED`) + event-driven webhook path |
 | Infrastructure | Pulumi (TypeScript) — see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
-| Tooling | Bun, Task, Docker, Playwright, GitHub Actions |
+| Tooling | Bun (install, unit tests), Node 22 (build, serve), Task, Docker (Supabase stack), Playwright, GitHub Actions |
 
 ---
 
@@ -154,7 +164,7 @@ CLAUDE.md                    Workflow rules
 PROGRESS.md                  What is built, what is next — the status source of truth
 tasks.md                     The active stage's checklist
 Taskfile.yml                 Every local command — `task` lists them
-Dockerfile / compose.yaml    Production and dev images, joined to the Supabase network
+Dockerfile / compose.yaml    Optional production image, joined to the Supabase network
 .claude/
   PRD.md                     Product requirements — one entry per stage
   adr/                       Architecture Decision Records, sequentially numbered
