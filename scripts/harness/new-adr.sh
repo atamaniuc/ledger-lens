@@ -27,7 +27,7 @@ SLUG="$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s
 
 LAST_NUM=$(find "$ADR_DIR" -maxdepth 1 -name '[0-9][0-9][0-9][0-9]-*.md' -print 2>/dev/null \
   | sed -E 's#.*/([0-9]{4})-.*#\1#' | sort -n | tail -1)
-NEXT_NUM=$(printf '%04d' "$(( ${LAST_NUM:-0} + 1 ))")
+NEXT_NUM=$(printf '%04d' "$(( 10#${LAST_NUM:-0} + 1 ))")
 
 FILE="$ADR_DIR/${NEXT_NUM}-${SLUG}.md"
 if [ -e "$FILE" ]; then
