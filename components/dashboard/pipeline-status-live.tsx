@@ -55,7 +55,7 @@ export function PipelineStatusLive({ runs }: { runs: RunSummary[] }) {
                 <span className="font-mono text-xs text-foreground">
                   {run.id.slice(0, 8)}
                 </span>
-                <span className="text-xs text-muted">
+                <span className="text-xs text-muted-foreground">
                   {run.kind} · {run.source} ·{" "}
                   {(run.finished_at ?? run.started_at).slice(11, 19)}
                 </span>

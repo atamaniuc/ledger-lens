@@ -44,7 +44,16 @@ test.beforeAll(async ({ request }) => {
   if (count === 0) await ingest(request, ORG_A);
 
   // `search_documents` needs an index; earlier specs truncate it away.
-  execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "ignore" });
+  // stderr is captured, not discarded: this rebuild has flaked once, and
+  // `stdio: "ignore"` turned the reason into "Command failed".
+  try {
+    execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "pipe" });
+  } catch (error) {
+    const detail = error as { stderr?: Buffer; stdout?: Buffer };
+    throw new Error(
+      `index-corpus failed:\n${detail.stderr?.toString() ?? ""}\n${detail.stdout?.toString() ?? ""}`,
+    );
+  }
 
   const [row] = await sql<{ external_id: string }[]>`
     select external_id from invoices where org_id = ${ORG_A} order by external_id limit 1`;

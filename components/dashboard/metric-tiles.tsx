@@ -13,7 +13,7 @@ import { SelectTrigger } from "./selection-context";
 
 const TILE =
   "flex w-full flex-col items-start gap-tight rounded-panel border border-border-subtle bg-surface p-section text-left " +
-  "transition-colors hover:border-border-strong data-[selected]:border-accent data-[selected]:bg-accent-surface";
+  "transition-colors hover:border-border-strong data-[selected]:border-accent data-[selected]:bg-accent";
 
 export function MetricTiles({
   result,

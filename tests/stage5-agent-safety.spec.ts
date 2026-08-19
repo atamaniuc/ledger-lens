@@ -72,7 +72,16 @@ test.beforeAll(async ({ request }) => {
     select count(*)::int from invoices where org_id = ${ORG_A}`;
   if (count === 0) await ingest(request, ORG_A);
 
-  execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "ignore" });
+  // stderr is captured, not discarded: this rebuild has flaked once, and
+  // `stdio: "ignore"` turned the reason into "Command failed".
+  try {
+    execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "pipe" });
+  } catch (error) {
+    const detail = error as { stderr?: Buffer; stdout?: Buffer };
+    throw new Error(
+      `index-corpus failed:\n${detail.stderr?.toString() ?? ""}\n${detail.stdout?.toString() ?? ""}`,
+    );
+  }
 });
 
 test.describe("Stage 5 — the safety claims", () => {

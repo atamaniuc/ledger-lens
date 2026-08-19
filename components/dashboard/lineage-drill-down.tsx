@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { fetchLineage, type LineageRecord } from "@/lib/dashboard/queries";
+import { useQuery } from "@tanstack/react-query";
+import { fetchLineage } from "@/lib/dashboard/queries";
 import { createClient } from "@/lib/supabase/browser-client";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Panel, PanelError, EmptyState } from "@/components/ui/status-badge";
 import { useSelection, type Selection } from "./selection-context";
 
@@ -17,19 +19,14 @@ import { useSelection, type Selection } from "./selection-context";
 // `org_id` filter here either, for the same reason there is none anywhere
 // else (ADR 0007).
 
-type State =
-  | { kind: "loading" }
-  | { kind: "loaded"; records: LineageRecord[] }
-  | { kind: "failed"; message: string };
-
 export function LineageDrillDown() {
   const { selection, clear } = useSelection();
   if (!selection) return null;
 
   // Keyed on the selection so a different figure remounts this rather than
-  // resetting it. Resetting would mean a setState in the effect body, which
-  // is a cascading render — and the mount already starts in `loading`, so
-  // there is no idle state to return to.
+  // resetting it — the query key below would do the same work, but the panel
+  // also has scroll position and open `<details>` elements that should not
+  // survive a change of subject.
   return (
     <LineagePanel key={selection.label} selection={selection} onClose={clear} />
   );
@@ -42,49 +39,43 @@ function LineagePanel({
   selection: Selection;
   onClose: () => void;
 }) {
-  const [state, setState] = useState<State>({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
+  // Cached by what is being looked at, so re-opening the same figure inside
+  // the stale window is free. There is no `org_id` in the key for the same
+  // reason there is none in the query (ADR 0007) — the client carries the
+  // user's JWT, and a key that pretended to scope would be a second, wrong
+  // copy of a rule Postgres already enforces.
+  const query = useQuery({
+    queryKey: ["lineage", selection.lineage.rawEventIds],
+    queryFn: async () => {
       const result = await fetchLineage(createClient(), selection.lineage);
-      if (cancelled) return;
-      setState(
-        result.ok
-          ? { kind: "loaded", records: result.data }
-          : { kind: "failed", message: result.error },
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selection]);
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  });
 
   return (
     <Panel
       title={`Lineage · ${selection.label}`}
       testId="lineage"
       action={
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs font-medium text-accent hover:underline"
-        >
+        <Button type="button" variant="ghost" size="xs" onClick={onClose}>
           Close
-        </button>
+        </Button>
       }
     >
-      {state.kind === "loading" && (
-        <p data-testid="lineage-loading" className="text-sm text-muted">
-          Loading the records behind this figure…
-        </p>
+      {query.isPending && (
+        <div data-testid="lineage-loading" className="flex flex-col gap-tight">
+          <p className="text-sm text-muted-foreground">
+            Loading the records behind this figure…
+          </p>
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
       )}
 
-      {state.kind === "failed" && <PanelError message={state.message} />}
+      {query.isError && <PanelError message={query.error.message} />}
 
-      {state.kind === "loaded" && state.records.length === 0 && (
+      {query.isSuccess && query.data.length === 0 && (
         <EmptyState>
           No raw records are visible for this figure. If it was produced by
           another tenant&apos;s run, that is the expected result rather than an
@@ -92,14 +83,14 @@ function LineagePanel({
         </EmptyState>
       )}
 
-      {state.kind === "loaded" && state.records.length > 0 && (
+      {query.isSuccess && query.data.length > 0 && (
         <ul data-testid="lineage-records" className="flex flex-col gap-tight">
-          {state.records.map((record) => (
+          {query.data.map((record) => (
             <li
               key={record.id}
-              className="rounded-control bg-surface-sunken px-snug py-tight"
+              className="rounded-control bg-muted px-snug py-tight"
             >
-              <p className="flex flex-wrap gap-snug text-xs text-muted">
+              <p className="flex flex-wrap gap-snug text-xs text-muted-foreground">
                 <span className="font-mono text-foreground">
                   {record.external_id}
                 </span>
@@ -108,10 +99,10 @@ function LineagePanel({
                 <span>{record.ingested_at.slice(0, 19).replace("T", " ")}</span>
               </p>
               <details className="mt-tight">
-                <summary className="cursor-pointer text-xs text-accent">
+                <summary className="cursor-pointer text-xs text-primary">
                   Raw payload
                 </summary>
-                <pre className="mt-tight overflow-x-auto rounded-control bg-surface p-tight font-mono text-xs text-muted">
+                <pre className="mt-tight overflow-x-auto rounded-control bg-card p-tight font-mono text-xs text-muted-foreground">
                   {JSON.stringify(record.payload, null, 2)}
                 </pre>
               </details>
@@ -119,6 +110,7 @@ function LineagePanel({
           ))}
         </ul>
       )}
+
     </Panel>
   );
 }

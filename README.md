@@ -183,12 +183,13 @@ conversation history, so a follow-up starts from nothing.
 be built from both while the audit rows named one. Refusing is honest;
 choosing is the feature that is missing.
 
+**Stage 7 (Stretch) will not be built.** Optional from the first PRD draft, on
+the condition that the core loop was already real. It is. The PRD entry stays
+as a record of what was considered.
+
 **End-to-end tests are not in CI.** The workflow gates on `task check` and the
 evals. Playwright needs the full stack plus a running app and stays a local
 habit.
-
-**`@tanstack/react-query` is installed and unused.** It should be used or
-dropped.
 
 ---
 
@@ -196,7 +197,7 @@ dropped.
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind with design tokens in one file |
+| Frontend | Next.js (App Router), TypeScript, Tailwind, shadcn/ui, TanStack Query |
 | Auth & live updates | Supabase Auth (magic link), Supabase Realtime |
 | Backend | Next.js route handlers, Deno (Supabase Edge Functions) |
 | Database | Postgres via Supabase — RLS, `pgvector` (HNSW), `tsvector`/GIN, `pgcrypto` |

@@ -84,7 +84,16 @@ test.beforeAll(async ({ request }) => {
   // an index exists at this point depends on file order, which is exactly the
   // kind of dependency the Stage 4 specs refused to take. The indexer is
   // idempotent, so this costs a second when the corpus is already indexed.
-  execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "ignore" });
+  // stderr is captured, not discarded: this rebuild has flaked once, and
+  // `stdio: "ignore"` turned the reason into "Command failed".
+  try {
+    execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "pipe" });
+  } catch (error) {
+    const detail = error as { stderr?: Buffer; stdout?: Buffer };
+    throw new Error(
+      `index-corpus failed:\n${detail.stderr?.toString() ?? ""}\n${detail.stdout?.toString() ?? ""}`,
+    );
+  }
 
   const [{ count: chunks }] = await sql<{ count: number }[]>`
     select count(*)::int from chunks`;

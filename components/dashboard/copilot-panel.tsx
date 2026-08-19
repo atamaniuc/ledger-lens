@@ -1,6 +1,10 @@
 "use client";
 
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { segmentAnswer, type Citation } from "@/lib/agent/citations";
 import type { AgentTurnResult } from "@/lib/agent/loop";
 import { fetchInvoiceLineage } from "@/lib/dashboard/queries";
@@ -19,20 +23,29 @@ import { useSelection } from "./selection-context";
 // particular it never hides a flagged answer: an unverified citation is
 // rendered, marked, and left in place.
 //
-// State is a `useState` machine and a `fetch`, matching `LineageDrillDown`.
-// One request, no cache to share and nothing to refetch, so a query client
-// would be machinery around a single POST.
+// The request runs through TanStack Query's `useMutation`, which is what owns
+// the pending/settled state. What this file still owns is the *shape* of a
+// settled response: a 503 is an unconfigured deployment rather than a failed
+// question, and a 200 whose body is not an answer is a failure — neither is
+// something the transport can tell apart on its own.
 
 type AgentResponse = AgentTurnResult & { correlation_id: string };
 
-type State =
-  | { kind: "idle" }
-  | { kind: "asking" }
-  | { kind: "answered"; result: AgentResponse }
-  // An operator problem, not the reader's: it gets its own state so it does
-  // not read as "the copilot failed to answer your question".
-  | { kind: "unconfigured"; message: string }
-  | { kind: "failed"; message: string; correlationId: string | null };
+/**
+ * An operator problem, not the reader's. Carried as its own error type so the
+ * panel does not render "the copilot failed to answer your question" over a
+ * deployment that was never given a key.
+ */
+class UnconfiguredError extends Error {}
+
+class TurnError extends Error {
+  readonly correlationId: string | null;
+
+  constructor(message: string, correlationId: string | null) {
+    super(message);
+    this.correlationId = correlationId;
+  }
+}
 
 function errorOf(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
@@ -61,58 +74,45 @@ function correlationOf(body: unknown): string | null {
   return null;
 }
 
+async function ask(question: string): Promise<AgentResponse> {
+  const response = await fetch("/api/agent/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  const body: unknown = await response.json().catch(() => null);
+
+  if (response.status === 503) {
+    throw new UnconfiguredError(errorOf(body, "the copilot is not configured"));
+  }
+  if (!response.ok) {
+    throw new TurnError(
+      errorOf(body, `the request failed with status ${response.status}`),
+      correlationOf(body),
+    );
+  }
+  if (!isAgentResponse(body)) {
+    throw new TurnError(
+      "the copilot returned something that is not an answer",
+      correlationOf(body),
+    );
+  }
+  return body;
+}
+
 export function CopilotPanel() {
   const { select } = useSelection();
   const [question, setQuestion] = useState("");
-  const [state, setState] = useState<State>({ kind: "idle" });
   const [citeNote, setCiteNote] = useState<string | null>(null);
 
-  async function ask(event: React.FormEvent) {
-    event.preventDefault();
-    const trimmed = question.trim();
-    if (trimmed.length === 0 || state.kind === "asking") return;
-
-    setState({ kind: "asking" });
-    setCiteNote(null);
-
-    try {
-      const response = await fetch("/api/agent/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
-      });
-      const body: unknown = await response.json().catch(() => null);
-
-      if (response.status === 503) {
-        setState({ kind: "unconfigured", message: errorOf(body, "the copilot is not configured") });
-        return;
-      }
-      if (!response.ok) {
-        setState({
-          kind: "failed",
-          message: errorOf(body, `the request failed with status ${response.status}`),
-          correlationId: correlationOf(body),
-        });
-        return;
-      }
-
-      if (!isAgentResponse(body)) {
-        setState({
-          kind: "failed",
-          message: "the copilot returned something that is not an answer",
-          correlationId: correlationOf(body),
-        });
-        return;
-      }
-      setState({ kind: "answered", result: body });
-    } catch (error) {
-      setState({
-        kind: "failed",
-        message: error instanceof Error ? error.message : String(error),
-        correlationId: null,
-      });
-    }
-  }
+  const turn = useMutation({
+    mutationFn: ask,
+    // A question that failed is not a question worth asking again unchanged:
+    // every failure this surfaces is deterministic (no key, a rejected body,
+    // a turn the agent could not complete).
+    retry: false,
+    onMutate: () => setCiteNote(null),
+  });
 
   // A cited invoice opens the same drawer a metric tile opens, so "where did
   // this number come from" has one answer in this UI rather than two.
@@ -133,13 +133,22 @@ export function CopilotPanel() {
     select({ label: `Invoice ${externalId}`, lineage: result.data });
   }
 
+  const unconfigured = turn.error instanceof UnconfiguredError;
+
   return (
     <Panel title="Copilot" testId="copilot">
-      <form onSubmit={ask} className="flex flex-col gap-tight">
-        <label htmlFor="copilot-question" className="text-xs text-muted">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmed = question.trim();
+          if (trimmed.length > 0) turn.mutate(trimmed);
+        }}
+        className="flex flex-col gap-tight"
+      >
+        <label htmlFor="copilot-question" className="text-xs text-muted-foreground">
           Ask about this organisation&apos;s invoices and documents.
         </label>
-        <textarea
+        <Textarea
           id="copilot-question"
           data-testid="copilot-question"
           value={question}
@@ -147,52 +156,54 @@ export function CopilotPanel() {
           rows={3}
           maxLength={1000}
           placeholder="Which invoices are overdue, and what are our payment terms?"
-          className="w-full resize-y rounded-control border border-border-subtle bg-surface-sunken p-tight text-sm text-foreground placeholder:text-faint"
         />
-        <button
+        <Button
           type="submit"
+          size="sm"
           data-testid="copilot-submit"
-          disabled={state.kind === "asking" || question.trim().length === 0}
-          className="self-start rounded-control bg-accent-surface px-snug py-tight text-xs font-medium text-accent disabled:opacity-50"
+          disabled={turn.isPending || question.trim().length === 0}
+          className="self-start"
         >
-          {state.kind === "asking" ? "Thinking…" : "Ask"}
-        </button>
+          {turn.isPending ? "Thinking…" : "Ask"}
+        </Button>
       </form>
 
       <div className="mt-gutter">
-        {state.kind === "idle" && (
+        {turn.isIdle && (
           <EmptyState>
             Answers are built from rows your account can already see, and every
             claim carries the id it came from.
           </EmptyState>
         )}
 
-        {state.kind === "asking" && (
-          <p data-testid="copilot-loading" className="text-sm text-muted">
-            Reading your invoices and documents…
+        {turn.isPending && (
+          <div data-testid="copilot-loading" className="flex flex-col gap-tight">
+            <p className="text-sm text-muted-foreground">
+              Reading your invoices and documents…
+            </p>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        )}
+
+        {unconfigured && (
+          <p data-testid="copilot-unconfigured" className="text-sm text-muted-foreground">
+            {turn.error?.message}. Everything else on this page is unaffected.
           </p>
         )}
 
-        {state.kind === "unconfigured" && (
-          <p data-testid="copilot-unconfigured" className="text-sm text-muted">
-            {state.message}. Everything else on this page is unaffected.
-          </p>
-        )}
-
-        {state.kind === "failed" && (
+        {turn.isError && !unconfigured && (
           <div data-testid="copilot-error">
-            <PanelError message={state.message} />
-            {state.correlationId && (
+            <PanelError message={turn.error.message} />
+            {turn.error instanceof TurnError && turn.error.correlationId && (
               <p className="mt-tight font-mono text-xs text-faint">
-                correlation_id {state.correlationId}
+                correlation_id {turn.error.correlationId}
               </p>
             )}
           </div>
         )}
 
-        {state.kind === "answered" && (
-          <Answer result={state.result} onOpenInvoice={openInvoice} />
-        )}
+        {turn.isSuccess && <Answer result={turn.data} onOpenInvoice={openInvoice} />}
 
         {citeNote && (
           <p data-testid="copilot-cite-note" className="mt-tight text-xs text-status-warn">
@@ -272,7 +283,7 @@ function CitationMarker({
   onOpenInvoice: (externalId: string) => void;
 }) {
   const tone = citation.verified
-    ? "bg-accent-surface text-accent"
+    ? "bg-accent text-primary"
     : "bg-status-warn-surface text-status-warn";
   const label = `[${citation.kind}:${citation.id}]`;
   const title = citation.verified

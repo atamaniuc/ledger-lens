@@ -15,7 +15,7 @@ The single source of truth for what is built and what is next. `README.md` and
 | 4 — Dashboard | done | Authenticated page over Stages 1–3, reading under the user's own JWT (ADR [0007](.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md)) |
 | 5 — RAG & Agent | done | Hybrid retrieval, a four-tool agent under the user's own JWT, and the copilot panel (ADR [0008](.claude/adr/0008-retrieval-embeds-in-the-edge-runtime-with-gte-small-hybrid-search-is-one-security-invoker-function.md), [0009](.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md)) |
 | 6 — Evals + CI gate | done (POC) | 20-case dataset, versioned thresholds, `task evals`, one GitHub Actions workflow |
-| **7 — Stretch** | **next** | Optional, independent |
+| 7 — Stretch | **not planned** | Optional from the start, and the core loop is what this project is for |
 
 ## What runs today
 
@@ -65,6 +65,12 @@ while every impersonated check kept passing.
 
 Carried forward deliberately, not dropped:
 
+- **Stage 7 (Stretch) will not be built.** It was optional from the first PRD
+  draft, on the condition that the core loop was already real. It is, and the
+  time is better spent on what Stages 1–6 already carry than on a seventh
+  stage nobody asked for. The PRD entry stays as a record of what was
+  considered.
+
 - **No Storybook.** Deferred to Stage 7. It is a large install and a second
   build surface for a project with one page and no CI, and CLAUDE.md scopes
   stories to shared components. The four states a story would have shown —
@@ -92,9 +98,6 @@ Carried forward deliberately, not dropped:
   `[chunk:…]` renders as a marker only, because the dashboard has no reader for
   corpus text. A link that led nowhere would be worse than one that does not
   claim to.
-- **`@tanstack/react-query` is an unused dependency.** In `package.json` since
-  Stage 4 and imported nowhere. Stage 5 decided against introducing it for a
-  single POST; it should be used or dropped.
 - **`chunks` is the one table where `service_role` holds `DELETE`.** Everything
   else is append-only because it records what arrived. `chunks` is a derived
   index of *current* text, and a document that loses a paragraph has to lose its
@@ -253,6 +256,19 @@ unrelated queries; twenty cases found the fourth. The floor is 0.80 now, and
 the margin between 0.791 unrelated and 0.803 for the weakest relevant chunk in
 range is the honest reason `README.md`'s TODO asks for a bigger dataset. That
 is the whole argument for an eval set, made by the eval set on its first run.
+
+**Frontend pass.** shadcn/ui and TanStack Query were both listed in the README
+long before either existed; the pass that added them found the collision worth
+recording. `shadcn init` writes its own greyscale palette straight over
+`--background`, `--foreground`, `--muted`, `--accent` and `--border` — the
+dashboard's blue silently became grey, and `--muted` flipped meaning from
+*muted text* to *a surface*. Keeping both palettes would have left two sources
+of truth for one colour, and the copy is always what drifts. shadcn's token
+names are now defined in terms of this project's, and where the two disagreed
+this project moved: `text-muted` became `text-muted-foreground`, which is
+shadcn's name for exactly what it already meant. The vendored components are
+exempted from the design-token gate by name, one line each, so adding one stays
+a visible decision.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

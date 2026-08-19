@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/browser-client";
 
 type State =
@@ -39,29 +41,37 @@ export function LoginForm({ next }: { next: string }) {
 
   if (state.kind === "sent") {
     return (
-      <p role="status" data-testid="login-sent">
-        Check <strong>{state.email}</strong> for a sign-in link. Locally, mail
-        goes to Mailpit on port 54324 rather than to a real inbox.
+      <p role="status" data-testid="login-sent" className="text-sm text-muted-foreground">
+        Check <strong className="text-foreground">{state.email}</strong> for a
+        sign-in link. Locally, mail goes to Mailpit on port 54324 rather than to
+        a real inbox.
       </p>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate>
-      <label htmlFor="email">Work email</label>
-      <input
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-tight">
+      <label htmlFor="email" className="text-xs text-muted-foreground">
+        Work email
+      </label>
+      <Input
         id="email"
         name="email"
         type="email"
         autoComplete="email"
+        placeholder="you@company.com"
         required
         disabled={state.kind === "sending"}
       />
-      <button type="submit" disabled={state.kind === "sending"}>
+      <Button type="submit" disabled={state.kind === "sending"} className="mt-tight">
         {state.kind === "sending" ? "Sending…" : "Send sign-in link"}
-      </button>
+      </Button>
       {state.kind === "failed" && (
-        <p role="alert" data-testid="login-error">
+        <p
+          role="alert"
+          data-testid="login-error"
+          className="text-sm text-destructive"
+        >
           {state.message}
         </p>
       )}

@@ -12,7 +12,24 @@ import { join } from "node:path";
 
 const ROOTS = ["app", "components"];
 const EXTENSIONS = [".tsx", ".ts", ".css"];
-const EXEMPT = ["app/globals.css"];
+
+// `globals.css` is where the literals belong. The rest are vendored from
+// shadcn/ui by its CLI and re-generated rather than hand-edited, so their
+// `ring-[3px]` and `rounded-[min(var(--radius-md),10px)]` are upstream's
+// choices, not this project's. Listed one by one on purpose: adding a
+// component is then a visible decision in a diff, not a widening glob that
+// quietly stops covering `components/ui/status-badge.tsx` — which is this
+// project's own and stays covered.
+const EXEMPT = [
+  "app/globals.css",
+  "components/ui/badge.tsx",
+  "components/ui/button.tsx",
+  "components/ui/card.tsx",
+  "components/ui/input.tsx",
+  "components/ui/separator.tsx",
+  "components/ui/skeleton.tsx",
+  "components/ui/textarea.tsx",
+];
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {

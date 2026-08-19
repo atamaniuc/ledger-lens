@@ -1,3 +1,10 @@
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import type { CheckStatus } from "@/lib/data-quality/constants";
 
 // The one place a state becomes a colour.
@@ -45,28 +52,34 @@ export function StatusBadge({
   );
 }
 
+/**
+ * Every panel on the dashboard. A shadcn `Card` underneath, so spacing,
+ * radius and ring come from one place — but kept as its own component rather
+ * than spelling out `Card`/`CardHeader`/`CardTitle` at eleven call sites,
+ * because a panel here always has exactly a title, an optional action and a
+ * body, and the wrapper is what keeps that true.
+ */
 export function Panel({
   title,
   action,
   children,
   testId,
+  className,
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   testId?: string;
+  className?: string;
 }) {
   return (
-    <section
-      data-testid={testId}
-      className="rounded-panel border border-border-subtle bg-surface p-section"
-    >
-      <header className="mb-gutter flex items-baseline justify-between gap-gutter">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {action}
-      </header>
-      {children}
-    </section>
+    <Card data-testid={testId} className={className}>
+      <CardHeader>
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        {action ? <CardAction>{action}</CardAction> : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   );
 }
 
@@ -80,5 +93,5 @@ export function PanelError({ message }: { message: string }) {
 }
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted">{children}</p>;
+  return <p className="text-sm text-muted-foreground">{children}</p>;
 }

@@ -105,7 +105,7 @@ export default async function DashboardPage({
               <h1 className="text-xl font-semibold text-foreground">
                 Pipeline overview
               </h1>
-              <p data-testid="signed-in-as" className="text-xs text-muted">
+              <p data-testid="signed-in-as" className="text-xs text-muted-foreground">
                 {user?.email}
               </p>
             </div>

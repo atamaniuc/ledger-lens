@@ -1,9 +1,13 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
    Design tokens. The only file in this project that may name a colour or a
    spacing value. Components reference these through Tailwind utilities
-   (`bg-surface`, `text-muted`, `p-gutter`) — a hardcoded hex or px in a
+   (`bg-surface`, `text-muted-foreground`, `p-gutter`) — a hardcoded hex or px in a
    component is a lint-visible mistake, and `task check`'s token grep looks
    for exactly that.
 
@@ -54,6 +58,34 @@
 
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
+
+  /* shadcn/ui's token names, defined in terms of the semantic ones above
+     rather than as a second palette. `shadcn init` ships its own greyscale
+     set; keeping it would have meant two sources of truth for the same
+     colour, and the one that drifts is always the copy. Its components read
+     this project's tokens instead, so changing what "accent" looks like is
+     still one edit in one file.
+
+     Two names mean different things in the two systems, and this project
+     moved rather than shadcn: `muted` is a surface there and was text here
+     (now `muted-foreground`, which is shadcn's name for exactly that), and
+     the interactive blue is `primary` there and was `accent` here. */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--surface);
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--foreground);
+  --muted-surface: var(--surface-sunken);
+  --muted-foreground: var(--muted);
+  --accent-hover: var(--accent-surface);
+  --accent-foreground: var(--accent);
+  --destructive: var(--status-fail);
+  --input: var(--border);
+  --ring: var(--accent);
+  --radius: var(--radius-control);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -92,7 +124,6 @@
   --color-border-strong: var(--border-strong);
 
   --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
   --color-faint: var(--faint);
 
   --color-status-pass: var(--status-pass);
@@ -106,8 +137,24 @@
   --color-status-missing: var(--status-missing);
   --color-status-missing-surface: var(--status-missing-surface);
 
-  --color-accent: var(--accent);
+  --color-accent: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
   --color-accent-surface: var(--accent-surface);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-border: var(--border);
 
   --spacing-tight: var(--space-tight);
   --spacing-snug: var(--space-snug);
@@ -117,6 +164,10 @@
 
   --radius-control: var(--radius-control);
   --radius-panel: var(--radius-panel);
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-panel);
+  --radius-xl: var(--radius-panel);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

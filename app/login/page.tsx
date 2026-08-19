@@ -1,4 +1,11 @@
 import { redirect } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server-client";
 import { LoginForm } from "./login-form";
@@ -26,14 +33,28 @@ export default async function LoginPage({
   if (user) redirect(next);
 
   return (
-    <main>
-      <h1>Sign in to LedgerLens</h1>
-      {error && (
-        <p role="alert" data-testid="callback-error">
-          {CALLBACK_ERRORS[error] ?? CALLBACK_ERRORS.invalid}
-        </p>
-      )}
-      <LoginForm next={next} />
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center p-page">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Sign in to LedgerLens</CardTitle>
+          <CardDescription>
+            A link, not a password — credential handling stays out of this
+            codebase.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-gutter">
+          {error && (
+            <p
+              role="alert"
+              data-testid="callback-error"
+              className="text-sm text-destructive"
+            >
+              {CALLBACK_ERRORS[error] ?? CALLBACK_ERRORS.invalid}
+            </p>
+          )}
+          <LoginForm next={next} />
+        </CardContent>
+      </Card>
     </main>
   );
 }

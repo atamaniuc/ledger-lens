@@ -381,7 +381,9 @@ No UI — CLI script + CI job. Output: a results table + non-zero exit code on t
 
 ## Stretch (Stage 7)
 
-**Status:** Draft
+**Status:** Not planned — closed unbuilt. The condition below was met (the core
+loop is real through Stage 6), and the entry is kept as a record of what was
+considered rather than deleted. Nothing downstream depends on it.
 **Timeline:** Stage 7 — optional, attempted only if the core loop (Stages 1–6) is already real
 
 ### Context & Business Value

@@ -89,7 +89,7 @@ export function DataHealthPanel({ result }: { result: QueryResult<DataHealth> })
               <span className="text-sm font-medium text-foreground">
                 {cell.check_name}
               </span>
-              <span className="text-xs text-muted">
+              <span className="text-xs text-muted-foreground">
                 {DESCRIPTIONS[cell.check_name]}
               </span>
               {cell.state === "present" && cell.result.delta !== null && (

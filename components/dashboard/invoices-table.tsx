@@ -45,7 +45,7 @@ export function InvoicesTable({ result }: { result: QueryResult<InvoicePage> }) 
           <Link
             data-testid="invoices-next"
             href={`/dashboard?after=${encodeURIComponent(encodeCursor(nextCursor))}`}
-            className="text-xs font-medium text-accent hover:underline"
+            className="text-xs font-medium text-primary hover:underline"
           >
             Next page →
           </Link>
@@ -66,14 +66,14 @@ export function InvoicesTable({ result }: { result: QueryResult<InvoicePage> }) 
           <tbody data-testid="invoice-rows">
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-border-subtle">
-                <td className="py-tight font-mono text-xs text-muted">
+                <td className="py-tight font-mono text-xs text-muted-foreground">
                   {row.external_id}
                 </td>
                 <td className="py-tight text-foreground">{row.customer}</td>
-                <td className="py-tight text-muted">
+                <td className="py-tight text-muted-foreground">
                   {row.issued_at.slice(0, 10)}
                 </td>
-                <td className="py-tight text-muted">{row.status}</td>
+                <td className="py-tight text-muted-foreground">{row.status}</td>
                 <td className="py-tight text-right font-mono text-foreground">
                   {formatMoney(row.amount_cents, row.currency)}
                 </td>
