@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A through E done. Retrieval is measured and holds.** Stage 4's list is archived at
+**Status: in progress — Batches A through F done. Retrieval is measured and holds.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -271,27 +271,37 @@ floor, not a measurement — Stage 6's dataset is what turns it into one.
 
 ## Batch F — The audit surface (one commit)
 
-- [ ] **T21** Migration `stage5_llm_calls_and_audit_log`: `llm_calls` (`org_id`,
+- [x] **T21** Migration `stage5_llm_calls_and_audit_log`: `llm_calls` (`org_id`,
       `correlation_id`, `model`, `input_tokens`, `output_tokens`, `cost_cents`,
       `latency_ms`, `tool_name`, `tool_args jsonb`, `step_no`, `created_at`) and
       `audit_log` (`org_id`, `correlation_id`, `actor_type`, `on_behalf_of`,
       `action`, `details jsonb`, `created_at`), both with RLS, read-own-org
       policies, and grants.
-- [ ] **T22** Same migration: `log_llm_call(...)` and `log_agent_action(...)` as
+- [x] **T22** Same migration: `log_llm_call(...)` and `log_agent_action(...)` as
       **`SECURITY DEFINER`** functions that stamp `auth.uid()` and verify org
       membership themselves. No INSERT grant to `authenticated` on either table —
       decision 5 above; the point of an audit log is that its subject cannot
       write to it freely.
-- [ ] **T23** `lib/agent/audit.ts` — the app-side writers, taking the
+- [x] **T23** `lib/agent/audit.ts` — the app-side writers, taking the
       `correlation_id` from the request rather than minting a new one per call
       (`CLAUDE.md`: one `correlation_id` per request/step chain).
-- [ ] **T24** `docs/DATABASE_SCHEMA.md` + regenerated types.
+- [x] **T24** `docs/DATABASE_SCHEMA.md` + regenerated types.
 
-**Verification:** a direct `insert into audit_log` as `authenticated` in `psql`
-is rejected; the definer function succeeds and stamps the right `on_behalf_of`;
-a cross-org call through it fails.
+**Verification (done):** in `psql` as `authenticated` — a direct
+`insert into audit_log` and a direct `insert into llm_calls` are both refused
+at the grant, before any policy runs; `log_agent_action` succeeds and stamps
+`actor_type='agent'`, `actor_id='ledgerlens-agent'` and `on_behalf_of` from
+`auth.uid()`; the same call against the other tenant's `org_id` is refused;
+Globex's user sees zero rows in both tables; `anon` cannot read either.
+`task check` green, including the pricing arithmetic and the audit wrappers.
 
-**Files:** 1 migration, `lib/agent/audit.ts` (+ test), docs, types.
+**One decision made here rather than deferred:** a **failed audit write fails
+the turn**. The PRD's counter-metric for this stage is "zero unaudited agent
+actions", and swallowing the error would trade that guarantee for one answer.
+Tested both writers.
+
+**Files:** 1 migration, `lib/agent/audit.ts`, `lib/agent/pricing.ts` (+ tests),
+`docs/DATABASE_SCHEMA.md`, generated types.
 
 ---
 
@@ -440,11 +450,11 @@ required — this is a one-off page section, not a shared component
 
 ## Open questions
 
-- ~~Cost accounting in `llm_calls.cost_cents`~~ — closed in ADR 0009: a
-  versioned price table in the repo, cost computed at write time, so a
-  historical row keeps the price actually paid and a price change does not
-  silently rewrite last month's numbers. The price table itself lands in
-  Batch F.
-- Which Anthropic model the agent runs on is still open, and it decides the
-  price-table entry above and the token ceiling in Batch H. Pick it in Batch H
-  against the latency the loop actually shows, not before.
+- ~~Cost accounting in `llm_calls.cost_cents`~~ — closed in ADR 0009 and
+  shipped in Batch F: `lib/agent/pricing.ts` holds a versioned table, cost is
+  computed at write time, and a row keeps the price actually paid.
+- ~~Which Anthropic model the agent runs on~~ — `claude-opus-5`
+  ($5/$25 per MTok), recorded in `lib/agent/pricing.ts` as `AGENT_MODEL`
+  alongside Sonnet 5 and Haiku 4.5 entries, so a change is a constant rather
+  than a hunt. The token ceiling that goes with it is still Batch H's to set,
+  against the latency the loop actually shows.

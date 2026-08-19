@@ -256,58 +256,78 @@ the document no longer contains.
 
 ## Audit — append-only
 
-**Not yet shipped** — lands in Stage 5's Batch F. The shape below predates
-[ADR 0009](../.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md)
-and will change with it: `request_id` becomes `correlation_id` (the
-project-wide logging contract in `CLAUDE.md`), and rows are written by a
-`SECURITY DEFINER` function that stamps `auth.uid()` itself, with no INSERT
-grant to `authenticated` — an audit log its subject can write to is not one.
+Shipped in `20260819190000_stage5_llm_calls_and_audit_log.sql`, alongside
+`llm_calls` below. Architecture is
+[ADR 0009](../.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md).
 
 ```sql
 create table audit_log (
-  id          bigserial primary key,
-  org_id      uuid not null references orgs(id),
-  actor_type  text not null check (actor_type in ('user','service','agent')),
-  actor_id    text not null,
-  on_behalf_of uuid,               -- for an agent: acting on behalf of whom
-  action      text not null,
-  entity      text,
-  entity_id   text,
-  before      jsonb,
-  after       jsonb,
-  request_id  text,
-  created_at  timestamptz not null default now()
+  id             bigint generated always as identity primary key,
+  org_id         uuid not null references orgs(id) on delete cascade,
+  correlation_id text not null,
+  actor_type     text not null check (actor_type in ('user','service','agent')),
+  actor_id       text not null,
+  on_behalf_of   uuid,
+  action         text not null,
+  entity         text,
+  entity_id      text,
+  details        jsonb,
+  created_at     timestamptz not null default now(),
+  constraint audit_log_agent_names_its_principal
+    check (actor_type <> 'agent' or on_behalf_of is not null)
 );
-revoke update, delete on audit_log from public;
 ```
+
+**Nobody holds INSERT on this table.** `authenticated` has `SELECT` and
+nothing else, and there is no INSERT policy — RLS denies what no policy
+allows. Rows arrive only through `log_agent_action(...)`, a `SECURITY
+DEFINER` function that establishes the caller with `auth.uid()`, checks
+membership itself, and stamps `actor_type` and `on_behalf_of` rather than
+accepting them.
+
+That is the whole point. The agent runs *as the user* (ADR 0009), so a policy
+permissive enough for it to insert its own audit rows would be permissive
+enough for that user to forge them with the anon key and curl. An audit log
+its own subject can write to is not an audit log.
 
 ---
 
 ## LLM call traces
 
-**Not yet shipped** — Batch F, alongside `audit_log`. Per ADR 0009,
-`cost_usd` becomes `cost_cents` computed at write time from a versioned
-price table, so a historical row keeps the price actually paid, and
-`request_id` becomes `correlation_id`.
-
 ```sql
 create table llm_calls (
-  id             bigserial primary key,
-  org_id         uuid not null references orgs(id),
-  request_id     text not null,
-  step           int not null default 0,
+  id             bigint generated always as identity primary key,
+  org_id         uuid not null references orgs(id) on delete cascade,
+  correlation_id text not null,
+  step_no        int not null default 0 check (step_no >= 0),
   model          text not null,
   prompt_version text not null,
-  input_tokens   int, output_tokens int,
-  cost_usd       numeric(10,6),
-  latency_ms     int,
-  retrieved_chunk_ids bigint[],
+  input_tokens   int check (input_tokens >= 0),
+  output_tokens  int check (output_tokens >= 0),
+  cost_cents     numeric(12,4) check (cost_cents >= 0),
+  latency_ms     int check (latency_ms >= 0),
   tool_name      text,
   tool_args      jsonb,
-  output_valid   boolean,
+  retrieved_chunk_ids bigint[],
+  outcome        text not null
+                 check (outcome in ('ok','abstained','step_cap','timeout','token_ceiling','error')),
   created_at     timestamptz not null default now()
 );
 ```
+
+Written the same way, through `log_llm_call(...)`, with the same lack of an
+INSERT grant.
+
+`cost_cents` is computed at write time from the versioned price table in
+`lib/agent/pricing.ts`, so a historical row keeps the price actually paid and
+a later price change cannot rewrite last month's numbers.
+
+`outcome` is not decoration either: a turn that ran out of steps, wall clock
+or tokens has to say which, because the alternative is a truncated answer
+that reads like a complete one.
+
+Every row of one request's chain — both tables — shares one
+`correlation_id`, per `CLAUDE.md`'s project-wide logging contract.
 
 ---
 

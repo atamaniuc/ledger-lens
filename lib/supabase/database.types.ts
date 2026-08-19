@@ -13,6 +13,56 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          actor_type: string
+          correlation_id: string
+          created_at: string
+          details: Json | null
+          entity: string | null
+          entity_id: string | null
+          id: number
+          on_behalf_of: string | null
+          org_id: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          actor_type: string
+          correlation_id: string
+          created_at?: string
+          details?: Json | null
+          entity?: string | null
+          entity_id?: string | null
+          id?: never
+          on_behalf_of?: string | null
+          org_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          actor_type?: string
+          correlation_id?: string
+          created_at?: string
+          details?: Json | null
+          entity?: string | null
+          entity_id?: string | null
+          id?: never
+          on_behalf_of?: string | null
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chunks: {
         Row: {
           chunk_no: number
@@ -244,6 +294,68 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "pipeline_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      llm_calls: {
+        Row: {
+          correlation_id: string
+          cost_cents: number | null
+          created_at: string
+          id: number
+          input_tokens: number | null
+          latency_ms: number | null
+          model: string
+          org_id: string
+          outcome: string
+          output_tokens: number | null
+          prompt_version: string
+          retrieved_chunk_ids: number[] | null
+          step_no: number
+          tool_args: Json | null
+          tool_name: string | null
+        }
+        Insert: {
+          correlation_id: string
+          cost_cents?: number | null
+          created_at?: string
+          id?: never
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model: string
+          org_id: string
+          outcome: string
+          output_tokens?: number | null
+          prompt_version: string
+          retrieved_chunk_ids?: number[] | null
+          step_no?: number
+          tool_args?: Json | null
+          tool_name?: string | null
+        }
+        Update: {
+          correlation_id?: string
+          cost_cents?: number | null
+          created_at?: string
+          id?: never
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model?: string
+          org_id?: string
+          outcome?: string
+          output_tokens?: number | null
+          prompt_version?: string
+          retrieved_chunk_ids?: number[] | null
+          step_no?: number
+          tool_args?: Json | null
+          tool_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_calls_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -481,6 +593,35 @@ export type Database = {
           outcome: string
           raw_event_id: number
         }[]
+      }
+      log_agent_action: {
+        Args: {
+          p_action: string
+          p_correlation_id: string
+          p_details: Json
+          p_entity: string
+          p_entity_id: string
+          p_org_id: string
+        }
+        Returns: number
+      }
+      log_llm_call: {
+        Args: {
+          p_correlation_id: string
+          p_cost_cents: number
+          p_input_tokens: number
+          p_latency_ms: number
+          p_model: string
+          p_org_id: string
+          p_outcome: string
+          p_output_tokens: number
+          p_prompt_version: string
+          p_retrieved_chunk_ids: number[]
+          p_step_no: number
+          p_tool_args: Json
+          p_tool_name: string
+        }
+        Returns: number
       }
       reap_abandoned_runs: {
         Args: { p_older_than?: string; p_org_id: string; p_source: string }
