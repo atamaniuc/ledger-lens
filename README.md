@@ -27,6 +27,11 @@ reliable data pipelines, and safe agentic AI.
 
 ---
 
+<img width="1023" height="955" alt="Screenshot 2026-08-20 at 00 08 02" src="https://github.com/user-attachments/assets/fa7bca31-3c73-4e67-944f-281fec050808" />
+<img width="1117" height="925" alt="Screenshot 2026-08-20 at 00 06 18" src="https://github.com/user-attachments/assets/a68dd952-f4ff-4551-8dc8-b65d074006d3" />
+
+---
+
 ## Running it locally
 
 Needs [Task](https://taskfile.dev), the
