@@ -13,8 +13,8 @@ The single source of truth for what is built and what is next. `README.md` and
 | 3 — Data Quality & Reconciliation | done | Four checks in one Postgres function per `run_id` (ADR [0005](.claude/adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md)) |
 | — Local dev loop | done | Containerised toolchain, `task` command surface, generated types (ADR [0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)) |
 | 4 — Dashboard | done | Authenticated page over Stages 1–3, reading under the user's own JWT (ADR [0007](.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md)) |
-| **5 — RAG & Agent** | **next** | Hybrid retrieval and a four-tool agent under the same policies |
-| 6 — Evals + CI gate | not started | Depends on 5 |
+| 5 — RAG & Agent | done | Hybrid retrieval, a four-tool agent under the user's own JWT, and the copilot panel (ADR [0008](.claude/adr/0008-retrieval-embeds-in-the-edge-runtime-with-gte-small-hybrid-search-is-one-security-invoker-function.md), [0009](.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md)) |
+| **6 — Evals + CI gate** | **next** | Depends on 5 |
 | 7 — Stretch | not started | Optional, independent |
 
 ## What runs today
@@ -22,7 +22,8 @@ The single source of truth for what is built and what is next. `README.md` and
 The stack runs end-to-end on one machine: local Supabase in Docker seeded with
 two tenants and two auth users, the app in a `dev` container against the same
 Linux/Bun environment that ships, an IDE-attachable debugger on `localhost:9230`,
-and 38 Playwright tests asserting each stage over HTTP from an empty database.
+and 94 Playwright tests asserting each stage over HTTP from an empty database,
+alongside 146 unit tests.
 `task` with no arguments prints every command. Setup and curl recipes are in
 [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md).
 
@@ -44,6 +45,21 @@ while every impersonated check kept passing.
   INFO `unused_index` across `data_quality_results`, `memberships`,
   `pipeline_runs`, `raw_events`, `invoices`, `quarantine` — expected on tables the
   dashboard has not queried yet. Later stages diff against this, not against zero.
+- **`get_advisors`, 2026-08-19, after Stage 5:** security still clean, performance
+  11 INFO `unused_index` — the same class on the same tables. It says nothing
+  about Stage 5, because the Stage 5 migrations exist only locally; the hosted
+  project stops at `20260819120000`. `supabase db lint --level warning` against
+  the local stack, which does have them, reports no schema errors. Deploying
+  Stage 5 and re-running advisors is the first close-out item that needs a
+  hosted database.
+- **Retrieval recall@5 = 1.00 (5/5), every target at rank 1.** Measured in Batch
+  E, before the agent existed, so that ADR 0008's model choice could be reversed
+  cheaply if it failed. Five hand-written queries is a floor, not a measurement —
+  Stage 6's eval set is what turns it into one.
+- **Relevance floor 0.78, measured not guessed.** Relevant queries scored
+  0.820–0.897 against this corpus with `gte-small`; unrelated ones 0.701–0.757.
+  Migration `20260819200000` carries the table. It is a property of *this* model
+  and *this* corpus, so Stage 6 re-measures rather than inheriting the constant.
 
 ## Known limitations
 
@@ -54,10 +70,50 @@ Carried forward deliberately, not dropped:
   stories to shared components. The four states a story would have shown —
   default, loading, empty, error — are each asserted in the end-to-end suite
   against the real page instead.
-- **US-07, the copilot chat panel, is not built.** It was written P0 in the
-  PRD but depends on an agent that does not exist until Stage 5. Stage 4's
-  layout reserves the column and renders nothing into it rather than being
-  re-cut later.
+- **No turn has ever run against a real model.** This environment has no
+  `ANTHROPIC_API_KEY`. The loop is tested against a stubbed model and a real
+  database — which is the right way round for the safety claims, since every one
+  of them is about capability rather than wording — and the route's own spec
+  branches on the variable and currently asserts the 503 path. What is *not*
+  demonstrated is that a real model answers sensibly. That is the first thing to
+  do with a key.
+- **`task index` is manual.** Nothing rebuilds the chunk index when ingestion
+  writes new invoices, so the corpus goes stale silently between runs. The
+  indexer is idempotent and content-hashed, so re-running it is cheap and safe —
+  there is simply nothing that runs it.
+- **The agent is single-turn.** The route takes one question and builds the
+  message list from it; there is no conversation history, so a follow-up
+  ("and the second one?") starts from nothing.
+- **An account in two organizations is refused with a 409.** The tools carry no
+  `org_id` filter — RLS decides what they see — so a two-org answer would be
+  built from both while the audit rows named one. Refusing is honest; choosing
+  is a Stage 6 feature.
+- **Chunk citations do not drill down.** `[invoice:…]` opens the lineage drawer;
+  `[chunk:…]` renders as a marker only, because the dashboard has no reader for
+  corpus text. A link that led nowhere would be worse than one that does not
+  claim to.
+- **`@tanstack/react-query` is an unused dependency.** In `package.json` since
+  Stage 4 and imported nowhere. Stage 5 decided against introducing it for a
+  single POST; it should be used or dropped.
+- **`chunks` is the one table where `service_role` holds `DELETE`.** Everything
+  else is append-only because it records what arrived. `chunks` is a derived
+  index of *current* text, and a document that loses a paragraph has to lose its
+  tail chunks or retrieval keeps answering from text the document no longer
+  contains. Stage 2's "no Data API role holds DELETE" invariant names this one
+  allowance explicitly rather than being relaxed.
+- **Changing the embedding model is a migration, not a config change.**
+  `gte-small` fixes the column at `extensions.vector(384)`, so a swap means a
+  column type change and a full re-embed. `chunks.embedding_model` is stored per
+  row so a half-migrated corpus is a query rather than a memory.
+- **The model price table is hand-maintained.** `lib/agent/pricing.ts` stamps
+  cost into `llm_calls` at write time from a versioned constant
+  (`PRICE_TABLE_VERSION`), so a row keeps the price actually paid — but nothing
+  checks that constant against Anthropic's published rates.
+- **The prompt-injection evidence is one fixture document.** The claim it
+  supports is strong, because it rests on the tool registry rather than on the
+  model's judgement — a compromised model can only *try*, and the attempt fails
+  on the registry and lands in `audit_log`. But one poisoned document is one
+  attack. A broader adversarial set belongs to Stage 6's evals.
 - **No CI.** `task check` and `task e2e` are habits, not gates. Nothing enforces
   them on a push. Closed by Stage 6.
 - **No cross-invocation lock.** Two overlapping runs for one `org_id` would
@@ -137,6 +193,53 @@ it exists; the subscription never listens for DELETE, because RLS is not
 applied to delete events and `*` would broadcast other tenants' primary keys;
 and the panel keeps *missing*, *no verdict* and *fail* as three different
 states, because collapsing any two turns the dashboard into a confident lie.
+
+**Stage 5.** The defect worth remembering is that **the abstention mechanism
+could never fire**, and it was found by writing the test for it rather than by
+reading the code. A nearest-neighbour search always has nearest neighbours, so
+"empty retrieval" — the condition US-06's whole behaviour hangs on — was a
+state the system could not reach: "what is our parental leave policy?" came
+back with five confident chunks about invoices. The bug was in retrieval, not
+in the agent. Fixed with a measured relevance floor on the vector half only,
+because a full-text match is a term the user actually typed and is evidence on
+its own terms. recall@5 stayed 1.00.
+
+Two more from the same stage. **The chunker silently dropped text:** its regex
+tokenizer skipped spans it could not match, so "accrue interest at 1.5 percent
+per month" lost the words around the decimal and `interest` vanished from the
+index entirely. Caught by an assertion that a fused search reported no lexical
+contribution — not by anything looking at the chunker. It is a character
+scanner now, with a regression test asserting that no character is lost. And
+**a correct citation came back unverified:** `search_chunks` returned the
+invoice's uuid while the agent cites by external id, which it reads out of the
+chunk text — so the panel put its "cites something that was not in anything the
+copilot read" warning on top of a right answer. A warning that fires on correct
+answers is worse than no warning; it teaches the reader to ignore the one
+signal that matters.
+
+The reviewer pass on the stage diff returned ten findings, all real. The two
+that mattered most were behavioural rather than defensive: abstention fired on
+the *first* empty search, discarding the half of a compound question
+`list_invoices` would have answered; and the successful-tool audit write sat
+inside the tool's own `try`, so a failing audit write was caught by the
+tool-failure handler and recorded `tool_call_failed` for a call that had
+succeeded — the trail mislabelled itself exactly when it was most needed. ADR
+0009 carries the amendment, because it states the abstention mechanism in so
+many words.
+
+Two smaller ones are worth the line. The Edge Function's embedding batch dies
+at 16 texts with an HTTP 546 `WORKER_LIMIT` and is fine at 8, which is why
+`MAX_TEXTS` is 8 and not a round number. And PostgREST cannot infer a
+*partial* unique index for `ON CONFLICT`, so the upsert keys became plain
+unique constraints — the predicate was redundant anyway, since NULLs are
+distinct.
+
+Two process findings, both about gates that were not gates. The design-token
+rule ("no hardcoded hex or px in a component") was asserted in two source
+comments that both claimed `task check` enforced it; nothing did, and it is a
+test now. And `stage4-dashboard.spec.ts`'s freshness assertion was a time bomb
+— it expected `fresh` on first load without establishing it, so it passed the
+day it was written and failed two hours and two minutes later.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

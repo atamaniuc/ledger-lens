@@ -205,6 +205,65 @@ test.describe("Stage 5 — the copilot panel", () => {
     await expect(page.getByTestId("invoices")).toBeVisible();
   });
 
+  test("a citation to another tenant's invoice opens nothing", async ({
+    page,
+    context,
+    request,
+  }) => {
+    // The cross-tenant half of the Definition of Done, asserted where a person
+    // would see the leak. A shared `external_id` proves nothing here — both
+    // tenants ingest the same mock dataset, so `inv_00007` legitimately exists
+    // in each. This is a marker only Acme can have.
+    const tag = `stage5-${Date.now()}`;
+    const externalId = `canary-${tag}`;
+    const marker = `Cross Tenant Canary ${tag}`;
+
+    const [{ raw_event_id, run_id }] = await sql<
+      { raw_event_id: number; run_id: string }[]
+    >`
+      insert into raw_events (org_id, external_id, payload, payload_hash, run_id, source, event_version)
+      select ${ORG_A}, ${externalId}, ${sql.json({ marker })},
+             ${`hash-${tag}`}, r.id, 'mock-provider', 'v1'
+        from pipeline_runs r
+       where r.org_id = ${ORG_A}
+       order by r.started_at desc limit 1
+      returning id as raw_event_id, run_id`;
+
+    await sql`
+      insert into invoices (org_id, raw_event_id, external_id, customer, amount_cents,
+                            currency, status, issued_at, run_id, pipeline_version, transformed_at)
+      values (${ORG_A}, ${raw_event_id}, ${externalId}, ${marker}, 12345,
+              'USD', 'open', now(), ${run_id}, 'v1', now())`;
+
+    try {
+      await signInBrowser(context, request, apiUrl, "bob@globex.test");
+      // The model is stubbed into its worst behaviour: citing an id it has no
+      // business knowing. RLS, not the panel, is what makes that inert.
+      await page.route("**/api/agent/chat", (route) =>
+        route.fulfill({
+          json: answer({
+            answer: `See [invoice:${externalId}].`,
+            citations: [{ kind: "invoice", id: externalId, verified: true }],
+          }),
+        }),
+      );
+
+      await page.goto("/dashboard");
+      await page.getByTestId("copilot-question").fill("what is the canary invoice?");
+      await page.getByTestId("copilot-submit").click();
+      await page.getByTestId("copilot-citation").click();
+
+      await expect(page.getByTestId("copilot-cite-note")).toContainText(
+        "not an invoice you can see",
+      );
+      await expect(page.getByTestId("lineage")).toHaveCount(0);
+      await expect(page.locator("body")).not.toContainText(marker);
+    } finally {
+      await sql`delete from invoices where external_id = ${externalId}`;
+      await sql`delete from raw_events where external_id = ${externalId}`;
+    }
+  });
+
   test("a failed turn shows its correlation_id", async ({ page, context, request }) => {
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
     await page.route("**/api/agent/chat", (route) =>

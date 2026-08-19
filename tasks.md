@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A through J done. The agent is built, its safety claims are tested, and the panel is on the dashboard; close-out (K) remains, and it is the first thing that needs an `ANTHROPIC_API_KEY`.** Stage 4's list is archived at
+**Status: done, with one thing outstanding that no amount of code closes — no turn has run against a real model, because this environment has no `ANTHROPIC_API_KEY`. Everything else in Batches A through K is built and verified.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -543,19 +543,52 @@ findings, all real; none were disputed. Fixed in three commits:
 
 ## Batch K — Close-out (one commit)
 
-- [ ] **T38** `tests/stage5-agent.spec.ts` — **started in Batch J**, which
-      covers the panel's own states against a stubbed route. What is left needs
-      a key: sign in, ask a real question, see a real answer with citations;
-      and as `bob@globex.test`, no Acme content reachable through the panel.
-      Fabricated rows cleaned up by a per-run tag, as
-      `tests/stage4-dashboard.spec.ts` does, because Stage 3's reconciliation
-      check is tenant-wide.
-- [ ] **T39** `PROGRESS.md` — Stage 5 to done, Stage 6 to next, plus its "what it
-      cost and what it caught" line and any new entry in the known-gaps list
-      (expected: eval thresholds not yet enforced, that being Stage 6).
-- [ ] **T40** Definition of Done close-out — reviewer pass on the full stage
-      diff; `get_advisors` re-checked against the baseline; this file ticked;
-      `README.md` link check only, no restatement.
+- [x] **T38** `tests/stage5-agent.spec.ts` — 8 browser tests. The cross-tenant
+      half is done and did not need a key: an Acme-only canary invoice, a model
+      stubbed into citing it, `bob@globex.test` signed in, and the citation
+      opening nothing — asserted where a person would see the leak, with the
+      marker absent from the DOM and the row removed in `finally`. A shared
+      `external_id` would have proved nothing, since both tenants ingest the
+      same dataset.
+      **Still blocked on a key:** ask a real question, see a real answer with
+      real citations. Nothing else in the stage depends on it.
+- [x] **T39** `PROGRESS.md` — Stage 5 done, Stage 6 next, the "what it cost and
+      what it caught" section, two new baselines (recall@5, the relevance
+      floor), the 2026-08-19 advisors reading, and eleven entries in known
+      limitations. The US-07 "not built" entry is gone, replaced by what the
+      panel does *not* do.
+- [x] **T40** Definition of Done close-out. Details below.
+
+**Definition of Done, item by item.**
+
+1. **`task check` green** — 146 unit tests. **Migrations apply clean** — all 14
+   applied to a local stack, `supabase db lint --level warning` reports no
+   schema errors. **`get_advisors`** (2026-08-19, hosted project): security
+   clean; performance 11 INFO `unused_index`, the same class on the same
+   Stage 1–4 tables as the 2026-08-18 baseline's 10. It says nothing about
+   Stage 5 — the Stage 5 migrations exist only locally, and the hosted project
+   stops at `20260819120000`. Recorded in `PROGRESS.md` rather than presented
+   as coverage it does not have.
+2. **Reviewer pass on the diff, findings resolved** — `/code-review medium`
+   over the branch and the working tree returned ten findings, all real, none
+   disputed. Fixed in three commits; the section above lists them.
+3. **RLS verified where the diff touches data** — under the `authenticated`
+   role as Globex, against Acme's `org_id`: `chunks` 0, `documents` 0,
+   `llm_calls` 0, `audit_log` 0, with the control confirming Globex sees its
+   own 182 chunks. Empty results, not error-masked data. The same boundary is
+   asserted again through the panel in `stage5-agent.spec.ts`.
+4. **No secrets, no `service_role` key in the diff** — scanned `main...HEAD`
+   for key shapes and JWT prefixes; the one hit is the placeholder text in
+   `.env.example`. The production client bundle also contains no
+   `service_role`, no `anthropic`, and neither the prompt nor the embed secret.
+5. **This file ticked**, and ADR 0009 carries an amendment rather than a silent
+   edit, because the reviewer pass changed the abstention mechanism the ADR
+   states in words.
+
+Also verified: `task types-check` (generated types match the schema), the full
+Playwright suite (94 passed, 1 skipped, before T38's eighth panel test), and
+`task index` run twice — second run 0 inserted, 0 updated, 0 deleted, 366
+unchanged, 0 embeddings computed.
 
 ---
 
