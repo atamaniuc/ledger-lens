@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A, B and C done.** Stage 4's list is archived at
+**Status: in progress — Batches A through D done.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -154,31 +154,53 @@ Batch K's docs pass rather than fixed; it is a CLI behaviour, not ours.
 
 ## Batch D — Chunking, indexing, corpus (one commit)
 
-- [ ] **T13** `lib/rag/chunk.ts` — deterministic chunking (fixed size + overlap,
+- [x] **T13** `lib/rag/chunk.ts` — deterministic chunking (fixed size + overlap,
       no randomness, no model call). Unit tests assert the same input yields the
       same chunk boundaries, because Stage 6's eval set is only stable if this is.
-- [ ] **T14** `lib/rag/index-corpus.ts` — idempotent indexer over both sources:
+- [x] **T14** `lib/rag/index-corpus.ts` — idempotent indexer over both sources:
       renders each `invoices` row to one chunk, chunks each `documents.body`,
       embeds via T12, upserts on `(org_id, source_kind, source_id, chunk_no)` and
       **skips rows whose `content_hash` is unchanged**. Re-running indexes zero
       new chunks — the same bar Stage 2's US-03 set for ingestion.
-- [ ] **T15** `scripts/index-corpus.ts` + a `task index` entry, service-role
+- [x] **T15** `scripts/index-corpus.ts` + a `task index` entry, service-role
       only, never reachable from the browser.
-- [ ] **T16** Seed corpus in `supabase/seed.sql` (fixed UUIDs, as the existing
+- [x] **T16** Seed corpus in `supabase/seed.sql` (fixed UUIDs, as the existing
       seed does): per-org documents whose content is *not* derivable from
       `invoices` — payment terms, a dispute note, a month-end memo — for both
       Acme and Globex, so US-03's cross-tenant test has something to fail on.
-- [ ] **T17** One deliberately **poisoned document** in Acme's seed, containing a
+- [x] **T17** One deliberately **poisoned document** in Acme's seed, containing a
       plain-text instruction to exfiltrate or send something. It is a fixture,
       not an accident, and it is what Batch I's test points at. Commented as such
       in the seed so nobody "fixes" it later.
 
-**Verification:** `task dev-reset --yes && task index` twice — second run writes
-zero chunks; `bun test lib` for T13/T14; chunk counts per org non-zero and
-disjoint.
+**Verification (done):** from an empty database, seed + ingestion for both
+tenants + `task index` produced 366 chunks — Acme 4 document and 180 invoice,
+Globex 2 document and 180 invoice. The second run reported
+`chunksInserted: 0, embeddingsComputed: 0`. Editing a document's body
+re-embedded exactly one chunk; growing it inserted three more; shrinking it
+deleted the three stale ones. `bun test lib/rag` covers determinism, the
+overlap, the hard-cut path, the no-progress guard, and the SQL-matching hash.
+
+**Two things the plan did not anticipate, both now fixed in this batch:**
+
+1. **The upsert key had to change** (`20260819170000`). Batch B's partial
+   unique indexes cannot be inferred by `ON CONFLICT` unless the statement
+   repeats their predicate, and PostgREST sends columns only — the indexer
+   failed with *"there is no unique or exclusion constraint matching the ON
+   CONFLICT specification"*. The predicate was doing nothing anyway: NULLs are
+   distinct in a unique index, so plain constraints enforce exactly the same
+   thing and are inferable.
+2. **The embed batch cap is 8, not 64.** The Edge Runtime enforces a
+   per-request CPU budget and a batch of 16 trips it — HTTP 546
+   `WORKER_LIMIT`, no partial result. Measured, not guessed: 8 embeds in about
+   a second. A full corpus index takes ~45s; a re-run over unchanged text
+   takes ~1.5s.
 
 **Files:** `lib/rag/chunk.ts`, `lib/rag/index-corpus.ts` (+ tests),
-`scripts/index-corpus.ts`, `Taskfile.yml`, `supabase/seed.sql`.
+`scripts/index-corpus.ts`, `Taskfile.yml`, `eslint.config.mjs`,
+`supabase/seed.sql`, 1 migration, `docs/DATABASE_SCHEMA.md`,
+`docs/LOCAL_DEV.md`, and the batch-cap change in `lib/rag/embed.ts` +
+`supabase/functions/embed/index.ts`.
 
 ---
 

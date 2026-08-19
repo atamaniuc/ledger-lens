@@ -212,10 +212,10 @@ create table chunks (
   constraint chunks_exactly_one_source check (num_nonnulls(document_id, invoice_id) = 1)
 );
 
-create unique index chunks_document_chunk_no_key
-  on chunks (document_id, chunk_no) where document_id is not null;
-create unique index chunks_invoice_chunk_no_key
-  on chunks (invoice_id, chunk_no) where invoice_id is not null;
+alter table chunks
+  add constraint chunks_document_chunk_no_key unique (document_id, chunk_no);
+alter table chunks
+  add constraint chunks_invoice_chunk_no_key unique (invoice_id, chunk_no);
 
 create index chunks_embedding_hnsw_idx
   on chunks using hnsw (embedding extensions.vector_cosine_ops);
@@ -235,9 +235,11 @@ with a `num_nonnulls(...) = 1` check buy referential integrity and
 `ON DELETE CASCADE`, which a `(source_kind, source_id)` pair cannot have
 against two tables at once. `source_kind` survives as a *generated* column,
 so the discriminator callers read can never disagree with the columns it
-comes from. The upsert keys are partial unique indexes for the same reason —
-`ON CONFLICT` can infer one, and a constraint cannot say "only when this
-parent is the populated one".
+comes from. The upsert keys are plain unique constraints, not the partial
+indexes `20260819160000` first created: NULLs are distinct in a unique index,
+so an invoice chunk (null `document_id`) never conflicts with another one
+anyway, and the predicate only made the key un-inferable by `ON CONFLICT`
+(`20260819170000` records that in full).
 
 **`embedding_model` is stored per row.** Changing the embedding model
 changes `extensions.vector(384)` — a column type, so a migration and a full

@@ -10,11 +10,11 @@ const EMBED_SECRET = Deno.env.get("EMBED_SHARED_SECRET");
 
 export const MODEL = "gte-small";
 export const DIMENSIONS = 384;
-// One request holds every text in memory and embeds them in sequence. The cap
-// is what keeps a caller from turning one HTTP request into a minutes-long
-// isolate the runtime will kill halfway through — the indexer batches to this
-// number deliberately.
-export const MAX_TEXTS = 64;
+// Measured, not guessed: the Edge Runtime enforces a per-request CPU budget,
+// and a batch of 16 texts trips it — the caller gets HTTP 546 WORKER_LIMIT
+// with no partial result. Eight embeds in about a second and leaves headroom.
+// Raising this is a runtime-limit question, not a preference.
+export const MAX_TEXTS = 8;
 export const MAX_TEXT_LENGTH = 8_000;
 
 interface EmbedBody {

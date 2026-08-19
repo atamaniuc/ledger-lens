@@ -15,7 +15,7 @@ non-secret by design, and a mistake there costs nothing.
 - [One-time setup](#one-time-setup)
 - [Daily loop](#daily-loop)
 - [Local URLs](#local-urls)
-- [Verifying by hand](#verifying-by-hand) — [browser](#in-the-browser), [curl](#with-curl), [the webhook](#the-webhook-edge-function), [Playwright](#automated-the-playwright-suite)
+- [Verifying by hand](#verifying-by-hand) — [browser](#in-the-browser), [curl](#with-curl), [the webhook](#the-webhook-edge-function), [the RAG index](#the-rag-index), [Playwright](#automated-the-playwright-suite)
 - [Running the app in Docker](#running-the-app-in-docker)
 - [Debugging in IntelliJ IDEA](#debugging-in-intellij-idea)
 - [Connecting IntelliJ IDEA (or DataGrip)](#connecting-intellij-idea-or-datagrip)
@@ -79,7 +79,10 @@ before the stack starts — the container reads its environment once — and
 both files. The caller reads it
 from `.env.local`; the function checks the one it was given here. If you
 wrote it after starting the stack, `task dev-down && task dev-start` picks
-it up without touching the data.
+it up without touching the data. A brand-new function *directory* needs the
+same restart even with hot reload on: the Edge Functions container binds its
+list of functions when it starts, and until then the gateway answers
+`Function not found`.
 
 The local `service_role` key is a fixed, publicly documented development
 key — it is not a secret and grants nothing outside your machine. The
@@ -340,6 +343,45 @@ Next.js app's configuration — so `deno check` is what covers it, and
 that directory only, pointed at
 `supabase/functions/provider-webhook/deno.json`. In IntelliJ IDEA and
 WebStorm that is *Settings → Languages & Frameworks → Deno*.
+
+### The RAG index
+
+Stage 5's corpus is two things: the documents the seed writes, and every
+invoice ingestion has produced. `task index` chunks both, embeds each chunk
+through the `embed` Edge Function, and writes `chunks`.
+
+```bash
+task index                  # every tenant
+task index -- --org 00000000-0000-4000-8000-000000000001
+```
+
+It is idempotent, and that is worth checking rather than trusting: run it
+twice and the second run reports `chunksInserted: 0` with
+`embeddingsComputed: 0`. Only a chunk whose content hash changed is
+re-embedded, and a source that got shorter has its tail chunks deleted.
+
+Embedding is the slow part — around 45 seconds for a full corpus of ~360
+invoice chunks on a laptop, because the Edge Runtime's per-request CPU budget
+caps a batch at eight texts. A re-run over an unchanged corpus takes about a
+second.
+
+Ingest before you index, or there is nothing but the seeded documents to
+retrieve:
+
+```bash
+curl -s -X POST http://localhost:3000/api/ingestion/run \
+  -H "x-ingestion-secret: $INGESTION_TRIGGER_SECRET" \
+  -H 'content-type: application/json' \
+  -d '{"org_id":"00000000-0000-4000-8000-000000000001"}'
+task index
+```
+
+One of the seeded documents is a **deliberate prompt-injection fixture**
+(`Vendor onboarding note`). It is retrievable on purpose: Stage 5's safety
+test asserts the agent does nothing harmful with it, because no tool in the
+system can send, write or reach the network. Do not remove it.
+
+---
 
 ### Automated: the Playwright suite
 

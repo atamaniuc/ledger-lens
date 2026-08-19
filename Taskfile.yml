@@ -318,6 +318,11 @@ tasks:
           echo "deno not installed — supabase/functions/ went unchecked. Install Deno to close this gap: https://deno.land"
         fi
 
+  index:
+    desc: Rebuild the RAG index from documents and invoices (idempotent)
+    deps: [stack-running]
+    cmds: ['bun run scripts/index-corpus.ts {{.CLI_ARGS}}']
+
   types:
     desc: Regenerate lib/supabase/database.types.ts from the local schema
     deps: [stack-running]

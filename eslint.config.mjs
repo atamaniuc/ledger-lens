@@ -24,7 +24,11 @@ const eslintConfig = defineConfig([
     // than as a user. `supabase/functions/**` is exempt by being outside
     // this config entirely — it is checked by `deno check`.
     files: ["**/*.ts", "**/*.tsx"],
-    ignores: ["app/api/**", "lib/supabase/service-client.ts"],
+    // `scripts/**` is exempt for a different reason than app/api/**: those
+    // files are a developer CLI run against a local stack. They are outside
+    // the Next.js build entirely, so nothing there can end up in a browser
+    // bundle — which is the risk this rule exists to stop.
+    ignores: ["app/api/**", "lib/supabase/service-client.ts", "scripts/**"],
     rules: {
       "no-restricted-imports": [
         "error",

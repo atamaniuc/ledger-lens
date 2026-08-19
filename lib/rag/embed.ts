@@ -8,8 +8,13 @@
 
 export const EMBEDDING_MODEL = "gte-small";
 export const EMBEDDING_DIMENSIONS = 384;
-/** Mirrors MAX_TEXTS in the Edge Function; a larger batch is rejected there. */
-export const EMBED_BATCH_LIMIT = 64;
+/**
+ * Mirrors MAX_TEXTS in the Edge Function; a larger batch is rejected there.
+ * Eight because the runtime's per-request CPU budget kills a batch of 16
+ * mid-flight (HTTP 546, no partial result), which is a limit rather than a
+ * tuning choice.
+ */
+export const EMBED_BATCH_LIMIT = 8;
 
 export const DEFAULT_TIMEOUT_MS = 20_000;
 
