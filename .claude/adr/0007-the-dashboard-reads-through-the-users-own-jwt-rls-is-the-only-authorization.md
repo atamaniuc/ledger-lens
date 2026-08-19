@@ -132,3 +132,73 @@ reasoning recorded then.
 Rejected as scope without a requirement. US-06 asks for pipeline status to
 update live; nothing asks for invoices to. Each published table adds WAL
 volume and another surface where the DELETE gap above applies.
+
+---
+
+## Amendment — 2026-08-19
+
+Four corrections and one absorption, recorded here rather than in a separate
+design document. `.claude/DESIGN.md` was deleted in the same change: it
+restated this ADR and drifted from it three times in one week, and the parts
+of it that were load-bearing are below.
+
+**1. The publication holds two tables, not one.** The decision above named
+only `pipeline_runs`. That is wrong for the requirement it serves. The data
+quality verdict is written *after* `closeRun()` returns, so a bridge watching
+`pipeline_runs` alone refreshes at the moment the run closes — before the
+verdict exists — and never again. `data_quality_results` joins the
+publication, and the subscription is two filtered channels:
+`pipeline_runs` on `INSERT` and `UPDATE`, `data_quality_results` on `INSERT`.
+Still never `*`; the DELETE reasoning above applies unchanged to both tables.
+
+**2. `proxy.ts`, not `middleware.ts`.** Next.js 16 deprecates `middleware.ts`
+in favour of a root `proxy.ts` exporting a function named `proxy`. The
+`edge` runtime is not supported there and is not configurable — it runs on
+`nodejs`. The handler body is still Supabase's standard session-refresh
+pattern; only the filename and export name differ from every `@supabase/ssr`
+example. The matcher is `['/dashboard/:path*']`.
+
+**3. The live path refreshes the server tree, it does not invalidate a
+client cache.** An earlier draft said the subscription would invalidate
+TanStack Query keys. It cannot: the figures are rendered by Server
+Components, which have no cache entry to invalidate, so the tiles would sit
+stale behind a live-looking panel — precisely the false-green failure this
+design exists to prevent. The subscription calls `router.refresh()`, which
+re-runs the same server queries through the same policies. TanStack Query is
+reserved for the genuinely client-side reads: lineage drill-down and invoice
+pagination.
+
+**4. One subscription, owned in one place.** The channel and the constant
+describing it live in the refresh bridge. `PipelineStatusLive` consumes that
+bridge and opens no channel of its own, so there is exactly one place where
+the published tables and events are declared and asserted against.
+
+**Absorbed from the deleted design document — the error-state contract.**
+These are the substance of the PRD's counter-metric (false-green is worse
+than no signal), not generic error plumbing:
+
+- No session → `proxy.ts` redirects to `/login`; the dashboard never renders
+  partially for an unauthenticated request.
+- Signed in with no membership → an empty state, not an error. RLS correctly
+  returns zero rows, and rendering that as a failure would teach users to
+  distrust a working system.
+- No data ingested yet → an empty state naming the next action.
+- A failing quality check → red, in place, never collapsed behind a toggle
+  and never softened to a warning.
+- Data past the freshness threshold → the badge says stale. If the freshness
+  query itself fails the badge says *unknown*; there is no path that renders
+  stale or unknown data as fresh.
+- A closed run that produced no results at all → *no verdict*, which is a
+  real reachable state (the ingestion route catches a checks failure and
+  continues) and is distinct from "everything passed". A check with no row is
+  *missing*, distinct from *failing*.
+- Realtime disconnects → fall back to interval refetching **and say so in the
+  UI**. A frozen live panel that still looks live is the same false-green
+  failure in a different costume.
+- A query throws → that panel renders its error state and the rest of the
+  page still renders. One failing tile does not blank the dashboard.
+
+**Scope change carried over.** US-07 (the AI copilot chat panel) was written
+P0 in the PRD but depends on the agent, which does not exist until Stage 5.
+It moves to Stage 5; Stage 4's layout reserves the column and renders nothing
+into it.

@@ -87,7 +87,6 @@ tasks:
         printf "  ${c}%-16s${r} %s\n" \
           adr             'New ADR (TITLE="cursor-based ingestion resume")' \
           prd             'New PRD section (FEATURE="Ingestion cursor resume")' \
-          design          'New DESIGN section (FEATURE="Ingestion cursor resume")' \
           worktree        "New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])" \
           worktree-done   "Merge back and clean up a worktree (BRANCH=…)" \
           codex-architect "Second-model architecture pass (PROMPT_FILE=…)" \
@@ -393,11 +392,6 @@ tasks:
     requires: { vars: [FEATURE] }
     cmds: ['./scripts/harness/new-prd-section.sh "{{.FEATURE}}"']
 
-  design:
-    desc: 'New DESIGN section (FEATURE="Ingestion cursor resume")'
-    requires: { vars: [FEATURE] }
-    cmds: ['./scripts/harness/new-design-section.sh "{{.FEATURE}}"']
-
   worktree:
     desc: New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])
     requires: { vars: [BRANCH] }
@@ -409,12 +403,12 @@ tasks:
     cmds: ['./scripts/harness/finish-worktree.sh "{{.BRANCH}}"']
 
   codex-architect:
-    desc: Second-model architecture pass (PROMPT_FILE=.claude/DESIGN.md)
+    desc: Second-model architecture pass (PROMPT_FILE=.claude/adr/NNNN-....md)
     requires: { vars: [PROMPT_FILE] }
     cmds: ['./scripts/harness/ask-codex.sh architect "{{.PROMPT_FILE}}"']
 
   codex-critic:
-    desc: Second-model critique pass (PROMPT_FILE=.claude/DESIGN.md)
+    desc: Second-model critique pass (PROMPT_FILE=.claude/adr/NNNN-....md)
     requires: { vars: [PROMPT_FILE] }
     cmds: ['./scripts/harness/ask-codex.sh critic "{{.PROMPT_FILE}}"']
 

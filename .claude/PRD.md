@@ -3,7 +3,6 @@
 ## LedgerLens (Overview)
 
 **Status:** Draft
-**Participants:** Solo project — PO/Engineering/Design/QA responsibilities collapsed to one person
 **Timeline:** No fixed release date — paced against the interview timeline (tracked locally, not in this repo)
 
 ### Context & Business Value
@@ -43,7 +42,6 @@ The project can be pitched end-to-end (problem → architecture → the reconcil
 
 **Technical constraints:** Free-tier deploy only (Vercel/Supabase/Modal) — see `docs/DEPLOYMENT.md`. Postgres RLS on every table (`CLAUDE.md` hard rule).
 
-**Localization:** English only — the deployed product and its docs.
 
 **Security/Legal:** No real PII — data is fictional/seeded. No `service_role` key or other secret in client code or in the repo, ever (`CLAUDE.md` hard rule).
 
@@ -60,7 +58,6 @@ No single user flow at the product-overview level — see the per-stage entries 
 ## Mock Provider
 
 **Status:** Approved — implemented and verified in Stage 1, no scope drift from these requirements
-**Participants:** Solo project
 **Timeline:** Stage 1
 
 ### Context & Business Value
@@ -97,7 +94,6 @@ No chaos behavior should be so aggressive that a correctly-written client can ne
 
 **Technical constraints:** In-memory/seeded dataset — no real persistence needed. Deterministic under a fixed seed.
 
-**Localization:** N/A — internal test double, no user-facing text.
 
 **Security/Legal:** No auth on the mock endpoint beyond the `expiredToken` chaos flag itself — this is a test double, not a real integration surface.
 
@@ -113,8 +109,7 @@ No UI — this is an API-only test double. No screens/states.
 
 ## Ingestion & Transform
 
-**Status:** Approved — implemented and verified in Stage 2. Acceptance criteria above were amended during that stage: the review pass found the original US-03 wording specified an idempotency key without `org_id` (a spec defect, not just an implementation one) and that US-01/US-04 were under-specified about cursor terminal values and non-Zod write failures. See ADR 0004 and `.claude/DESIGN.md`.
-**Participants:** Solo project
+**Status:** Approved — implemented and verified in Stage 2. Acceptance criteria above were amended during that stage: the review pass found the original US-03 wording specified an idempotency key without `org_id` (a spec defect, not just an implementation one) and that US-01/US-04 were under-specified about cursor terminal values and non-Zod write failures. See ADR 0004.
 **Timeline:** Stage 2
 
 ### Context & Business Value
@@ -153,7 +148,6 @@ Zero silent drops — every raw record ends up in either `invoices` or `quaranti
 
 **Technical constraints:** At-least-once delivery + dedup is the actual contract — not exactly-once. One provider only, no generic adapter abstraction.
 
-**Localization:** N/A.
 
 **Security/Legal:** Same as project-wide — no secrets in client code, RLS on every table touched. Both ingestion entrypoints write with the service-role client (the pipeline acts as itself, not as an end user, so there is no user JWT for RLS to key off), which means both must authenticate their caller with a shared secret: `org_id` arrives in the request and would otherwise be an attacker-controlled tenant selector. `CLAUDE.md`'s "no cross-`org_id` query without explicit filter" is not satisfied by a filter the caller supplies.
 
@@ -169,7 +163,6 @@ No direct UI — background job. Observable indirectly via `pipeline_runs` rows 
 ## Data Quality & Reconciliation
 
 **Status:** Draft
-**Participants:** Solo project
 **Timeline:** Stage 3. The project's actual differentiator.
 
 ### Context & Business Value
@@ -208,7 +201,6 @@ No check should produce false positives on a healthy run — thresholds (2h fres
 
 **Technical constraints:** Reconciliation compares against `/api/mock-provider/summary` — an independent source, not internal consistency.
 
-**Localization:** N/A.
 
 **Security/Legal:** N/A beyond project-wide RLS.
 
@@ -223,8 +215,7 @@ Surfaced entirely through the Dashboard's Data Health panel (Stage 4) — no sta
 
 ## Dashboard
 
-**Status:** Approved — architecture agreed in Stage 4's Phase 1; see `.claude/DESIGN.md` ("Dashboard") and ADR 0007. One amendment made during that phase: US-07 was specified P0 but depends on an agent that does not exist until Stage 5, and moves there at P1 — see its row below.
-**Participants:** Solo project — new UI routes through the `designer` agent per `CLAUDE.md`
+**Status:** Approved — architecture agreed in Stage 4; see ADR 0007. One amendment made during that phase: US-07 was specified P0 but depends on an agent that does not exist until Stage 5, and moves there at P1 — see its row below.
 **Timeline:** Stage 4
 
 ### Context & Business Value
@@ -265,7 +256,6 @@ No dashboard state should ever show stale data as fresh, or a failing check as p
 
 **Technical constraints:** Cursor-paginated invoices table. New components ship with a co-located `*.stories.tsx` per `CLAUDE.md`'s Frontend rules (default/loading/empty/error states).
 
-**Localization:** English only, no i18n.
 
 **Security/Legal:** RLS-enforced org isolation — no client-side-only access control.
 
@@ -281,7 +271,6 @@ Sign in (magic link) → land on single dashboard page → tiles + freshness bad
 ## RAG & Agent
 
 **Status:** Draft
-**Participants:** Solo project
 **Timeline:** Stage 5. Where the target role's core anxiety lives.
 
 ### Context & Business Value
@@ -321,7 +310,6 @@ Zero unaudited agent actions — every tool call logged to both `llm_calls` and 
 
 **Technical constraints:** Max 6 tool-call steps, 30s timeout, token ceiling enforced.
 
-**Localization:** English only.
 
 **Security/Legal:** No tool with real external side effects. JWT-scoped execution is the actual security boundary, not a system-prompt instruction.
 
@@ -338,7 +326,6 @@ User types a question in the dashboard's chat panel → agent retrieves + reason
 ## Evals
 
 **Status:** Draft
-**Participants:** Solo project
 **Timeline:** Stage 6
 
 ### Context & Business Value
@@ -376,7 +363,6 @@ recall@5, JSON-schema validity rate, citation-validity rate, abstention rate on 
 
 **Technical constraints:** Wired into GitHub Actions — regression blocks the merge, not just a local warning.
 
-**Localization:** N/A.
 
 **Security/Legal:** N/A.
 
@@ -392,7 +378,6 @@ No UI — CLI script + CI job. Output: a results table + non-zero exit code on t
 ## Stretch (Stage 7)
 
 **Status:** Draft
-**Participants:** Solo project
 **Timeline:** Stage 7 — optional, attempted only if the core loop (Stages 1–6) is already real
 
 ### Context & Business Value
@@ -430,7 +415,6 @@ None of these items should be attempted at the cost of a core-loop (Stage 1–6)
 
 **Technical constraints:** Each item independent — attempting one doesn't require attempting the others.
 
-**Localization:** N/A.
 
 **Security/Legal:** Secrets management and PII handling are the explicit subject of two of these items.
 

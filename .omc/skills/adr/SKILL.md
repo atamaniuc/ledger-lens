@@ -110,8 +110,8 @@ reason. "Not chosen" with no reason is not.
   `task codex-architect PROMPT_FILE=.claude/adr/NNNN-....md` and/or
   `task codex-critic PROMPT_FILE=...`.
 - If this decision changes something already stated in `.claude/PRD.md`
-  or `.claude/DESIGN.md`, update those in the *same* change as the ADR —
-  per `CLAUDE.md`, don't leave the PRD/design docs describing the old
+  update it in the *same* change as the ADR —
+  per `CLAUDE.md`, do not leave the PRD describing the old
   decision while the ADR says otherwise.
 - If this ADR supersedes an earlier one, go make that edit to the old
   ADR's `Status` line now — the harness reminds you, it doesn't do it for

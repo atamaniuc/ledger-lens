@@ -21,7 +21,7 @@ Usage: $(basename "$0") <role> <prompt-file|->
   prompt-file: path to a file with the prompt, or - to read stdin
 
 Examples:
-  $(basename "$0") architect .claude/DESIGN.md
+  $(basename "$0") architect .claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md
   git diff main... | $(basename "$0") code-reviewer -
 EOF
   exit 1

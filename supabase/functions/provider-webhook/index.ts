@@ -2,8 +2,8 @@
 // Reuses lib/ingestion/transform.ts and lib/ingestion/hash.ts verbatim
 // (relative-path import, Deno resolves local .ts natively — ADR 0002)
 // so idempotency and validation are proven once, not reimplemented for
-// the push path. See .claude/DESIGN.md's "Ingestion & Transform"
-// section and .claude/PRD.md US-05.
+// the push path. See ADR 0003/0004 and the "Ingestion & Transform"
+// entry in .claude/PRD.md (US-05).
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { validateInvoice } from "../../../lib/ingestion/transform.ts";
@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
     console.log(JSON.stringify({ correlation_id: correlationId, event, ...fields }));
 
   // Auth first — a rejected call writes nothing, not even a pipeline_runs
-  // row (DESIGN.md: "nothing happened, nothing to record").
+  // row: nothing happened, so there is nothing to record.
   const providedSecret = req.headers.get("x-webhook-secret");
   if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
     log("webhook_unauthorized");

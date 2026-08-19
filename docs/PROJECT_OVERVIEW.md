@@ -1,95 +1,56 @@
-# LedgerLens — Project Overview
+# LedgerLens — Architecture
 
-**AI copilot over financial data you can actually trust.**
+How the pieces fit together and why. For what the project is and how to run it,
+see [`README.md`](../README.md); for current state, [`PROGRESS.md`](../PROGRESS.md);
+for column-level DDL and RLS policies, [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md).
 
-This is the working overview of the LedgerLens project: what it is, how the
-pieces fit together, and where to go for more detail. For the full database
-schema, see [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md). To run it on
-your machine and verify a stage by hand, see
-[`docs/LOCAL_DEV.md`](LOCAL_DEV.md). For the
-deployment plan, see [`docs/DEPLOYMENT.md`](DEPLOYMENT.md). For scoped
-requirements per stage, see [`.claude/PRD.md`](../.claude/PRD.md). For
-workflow rules (how work gets planned and executed), see
-[`CLAUDE.md`](../CLAUDE.md).
+## The seven stages
 
-Everything linked above is self-contained in this repository — nothing
-required to understand or build the project lives only in the gitignored,
-personal `interview-preps/` notes.
+Each stage is a real business process with its own entry in
+[`.claude/PRD.md`](../.claude/PRD.md) — problem, users, testable success
+criteria, non-goals — and an ADR for any decision expensive to reverse.
 
----
+**1. Mock Provider.** A cursor-paginated invoice API with seven independently
+toggleable chaos flags: duplicates, schema drift, null fields, rate limiting,
+server errors, expired tokens, future-dated records. Deterministic under a fixed
+seed, so it doubles as a regression fixture rather than a demo toy.
 
-## Elevator pitch
+**2. Ingestion & Transform.** Cursor-based incremental pulls with exponential
+backoff, jitter and a circuit breaker, plus a parallel webhook path (a Deno Edge
+Function) for genuine event-driven ingestion. Both paths run the same
+Zod-validated transform and the same atomic Postgres write, so idempotency and
+validation are proven once rather than implemented twice. Invalid records land
+in `quarantine` with a reason instead of being dropped or blocking the load.
 
-A small multi-tenant app that ingests invoices from a third-party API,
-validates and reconciles them, and puts an AI copilot on top — one that can
-only answer from data it can prove, and can only act within tools narrow
-enough that a poisoned document can't make it do damage.
+**3. Data Quality & Reconciliation.** Four checks — freshness, volume,
+uniqueness, reconciliation — run as one Postgres function in one transaction and
+recorded per `run_id`. Reconciliation compares the summed total against the
+provider's own independent summary endpoint. This is the project's actual
+differentiator, and it is measured on every run rather than captured once.
 
-The interesting part isn't the AI. It's that the upstream data source is
-deliberately adversarial (duplicate events, schema drift, expired tokens,
-outages), so the pipeline has to prove it survives exactly the failures a
-real integration would hit — and the AI layer sits on top of *that*, not on
-top of blind trust.
+**4. Dashboard.** One authenticated page over Stages 1–3: metrics, a freshness
+badge, a Data Health panel, cursor-paginated invoices, lineage drill-down to the
+raw payload, and Realtime pipeline status. It reads Postgres directly under the
+signed-in user's JWT, so RLS is the authorization mechanism rather than a second
+copy of it in application code — [ADR 0007](../.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md).
 
----
+**5. RAG & Agent.** Hybrid vector and full-text retrieval combined by Reciprocal
+Rank Fusion; exactly four scoped tools running under the calling user's JWT, so
+Postgres bounds the agent exactly as it bounds the dashboard. Citations are
+checked deterministically; every step is logged to `llm_calls` and `audit_log`.
 
-## Problem
+**6. Evals.** A versioned dataset spanning metric, lookup, retrieval,
+unanswerable and injection cases, scored on retrieval recall, JSON and citation
+validity, abstention rate and LLM-as-judge groundedness — wired into CI as a hard
+gate, not a manual check.
 
-An LLM layered on unvalidated data doesn't fix bad data — it makes wrong
-numbers sound more convincing. Most "AI on your data" portfolio projects
-skip the validation layer entirely and go straight to a chat UI. LedgerLens
-inverts the emphasis: the pipeline that guarantees the numbers are right is
-the bulk of the work, and the AI is a thin, safety-constrained layer on top
-of it.
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    subgraph Upstream["Adversarial upstream"]
-        MP["Mock Provider API<br/>duplicates · schema drift · 429/500 · expired tokens"]
-    end
-
-    MP -->|"polling, cursor-based"| ING["Ingestion job<br/>idempotent, retry+backoff"]
-    MP -->|"push event"| WH["Webhook<br/>(Deno Edge Function)"]
-    WH --> ING
-
-    ING --> RAW[("raw_events<br/>append-only, hashed, run_id")]
-    RAW -->|"transform + Zod validation"| TR{Valid?}
-    TR -->|yes| INV[("invoices / payments")]
-    TR -->|no| QUA[("quarantine<br/>+ reason")]
-
-    INV --> DQ["Data quality checks<br/>freshness · volume · uniqueness · reconciliation"]
-    DQ --> DQR[("data_quality_results")]
-
-    AUTH["Supabase Auth"] --> DASH
-    DQR --> DASH["Next.js Dashboard<br/>metrics · freshness badge · lineage drill-down"]
-    DASH -.->|"Realtime subscription"| DQR
-    INV --> DASH
-
-    DOCS[("documents")] --> CHUNK["chunker + embeddings"]
-    CHUNK --> VEC[("chunks<br/>pgvector HNSW + tsvector")]
-    VEC --> AGENT["Agent<br/>4 scoped tools, user JWT"]
-    INV --> AGENT
-    AGENT --> AUDIT[("audit_log")]
-    AGENT --> LLMC[("llm_calls")]
-    AGENT --> DASH
-
-    EVALS["Evals suite"] -.->|"CI gate"| AGENT
-
-    classDef store fill:#2b2b2b,stroke:#888,color:#eee;
-    class RAW,INV,QUA,DQR,DOCS,VEC,AUDIT,LLMC store;
-```
-
-Everywhere: Postgres RLS scoped by `org_id`, `correlation_id` in every log
-line, `run_id` on every data row. See the full SQL schema in
-[`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md).
+**7. Stretch (optional).** Modal-hosted Whisper transcription, an
+idempotency-proving backfill script, a second tenant with a CI isolation test,
+and explicit secrets/PII documentation.
 
 ---
 
-## Data model (core entities)
+## Data model
 
 ```mermaid
 erDiagram
@@ -176,43 +137,16 @@ erDiagram
     }
 ```
 
-Full column-level DDL (including RLS policies) lives in
-[`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md).
+Every table is `org_id`-scoped with RLS enabled from the migration that created
+it. The calling user's JWT — dashboard and agent identically — determines which
+rows come back.
 
 ---
 
-## Build roadmap
+## Agent safety
 
-```mermaid
-flowchart LR
-    S1["Stage 1<br/>Mock Provider"] --> S2["Stage 2<br/>Ingestion + Transform"]
-    S2 --> S3["Stage 3<br/>Data Quality +<br/>Reconciliation"]
-    S3 --> S4["Stage 4<br/>Dashboard"]
-    S4 --> S5["Stage 5<br/>RAG + Agent"]
-    S5 --> S6["Stage 6<br/>Evals"]
-    S6 -.optional.-> S7["Stage 7<br/>Stretch<br/>Modal · 2nd tenant · secrets/PII docs"]
-
-    classDef required fill:#1f3a5f,stroke:#5b9bd5,color:#eee;
-    classDef optional fill:#3a2f1f,stroke:#c8963e,color:#eee;
-    class S1,S2,S3,S4,S5,S6 required;
-    class S7 optional;
-```
-
-Each stage has its own PRD entry (problem, user, testable success criteria,
-non-goals) in [`.claude/PRD.md`](../.claude/PRD.md), and per `CLAUDE.md`'s
-Phase 1, gets its own `.claude/DESIGN.md` section + ADR before code starts.
-Stage 3 (Data Quality & Reconciliation) is the project's actual
-differentiator — the before/after reconciliation-drift number is the
-strongest single artifact in the whole build, and it is now measured live
-on every run rather than captured once by a script.
-
----
-
-## Agent safety flow
-
-The part of the system the JD is most anxious about: an AI feature that can
-*act*, not just answer. Safety here comes from what the agent physically
-cannot do, not from a system prompt asking it to behave.
+An AI feature that can *act*, not just answer. Safety comes from what the agent
+physically cannot do, not from a system prompt asking it to behave.
 
 ```mermaid
 sequenceDiagram
@@ -240,67 +174,28 @@ sequenceDiagram
 
 ---
 
-## Where things stand
+## Deployment
 
-- **Layout decided:** single Next.js app (Bun), no monorepo — see
-  [ADR 0002](../.claude/adr/0002-project-layout-single-next-js-app-no-monorepo.md)
-  and the "Project Layout" section in [`.claude/DESIGN.md`](../.claude/DESIGN.md).
-  App scaffolded, dependencies installed, build verified, `supabase init`
-  done.
-- **Code:** Stages 1–3 done, Definition of Done passed on each. Stage 1
-  (Mock Provider), Stage 2 (Ingestion & Transform: polling route + webhook
-  Edge Function, live Postgres schema with RLS, atomic write path per
-  ADR 0004), Stage 3 (Data Quality & Reconciliation: four checks in one
-  Postgres function per ADR 0005, recorded per `run_id`). Stage 4
-  (Dashboard, and the first `infra/` deploy) next.
-- **Reconciliation baseline captured:** +2.65% drift before idempotency,
-  exactly 0 after — [`docs/RECONCILIATION_BASELINE.md`](RECONCILIATION_BASELINE.md).
-  This is Stage 3's headline input, banked during Stage 2 as its PRD
-  requires, and now measured live by Stage 3's reconciliation check on
-  every run — invoiced 47,942,632 + quarantined 4,475,029 against the
-  provider's independent 52,417,661.
-- **Runs locally:** the full stack (Next.js + Supabase in Docker, seeded
-  with two tenants) comes up with `task dev-up` + `task dev`, and a
-  Playwright suite asserts each stage end-to-end over HTTP — 38 tests
-  green, the webhook Edge Function included. `task` with no arguments
-  lists every local command. The app's own toolchain is containerised as
-  well — `dev`, `build`, `typecheck`, `lint`, `test` run inside the same
-  Linux/Bun image that ships, with hot reload and a debugger IntelliJ can
-  attach to; `task docker-up` runs the production build beside that stack
-  ([ADR 0006](../.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)).
-  See [`docs/LOCAL_DEV.md`](LOCAL_DEV.md), which also covers connecting
-  IntelliJ IDEA/DataGrip to the database.
-- **Progress tracking:** see [`PROGRESS.md`](../PROGRESS.md) at the repo
-  root — a kanban-style board tracking every stage from here to Definition
-  of Done, plus which agent/harness role did each step.
-- **Deploy readiness:** see [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)'s
-  readiness checklist — the repo is meant to be push/deploy-ready at any
-  point, not just at the end.
+Everything deployable is provisioned by one Pulumi program in `infra/`
+([ADR 0001](../.claude/adr/0001-infrastructure-as-code-with-pulumi.md)), built
+at Stage 4 — the first point there is a real app and schema worth standing up.
 
-## Roadmap to production
+| Component | Platform | Managed by |
+|---|---|---|
+| Next.js app | Vercel | Pulumi — native resource |
+| Postgres, pgvector, Auth, Realtime | Supabase | Pulumi — command-wrapped `db push` |
+| Webhook receiver (Deno) | Supabase Edge Functions | Pulumi — command-wrapped `functions deploy` |
+| Whisper transcription (Stage 7) | Modal | Pulumi — command-wrapped `modal deploy` |
+| CI / evals gate | GitHub Actions | Workflow file, not deployable infra |
 
-1. **Setup** — scaffold the Next.js app once, before Stage 1, not deferred
-   to Stage 4 (ADR 0002). Done.
-2. **Stages 1–6, sequential** — each stage: design (if it has a real
-   fork) → `/omc-plan --consensus` → `tasks.md` → worktree + Delegation
-   Ladder → Definition of Done → merge. Stage 4 and Stage 5 route through
-   `--architect codex --critic codex` (auth/RLS/agent-surface changes).
-   **Stages 1–3 done**, DoD passed on each — see
-   [`PROGRESS.md`](../PROGRESS.md) for each stage's checklist and what was
-   carried forward. Stage 4 (Dashboard) next; Stages 5–6 not started.
-3. **First live deploy — at Stage 4.** `infra/` (Pulumi) gets built here,
-   not before: this is the first point there's a real app + schema worth
-   standing up. `pulumi up` runs for the first time at this stage.
-4. **Stage 5** — first point real LLM secrets matter; set through Pulumi
-   config, never committed.
-5. **Stage 6** — CI eval gate goes live in GitHub Actions. Once this
-   merges, the project meets this build's definition of "production":
-   deployed, gated, evaluable end-to-end.
-6. **Cutover** — run `docs/DEPLOYMENT.md`'s readiness checklist,
-   `pulumi preview` → `pulumi up` for the final deploy, fill the README's
-   real artifacts (reconciliation before/after number, failure-mode
-   table, security model, prompt-injection transcript) from the live
-   system, rehearse the pitch against it.
-7. **Stage 7 (optional)** — attempted independently, any subset, never at
-   the cost of a Stage 1–6 regression. Not required to hit the production
-   bar above.
+Two honest tiers, stated rather than presented as uniform coverage: **native
+resources** (Vercel) get a real dependency graph and drift detection;
+**command-wrapped steps** are still orchestrated by one `pulumi up` but are only
+as idempotent as the underlying CLI. State lives in Pulumi Cloud, secrets go
+through `pulumi config set --secret`.
+
+CI runs `task evals` on every PR — the same command locally and in CI — and
+blocks merges below threshold. CI does **not** run `pulumi up`; infra deploys
+from a developer machine after a reviewed `pulumi preview`.
+
+Full environment-variable and readiness checklists: [`DEPLOYMENT.md`](DEPLOYMENT.md).

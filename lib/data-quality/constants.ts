@@ -12,8 +12,8 @@ export type CheckName = (typeof CHECK_NAMES)[number];
 export type CheckStatus = "pass" | "warn" | "fail";
 
 // The row shape run_data_quality_checks returns. Hand-written for the same
-// reason IngestOutcome is: no generated Supabase types yet, so supabase.rpc()
-// is untyped (see .claude/DESIGN.md's open questions).
+// reason IngestOutcome is: generated types do not cover function return
+// shapes, so supabase.rpc() is otherwise untyped.
 export interface CheckResult {
   check_name: CheckName;
   status: CheckStatus;

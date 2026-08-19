@@ -8,8 +8,8 @@ export const PIPELINE_VERSION = "1";
 
 /**
  * What `public.ingest_raw_event` returns. Hand-written because the project
- * has no generated Supabase types yet, so `supabase.rpc()` is otherwise
- * untyped — see .claude/DESIGN.md's open questions.
+ * generated types do not cover function return shapes, so `supabase.rpc()`
+ * untyped: the RPC return shape is not part of the generated types.
  *
  * - `written` — new raw event, valid, an invoices row was created.
  * - `quarantined` — new raw event, invalid, a quarantine row was created.

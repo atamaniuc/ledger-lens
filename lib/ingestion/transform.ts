@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 // Shared verbatim by the polling ingestion route (Next.js) and the
-// provider-webhook Deno Edge Function — see .claude/DESIGN.md's
-// "Ingestion & Transform" section. Pure validation logic, no I/O, so it
+// provider-webhook Deno Edge Function — see ADR 0002 and the
+// "Ingestion & Transform" PRD entry. Pure validation logic, no I/O, so it
 // can be imported by relative path from both runtimes without a build
 // step (ADR 0002).
 

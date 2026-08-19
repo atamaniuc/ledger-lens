@@ -29,8 +29,8 @@ runtimes in one repo raised the question of whether a monorepo tool
    and relative-path local imports is enough to share the
    transform/validation logic between the polling ingestion job (Next.js
    side) and the webhook Edge Function (Deno side) — see
-   `.claude/DESIGN.md`'s "Project Layout" section for the concrete module
-   boundary.
+   `lib/ingestion/transform.ts`, which both runtimes import, for the concrete
+   module boundary.
 3. `infra/` (Pulumi) and `evals/` (Python) remain their own independent
    toolchains alongside the app, each with their own dependency file —
    not folded into a monorepo build graph either.

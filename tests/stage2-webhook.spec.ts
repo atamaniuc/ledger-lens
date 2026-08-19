@@ -27,7 +27,7 @@ test.describe.configure({ mode: "serial" });
 // whether the tenant's ledger matches the provider's, which is not a
 // per-run question — and it holds because every other invoice for this org
 // came from the provider, so the provider counts it. These do not: the mock
-// provider has no push API (a risk .claude/DESIGN.md records), so this spec
+// provider has no push API (a limitation PROGRESS.md records), so this spec
 // has to fabricate the upstream, and what it fabricates has no counterpart
 // in /summary. Left behind, the accepted invoice and the quarantined event
 // — whose payload still carries a readable amount, so it counts as

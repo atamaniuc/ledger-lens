@@ -61,8 +61,7 @@ above, which is for the deployed infrastructure.
 ## One-time setup
 
 ```bash
-# Next.js app (once Phase 1 design for project layout is decided —
-# see .claude/DESIGN.md)
+# Next.js app (project layout per ADR 0002)
 bunx create-next-app@latest ledgerlens --typescript --tailwind --app
 cd ledgerlens
 bun add @supabase/supabase-js zod @tanstack/react-query

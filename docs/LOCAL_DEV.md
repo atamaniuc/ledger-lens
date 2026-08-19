@@ -9,6 +9,20 @@ Docker, seeded from `supabase/seed.sql`, and it is the right place to test
 a stage: it can be reset to a known state in seconds, its credentials are
 non-secret by design, and a mistake there costs nothing.
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [One-time setup](#one-time-setup)
+- [Daily loop](#daily-loop)
+- [Local URLs](#local-urls)
+- [Verifying by hand](#verifying-by-hand) — [browser](#in-the-browser), [curl](#with-curl), [the webhook](#the-webhook-edge-function), [Playwright](#automated-the-playwright-suite)
+- [Running the app in Docker](#running-the-app-in-docker)
+- [Debugging in IntelliJ IDEA](#debugging-in-intellij-idea)
+- [Connecting IntelliJ IDEA (or DataGrip)](#connecting-intellij-idea-or-datagrip)
+- [Syncing schema changes to the hosted project](#syncing-schema-changes-to-the-hosted-project)
+
+Read it by section — it is a runbook, not a document to read front to back.
+
 ---
 
 ## Prerequisites

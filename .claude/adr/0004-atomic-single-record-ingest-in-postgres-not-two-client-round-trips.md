@@ -83,8 +83,10 @@ benefit.
 - `supabase.rpc()` is untyped without generated Supabase types, so the
   return shape is a hand-written interface. Generating types would be
   better, but adds a large file that can silently drift from the schema
-  with no CI to catch it — deferred, and recorded in `.claude/DESIGN.md`'s
-  open questions.
+  with no CI to catch it. Since resolved: `lib/supabase/database.types.ts` is
+  generated and gated by `task types-check`, so the drift risk is covered.
+  Function return shapes are not part of the generated types, so
+  `IngestOutcome` stays hand-written.
 - The function is not itself unit-tested; it was verified by executing all
   five outcome paths (including a deliberately orphaned row) against the
   live project. Postgres functions in this project have no test harness

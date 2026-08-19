@@ -1,7 +1,7 @@
 // Cursor and circuit-breaker decisions, extracted from the ingestion route
 // so they can be unit-tested without a database or a live provider. The
 // route's first version inlined both, and both shipped with defects a
-// two-line test would have caught — see .claude/DESIGN.md's testing plan.
+// two-line test would have caught.
 
 export const MAX_PAGES_PER_RUN = 20;
 export const CONSECUTIVE_FAILURE_LIMIT = 5;

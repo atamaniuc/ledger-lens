@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service-client";
 import { fetchProviderSummary, runChecks } from "@/lib/data-quality/run-checks";
 
-// Stage 3 (Data Quality & Reconciliation). See .claude/DESIGN.md's
-// "Data Quality & Reconciliation" section and ADR 0005.
+// Stage 3 (Data Quality & Reconciliation). See ADR 0005 and the
+// "Data Quality & Reconciliation" entry in .claude/PRD.md.
 //
 // The four checks themselves run inside one Postgres function. This route
 // exists because one of them — reconciliation — needs the provider's own

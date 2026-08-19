@@ -14,7 +14,6 @@ All scripts are already executable (`chmod +x`) and can be called either directl
 |---|---|---|
 | Record an architecture decision | `new-adr.sh` | `task adr TITLE="..."` |
 | Open a PRD entry before starting design (Phase 0) | `new-prd-section.sh` | `task prd FEATURE="..."` |
-| Write/update the approved architecture (Phase 1) | `new-design-section.sh` | `task design FEATURE="..."` |
 | Start work on a `tasks.md` item, isolated | `new-worktree.sh` | `task worktree BRANCH=...` |
 | Finish a task, clean up its worktree | `finish-worktree.sh` | `task worktree-done BRANCH=...` |
 | Get a second opinion from Codex (architect/critic) | `ask-codex.sh` | `task codex-architect PROMPT_FILE=...` / `task codex-critic PROMPT_FILE=...` |
@@ -98,38 +97,7 @@ scripts/harness/new-prd-section.sh --force "Mock Provider" <<'EOF'
 EOF
 ```
 
-**Order in the real workflow:** `new-prd-section.sh` first (Phase 0), fill it in by hand/with an agent, then `/superpowers:brainstorming` → `new-design-section.sh` + `new-adr.sh` (Phase 1), then `/omc-plan --consensus` → `tasks.md` (Phase 2).
-
----
-
-## `new-design-section.sh` — write the approved architecture
-
-**Why:** CLAUDE.md, Phase 1 step 3 — once `/superpowers:brainstorming` has walked through 2–3 approaches and one is approved, the actual architecture (components, data flow, error handling, testing plan) gets written down in `.claude/DESIGN.md`, not left implicit in chat history. Same mechanism as `new-prd-section.sh`, aimed at a different file.
-
-**Paired skill:** [`.omc/skills/design/SKILL.md`](../../.omc/skills/design/SKILL.md) — this script only produces the skeleton; the skill teaches the content rules (one clear purpose per component, PRD/ADR cross-links, don't write this until brainstorming has actually converged). Load it whenever you're about to write design content, not just scaffold it.
-
-**What it does:**
-1. Creates `.claude/DESIGN.md` with a heading if it doesn't exist yet.
-2. Checks whether a `## <feature>` section already exists.
-3. **Interactive (no piped stdin):** appends an empty skeleton — PRD/ADR cross-reference lines, Overview, Components, Data flow, Error handling, Testing plan, Open questions/risks.
-4. **Piped stdin:** writes the piped content verbatim as the section body — same scripted/agent-driven usage as `new-prd-section.sh`.
-5. Refuses to duplicate an existing section unless you pass `--force`.
-
-**Usage:**
-```bash
-scripts/harness/new-design-section.sh "Mock Provider"
-# → empty "## Mock Provider" skeleton in .claude/DESIGN.md
-
-task design FEATURE="Mock Provider"
-
-scripts/harness/new-design-section.sh --force "Mock Provider" <<'EOF'
-**PRD:** .claude/PRD.md#mock-provider
-**ADR(s):** .claude/adr/0002-mock-provider-layout.md
-...
-EOF
-```
-
-**`--force` here means something different than in `new-adr.sh`:** `.claude/DESIGN.md` is a living per-feature document, not an immutable decision log — CLAUDE.md's Definition of Done item 5 expects it to be updated in place when scope drifts during implementation. `--force` is the normal way to do that update, not an exception. If the update is actually an architecture *reversal* rather than a refinement, it still needs its own ADR (`new-adr.sh ... --supersedes NNNN`) — updating `DESIGN.md` alone isn't enough for that case.
+**Order in the real workflow (CLAUDE.md, Track 2):** `new-prd-section.sh` first — one paragraph of problem, users, success criteria, non-goals — then `new-adr.sh` for the decision itself, then a batched checklist in `tasks.md`. The ADR *is* the design document; there is no separate design file.
 
 ---
 
@@ -193,21 +161,21 @@ git branch -d stage-3-reconciliation
 
 ## `ask-codex.sh` — second opinion from Codex
 
-**Why:** CLAUDE.md, Phase 2 — for architecture/security-sensitive stages (auth, RLS/RBAC, agent tool surface, cross-tenant migrations), `/omc-plan --consensus --architect codex --critic codex` routes Architect/Critic through an external model instead of only Claude. This script is the same mechanism (`omc ask codex --agent-prompt <role>`), but as a standalone command you can fire by hand outside a full consensus cycle — e.g. to quickly get an opinion on an already-drafted `.claude/DESIGN.md` without running the whole `/omc-plan`.
+**Why:** CLAUDE.md, Phase 2 — for architecture/security-sensitive stages (auth, RLS/RBAC, agent tool surface, cross-tenant migrations), `/omc-plan --consensus --architect codex --critic codex` routes Architect/Critic through an external model instead of only Claude. This script is the same mechanism (`omc ask codex --agent-prompt <role>`), but as a standalone command you can fire by hand outside a full consensus cycle — e.g. to quickly get an opinion on an already-drafted `.claude/adr/0007-....md` without running the whole `/omc-plan`.
 
 **What it does:**
 1. Checks that the `codex` CLI is actually installed (`which codex`) — if not, says so immediately and exits, instead of failing silently deeper in.
-2. Takes the prompt either from a file (`ask-codex.sh architect .claude/DESIGN.md`) or from stdin (`-`).
+2. Takes the prompt either from a file (`ask-codex.sh architect .claude/adr/0007-....md`) or from stdin (`-`).
 3. Calls `omc ask codex --agent-prompt "$ROLE" "$PROMPT"`.
 
 **Usage:**
 ```bash
-scripts/harness/ask-codex.sh architect .claude/DESIGN.md
-scripts/harness/ask-codex.sh critic .claude/DESIGN.md
+scripts/harness/ask-codex.sh architect .claude/adr/0007-....md
+scripts/harness/ask-codex.sh critic .claude/adr/0007-....md
 git diff main... | scripts/harness/ask-codex.sh code-reviewer -
 
-task codex-architect PROMPT_FILE=.claude/DESIGN.md
-task codex-critic PROMPT_FILE=.claude/DESIGN.md
+task codex-architect PROMPT_FILE=.claude/adr/0007-....md
+task codex-critic PROMPT_FILE=.claude/adr/0007-....md
 ```
 
 `role` is validated by `omc ask` against a fixed roster of agent-prompt files — `architect`, `critic`, `code-reviewer`, `analyst`, `code-simplifier`, `debugger`, `designer`, `document-specialist`, `executor`, `explore`, `git-master`, `planner`, `qa-tester`, `scientist`, `security-reviewer`, `test-engineer`, `tracer`, `verifier`, `writer`. Anything outside that list is rejected outright (confirmed by running it — `review` is not in the roster, `code-reviewer` is).
@@ -249,7 +217,7 @@ task prd FEATURE="Mock Provider"
 task design FEATURE="Mock Provider"    # write the approved architecture
 task adr TITLE="chaos-flag mock provider design"
 # optional — second opinion before treating the design as final:
-task codex-architect PROMPT_FILE=.claude/DESIGN.md
+task codex-architect PROMPT_FILE=.claude/adr/0007-....md
 
 # Phase 2 — plan and execute
 # /omc-plan --consensus --architect codex --critic codex → tasks.md
@@ -272,5 +240,5 @@ git branch -d stage-1-mock-provider
 
 - All written with `set -euo pipefail` — fail on the first error, never keep going blind.
 - None of them `git push`, merge, or delete branches without a separate explicit step — destructive/public actions are deliberately left to you.
-- `new-adr.sh`, `new-prd-section.sh`, and `new-design-section.sh` resolve the repo root **from their own path on disk** — invoke them via the copy that lives in the tree you're currently working in.
+- `new-adr.sh` and `new-prd-section.sh` resolve the repo root **from their own path on disk** — invoke them via the copy that lives in the tree you're currently working in.
 - `new-worktree.sh`, `finish-worktree.sh`, `codex-review.sh` resolve the root via `git rev-parse --show-toplevel` — these work correctly from any subdirectory of the current tree, and aren't subject to the footgun above.

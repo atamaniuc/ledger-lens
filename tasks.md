@@ -1,8 +1,7 @@
 # Stage 4 — Dashboard: task list
 
-Derived from `.omc/plans/2026-08-18-stage-4-dashboard.md` (revision 5), which
-holds the reasoning behind every line here. Architecture is fixed by
-`.claude/DESIGN.md` → "## Dashboard" and ADR 0007. Branch: `stage-4-dashboard`.
+Architecture is fixed by ADR 0007 (including its 2026-08-19 amendment) and the
+"## Dashboard" entry in `.claude/PRD.md`. Branch: `stage-4-dashboard`.
 
 Tasks are grouped into batches. **A batch is one commit** — the tasks inside
 it are one logical change, and splitting them would commit a contract without
@@ -22,8 +21,7 @@ order; there is a real dependency between each and the next.
 - [ ] **T2** Root `proxy.ts`, named export `proxy`, matcher
       `['/dashboard/:path*']` — **not** `middleware.ts`, which Next 16.3.1
       deprecates. Supabase's handler body, Next's filename. Runs on the
-      `nodejs` runtime, which is not configurable. Update
-      `.claude/DESIGN.md`'s read-path sentence in the same commit.
+      `nodejs` runtime, which is not configurable.
 - [ ] **T3** `no-restricted-imports` forbidding `lib/supabase/service-client`
       outside `app/api/**` and `supabase/functions/**`, plus a committed
       fixture proving the rule fires.
@@ -36,17 +34,15 @@ drives the proxy with an expired access token plus a valid refresh token and
 asserts the session rotates and the page renders (local `jwt_expiry` is
 3600s, so waiting out a token is not a test); deleting the lint rule fails
 the fixture; the magic-link round trip completes against Mailpit; a grep for
-`middleware.ts` across `app/`, the repo root and `.claude/DESIGN.md` returns
-nothing.
+`middleware.ts` across `app/` and the repo root returns nothing.
 
 ## Batch B1 — Realtime publication (one commit, single agent)
 
-- [ ] **T4a** Amend ADR 0007 in place with a dated amendment block: the
-      publication holds `pipeline_runs` **and** `data_quality_results`, the
-      subscription is two filtered channels, and why — the verdict is written
-      after `closeRun()`, so a bridge watching only `pipeline_runs` refreshes
-      before the verdict exists and never again. Sync `.claude/DESIGN.md`'s
-      live-path paragraph. **Blocks T5.**
+- [x] **T4a** ADR 0007 amended (2026-08-19): the publication holds
+      `pipeline_runs` **and** `data_quality_results`, the subscription is two
+      filtered channels, and the reason — the verdict is written after
+      `closeRun()`, so a bridge watching only `pipeline_runs` refreshes before
+      the verdict exists and never again.
 - [ ] **T5** `supabase/migrations/<ts>_stage4_publish_dashboard_tables_to_realtime.sql`
       adding both tables to `supabase_realtime`. `REPLICA IDENTITY` stays
       `DEFAULT`. Load `supabase:supabase-postgres-best-practices` before
@@ -114,10 +110,11 @@ selecting a tile then clearing it round-trips without a re-fetch.
 
 ## Batch E — Surfaces (two commits: E1 server panels, E2 client panels)
 
-Every component goes through the `designer` agent, not ad-hoc component code,
-and the `dataviz` skill is loaded before the metric tiles (`CLAUDE.md`,
-Frontend section). Each ships a co-located `*.stories.tsx` covering default,
-loading, empty and error — no exceptions, no "add story later".
+The `dataviz` skill is loaded before the metric tiles (`CLAUDE.md`, Frontend
+section). Shared components — anything used by two or more surfaces, which here
+means the badge, the tile and the table primitives — ship a co-located
+`*.stories.tsx` covering default, loading, empty and error. One-off page
+sections do not need one.
 
 **E1 (server):**
 - [ ] **T11** `MetricTiles` (US-02) — each tile wraps its figure in T10a's
@@ -151,10 +148,9 @@ loading, empty and error — no exceptions, no "add story later".
       `infra/` and Pulumi, with the advisory-lock precondition recorded
       against that work rather than forgotten.
 - [ ] **T20** Definition of Done close-out — reviewer pass on the full diff;
-      `get_advisors` re-checked; this file ticked; the three status docs
-      (`PROGRESS.md` `## Current status`, `README.md` badge + `## Project
-      status`, `docs/PROJECT_OVERVIEW.md` `## Where things stand`) synced **in
-      the same commit**.
+      `get_advisors` re-checked against the 2026-08-18 baseline; this file
+      ticked; `PROGRESS.md` updated in the same commit (it is the only status
+      document — `README.md` and `docs/PROJECT_OVERVIEW.md` link to it).
 
 **E2E cases (T18):**
 1. unauthenticated `/dashboard` redirects to `/login`;

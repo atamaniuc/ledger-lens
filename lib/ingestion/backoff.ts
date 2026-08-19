@@ -1,7 +1,7 @@
 // Exponential backoff + jitter, with an escape hatch for honoring a
 // server-supplied Retry-After. Deliberately doesn't know about circuit
 // breakers or "5 consecutive failures" — that decision lives in the
-// caller (ingestion route / webhook function), per .claude/DESIGN.md:
+// caller (ingestion route / webhook function), per ADR 0003:
 // keeping this primitive reusable and boring.
 
 export class RetryableError extends Error {
