@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A and B done.** Stage 4's list is archived at
+**Status: in progress — Batches A, B and C done.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -117,25 +117,38 @@ close-out (Batch K), not per batch.
 
 ## Batch C — The embedding function (one commit)
 
-- [ ] **T9** **Spike first, before writing anything else in this batch:** confirm
+- [x] **T9** **Spike first, before writing anything else in this batch:** confirm
       `Supabase.ai.Session('gte-small')` is available in the Edge Runtime version
       this repo pins, and that it returns 384 floats. If it is not, stop and
       amend ADR 0008 — the fallback is Voyage `voyage-3-lite` and it changes the
       column type, so it cannot be discovered in Batch F.
-- [ ] **T10** `supabase/functions/embed/index.ts` — POST `{ texts: string[] }`
+- [x] **T10** `supabase/functions/embed/index.ts` — POST `{ texts: string[] }`
       → `{ embeddings: number[][], model: 'gte-small' }`. Shared-secret header
       check like `provider-webhook`; batch size cap; rejects an empty array
       rather than returning an empty success.
-- [ ] **T11** `config.toml` `[edge_runtime.secrets]` entry + `supabase/.env` +
+- [x] **T11** `config.toml` `[edge_runtime.secrets]` entry + `supabase/.env` +
       `.env.example` documentation for `EMBED_SHARED_SECRET`, matching the
       two-copies note the webhook secret already carries.
-- [ ] **T12** `lib/rag/embed.ts` — the app-side client for T10, with the timeout
+- [x] **T12** `lib/rag/embed.ts` — the app-side client for T10, with the timeout
       and one retry. Unit-tested against a stubbed fetch.
 
-**Verification:** `task deno-check`; `curl` the local function with and without
-the secret (401); `bun test lib` covers T12's retry and timeout paths.
+**Verification (done):** T9 answered yes — `supabase-edge-runtime-1.74.3`
+returns 384 floats from `gte-small`, so ADR 0008 stands and Voyage stays a
+fallback rather than a correction. `task deno-check` now covers both Edge
+Functions. Against the running stack: no secret and a wrong secret both 401,
+an empty `texts` array is a 400 rather than an empty success, and a two-text
+batch returns two 384-wide vectors. `bun test lib/rag` covers the retry
+policy (5xx retried once, 4xx never), the abort-on-timeout path, and both
+malformed-response guards.
 
-**Files:** 1 Edge Function, `config.toml`, `.env.example`, `lib/rag/embed.ts` + test.
+**One thing the plan did not anticipate:** a new function directory is not
+picked up by hot reload — the Edge Functions container binds its list at
+start, so `supabase stop && supabase start` is required once. Recorded in
+Batch K's docs pass rather than fixed; it is a CLI behaviour, not ours.
+
+**Files:** 1 Edge Function, `config.toml`, `supabase/.env.example`,
+`.env.example`, `scripts/write-env-local.sh`, `docs/LOCAL_DEV.md`,
+`Taskfile.yml`, `lib/rag/embed.ts` + test.
 
 ---
 

@@ -65,6 +65,7 @@ SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=<the "service_role key" the stack printed>
 INGESTION_TRIGGER_SECRET=local-dev-ingestion-secret
 WEBHOOK_SHARED_SECRET=local-dev-webhook-secret
+EMBED_SHARED_SECRET=local-dev-embed-secret
 MOCK_PROVIDER_SEED=42
 ```
 
@@ -74,7 +75,8 @@ Reprint the stack's values at any time with `task dev-status`.
 secrets `supabase start` hands to the **Edge Functions container**, wired
 through `[edge_runtime.secrets]` in `supabase/config.toml`. It has to exist
 before the stack starts — the container reads its environment once — and
-`WEBHOOK_SHARED_SECRET` must be identical in both files. The caller reads it
+`WEBHOOK_SHARED_SECRET` and `EMBED_SHARED_SECRET` must each be identical in
+both files. The caller reads it
 from `.env.local`; the function checks the one it was given here. If you
 wrote it after starting the stack, `task dev-down && task dev-start` picks
 it up without touching the data.

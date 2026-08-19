@@ -398,6 +398,7 @@ deno_version = 2
 # which is correct behaviour but makes the function untestable locally.
 [edge_runtime.secrets]
 WEBHOOK_SHARED_SECRET = "env(WEBHOOK_SHARED_SECRET)"
+EMBED_SHARED_SECRET = "env(EMBED_SHARED_SECRET)"
 
 [analytics]
 enabled = true

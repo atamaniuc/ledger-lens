@@ -49,6 +49,11 @@ fi
 webhook_secret="$(sed -n 's/^WEBHOOK_SHARED_SECRET=//p' supabase/.env 2>/dev/null | head -1 || true)"
 webhook_secret="${webhook_secret:-local-dev-webhook-secret}"
 
+# Same two-copies rule for the embed function (Stage 5, ADR 0008): it is the
+# only path to a vector in this system, so it checks a secret too.
+embed_secret="$(sed -n 's/^EMBED_SHARED_SECRET=//p' supabase/.env 2>/dev/null | head -1 || true)"
+embed_secret="${embed_secret:-local-dev-embed-secret}"
+
 cat > .env.local <<ENV
 # Local development only. Gitignored. Regenerate with 'task env' after
 # deleting this file; see docs/LOCAL_DEV.md for what each value is for.
@@ -76,6 +81,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon_key
 # for anything to be testable.
 INGESTION_TRIGGER_SECRET=local-dev-ingestion-secret
 WEBHOOK_SHARED_SECRET=$webhook_secret
+
+# Stage 5 (RAG): the embed Edge Function's secret. Must match supabase/.env.
+EMBED_SHARED_SECRET=$embed_secret
 
 # Mock provider: seeded PRNG, all seven chaos flags on by default. Leave them
 # on — the failure modes are the regression tests. Override per request

@@ -310,7 +310,7 @@ tasks:
     cmds:
       - |
         if command -v deno >/dev/null 2>&1; then
-          deno check --allow-import supabase/functions/provider-webhook/index.ts
+          deno check --allow-import supabase/functions/provider-webhook/index.ts supabase/functions/embed/index.ts
         elif [ -n "${CI:-}" ]; then
           echo "deno not installed, and CI is set — refusing to report a pass over an unchecked Edge Function." >&2
           exit 1
