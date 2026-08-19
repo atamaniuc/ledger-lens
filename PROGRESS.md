@@ -14,8 +14,8 @@ The single source of truth for what is built and what is next. `README.md` and
 | — Local dev loop | done | Containerised toolchain, `task` command surface, generated types (ADR [0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)) |
 | 4 — Dashboard | done | Authenticated page over Stages 1–3, reading under the user's own JWT (ADR [0007](.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md)) |
 | 5 — RAG & Agent | done | Hybrid retrieval, a four-tool agent under the user's own JWT, and the copilot panel (ADR [0008](.claude/adr/0008-retrieval-embeds-in-the-edge-runtime-with-gte-small-hybrid-search-is-one-security-invoker-function.md), [0009](.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md)) |
-| **6 — Evals + CI gate** | **next** | Depends on 5 |
-| 7 — Stretch | not started | Optional, independent |
+| 6 — Evals + CI gate | done (POC) | 20-case dataset, versioned thresholds, `task evals`, one GitHub Actions workflow |
+| **7 — Stretch** | **next** | Optional, independent |
 
 ## What runs today
 
@@ -114,8 +114,10 @@ Carried forward deliberately, not dropped:
   model's judgement — a compromised model can only *try*, and the attempt fails
   on the registry and lands in `audit_log`. But one poisoned document is one
   attack. A broader adversarial set belongs to Stage 6's evals.
-- **No CI.** `task check` and `task e2e` are habits, not gates. Nothing enforces
-  them on a push. Closed by Stage 6.
+- **The CI workflow has never run.** `.github/workflows/ci.yml` gates `task check`
+  and `task evals`, but this repository has no git remote, so nothing has ever
+  executed it. `task e2e` is still a local habit — Playwright needs the full
+  stack plus a running app.
 - **No cross-invocation lock.** Two overlapping runs for one `org_id` would
   advance from the same cursor. Harmless at manual-trigger scale; needs an
   advisory lock before any cron fires alongside a manual trigger. Recorded
@@ -240,6 +242,17 @@ comments that both claimed `task check` enforced it; nothing did, and it is a
 test now. And `stage4-dashboard.spec.ts`'s freshness assertion was a time bomb
 — it expected `fresh` on first load without establishing it, so it passed the
 day it was written and failed two hours and two minutes later.
+
+**Stage 6.** Built as a proof of concept, deliberately: four deterministic
+metrics that gate, and the model-dependent ones reported as `skip` rather than
+counted as passes. It earned its keep on the first run — the dataset's "what is
+the office wifi password?" scored 0.791 against a floor of 0.78, so an
+unanswerable question retrieved five confident chunks and the abstention metric
+went red. Migration `20260819200000` had measured that floor against three
+unrelated queries; twenty cases found the fourth. The floor is 0.80 now, and
+the margin between 0.791 unrelated and 0.803 for the weakest relevant chunk in
+range is the honest reason `README.md`'s TODO asks for a bigger dataset. That
+is the whole argument for an eval set, made by the eval set on its first run.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

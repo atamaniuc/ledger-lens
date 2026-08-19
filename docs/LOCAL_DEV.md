@@ -408,6 +408,18 @@ runtime the test runner and its browser drivers target. Nothing here needs
 Bun to execute the suite, and delegating avoids a class of failures that
 have nothing to do with this code.
 
+### Automated: the evals
+
+```bash
+task evals              # the gate CI runs
+task evals -- --verbose # print what each retrieval case actually returned
+```
+
+Needs the stack running and the index built (`task index`). It scores
+`evals/dataset.jsonl` against `evals/thresholds.json` and exits non-zero when
+a threshold is breached. Without an `ANTHROPIC_API_KEY` the two
+model-dependent metrics report `skip` — they are never counted as passes.
+
 Playwright starts the dev server itself if one is not already running, and
 reuses yours if it is. `.env.local` is read by `playwright.config.ts`, so
 no secret has to be exported by hand; `BASE_URL` and `DB_URL` override the

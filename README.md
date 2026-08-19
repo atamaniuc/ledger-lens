@@ -142,18 +142,68 @@ Current known limitations are tracked in [`PROGRESS.md`](PROGRESS.md#known-limit
 
 ---
 
+## TODO
+
+Deliberately not built yet. Each line is a thing a reviewer might reasonably
+look for, with the reason it is absent rather than an apology.
+
+**Evals.** LLM-as-judge groundedness, cost per run and p95 latency are not
+computed. The judge is the one metric where a build fails because one model
+graded another, which is a gate people learn to override; the other two are
+reporting, not regression protection. The four deterministic metrics
+(recall@5, abstention, injection safety, citation validity) are what gate.
+
+**No turn has ever run against a real model.** There is no `ANTHROPIC_API_KEY`
+in the development environment. The agent loop is tested against a stubbed
+model and a real database — the right way round, since every safety claim is
+about capability rather than wording — and the eval runner reports its
+model-dependent metrics as `skip`, never as passes. With a key, `task evals`
+scores them and nothing else changes.
+
+**The CI workflow has never executed.** This repository has no git remote, so
+`.github/workflows/ci.yml` is written but unrun.
+
+**The relevance floor is thin.** 0.80 sits between 0.791 (the highest-scoring
+unrelated query in the dataset) and 0.803 (the weakest relevant chunk still in
+range). Top-ranked relevant chunks are at 0.86–0.89, so recall has margin, but
+the floor itself wants a bigger dataset behind it. The SQL default in migration
+`20260819200000` is still 0.78 and left alone deliberately — every caller passes
+the value explicitly, so folding it in belongs to the next migration that
+touches the function.
+
+**`task index` is manual.** Nothing rebuilds the chunk index when ingestion
+writes new invoices. The indexer is idempotent and content-hashed, so
+re-running is cheap and safe; there is simply nothing that runs it.
+
+**The agent is single-turn.** One question in, one answer out — no
+conversation history, so a follow-up starts from nothing.
+
+**An account in two organizations is refused with a 409.** The tools carry no
+`org_id` filter because RLS decides what they see, so a two-org answer would
+be built from both while the audit rows named one. Refusing is honest;
+choosing is the feature that is missing.
+
+**End-to-end tests are not in CI.** The workflow gates on `task check` and the
+evals. Playwright needs the full stack plus a running app and stays a local
+habit.
+
+**`@tanstack/react-query` is installed and unused.** It should be used or
+dropped.
+
+---
+
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind, TanStack Query, shadcn/ui |
+| Frontend | Next.js (App Router), TypeScript, Tailwind with design tokens in one file |
 | Auth & live updates | Supabase Auth (magic link), Supabase Realtime |
-| Backend | Next.js route handlers, Deno (Supabase Edge Functions), Python (embeddings/evals) |
+| Backend | Next.js route handlers, Deno (Supabase Edge Functions) |
 | Database | Postgres via Supabase — RLS, `pgvector` (HNSW), `tsvector`/GIN, `pgcrypto` |
-| AI | Anthropic or OpenAI API, hybrid RAG (vector + full-text, RRF), 4-tool scoped agent |
+| AI | Anthropic API (`claude-opus-5`), `gte-small` embeddings in the Edge Runtime, hybrid RAG (vector + full-text, RRF), 4-tool scoped agent |
 | Background work | Postgres queue (`SKIP LOCKED`) + event-driven webhook path |
 | Infrastructure | Pulumi (TypeScript) — see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
-| Tooling | Bun (install, unit tests), Node 22 (build, serve), Task, Docker (Supabase stack), Playwright, GitHub Actions |
+| Tooling | Bun (install, unit tests, scripts), Node 22 (build, serve), Task, Docker (Supabase stack), Playwright, GitHub Actions |
 
 ---
 
@@ -163,6 +213,7 @@ Current known limitations are tracked in [`PROGRESS.md`](PROGRESS.md#known-limit
 CLAUDE.md                    Workflow rules
 PROGRESS.md                  What is built, what is next — the status source of truth
 tasks.md                     The active stage's checklist
+evals/                       Eval dataset, thresholds and the CI scorer
 Taskfile.yml                 Every local command — `task` lists them
 Dockerfile / compose.yaml    Optional production image, joined to the Supabase network
 .claude/

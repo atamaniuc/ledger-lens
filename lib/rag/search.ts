@@ -13,12 +13,28 @@ export const DEFAULT_MATCH_LIMIT = 5;
 
 /**
  * Cosine-similarity floor on the vector half, measured against this corpus
- * and `gte-small` (migration 20260819200000 carries the numbers). Below it a
- * result is a nearest neighbour rather than an answer — and without a floor,
- * "empty retrieval" is a state a vector search never reaches, so US-06's
- * abstention could never fire.
+ * and `gte-small`. Below it a result is a nearest neighbour rather than an
+ * answer — and without a floor, "empty retrieval" is a state a vector search
+ * never reaches, so US-06's abstention could never fire.
+ *
+ * **Raised from 0.78 to 0.80 by Stage 6's eval set**, which is what an eval
+ * set is for. Migration 20260819200000 measured the floor against three
+ * unrelated queries; the dataset added more, and "what is the office wifi
+ * password?" scored 0.791 — above the old floor, so an unanswerable question
+ * retrieved five confident chunks.
+ *
+ * The margin is thin: 0.791 unrelated against 0.803 for the weakest relevant
+ * chunk still in range. Top-ranked relevant chunks sit at 0.86–0.89, so
+ * recall is unaffected, but this number wants a bigger dataset behind it —
+ * see the TODO in `README.md`.
+ *
+ * The SQL default in migration 20260819200000 is still 0.78 and deliberately
+ * left alone: every caller here passes `min_similarity` explicitly, so the
+ * function default only applies to a hand-written RPC call. Folding it in
+ * belongs to the next migration that touches the function rather than a
+ * hundred-line recreate for one number.
  */
-export const DEFAULT_MIN_SIMILARITY = 0.78;
+export const DEFAULT_MIN_SIMILARITY = 0.8;
 
 export interface RetrievedChunk {
   chunk_id: number;

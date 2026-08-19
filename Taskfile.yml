@@ -86,6 +86,7 @@ tasks:
           e2e         "Playwright against the running app (task e2e -- tests/rls.spec.ts)" \
           e2e:ui      "Playwright's interactive runner" \
           e2e:report  "Open the last Playwright HTML report" \
+          evals       "Score retrieval and agent safety (the CI gate)" \
           verify      "The full gate: check, types-check, then the end-to-end suite"
         printf '\n%s\n' "${y}Documents and process${r}"
         printf "  ${c}%-16s${r} %s\n" \
@@ -322,6 +323,11 @@ tasks:
     desc: Rebuild the RAG index from documents and invoices (idempotent)
     deps: [stack-running]
     cmds: ['bun run scripts/index-corpus.ts {{.CLI_ARGS}}']
+
+  evals:
+    desc: "Score retrieval and agent safety against evals/dataset.jsonl (the CI gate)"
+    deps: [stack-running]
+    cmds: ['bun run evals/run.ts {{.CLI_ARGS}}']
 
   types:
     desc: Regenerate lib/supabase/database.types.ts from the local schema

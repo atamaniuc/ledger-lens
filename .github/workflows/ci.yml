@@ -1,0 +1,72 @@
+name: CI
+
+# Two jobs, split by what they need. `check` is pure logic and runs in under a
+# minute on a bare runner. `evals` needs a database, migrations, a seeded
+# corpus and an embedding function, so it pays for a Supabase stack — and it
+# is the gate that actually protects Stage 5's behaviour.
+#
+# Both run the same commands a developer runs. There is no CI-only script, so
+# there is no "works locally, fails in CI".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: typecheck, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # `task check` refuses to report a pass over unchecked Edge Functions
+      # when CI is set, so Deno is not optional here.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --frozen-lockfile
+      - run: task check
+
+  evals:
+    name: retrieval and agent-safety evals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: bun install --frozen-lockfile
+
+      - name: Start the stack and apply migrations and seed
+        run: |
+          supabase start
+          supabase db reset --local
+          ./scripts/write-env-local.sh
+
+      - name: Build the RAG index
+        run: task index
+
+      # Exits non-zero on a threshold breach. The model-dependent metrics
+      # report as skipped without a key rather than counting as passes; set
+      # ANTHROPIC_API_KEY as a repository secret to turn them on.
+      - name: Evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: task evals

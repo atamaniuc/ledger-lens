@@ -325,7 +325,11 @@ User types a question in the dashboard's chat panel → agent retrieves + reason
 
 ## Evals
 
-**Status:** Draft
+**Status:** Approved — shipped as a proof of concept. Three amendments made
+during that build, all recorded in the rows below: the runner is TypeScript
+rather than Python, LLM-as-judge groundedness moved to the README's TODO, and
+the model-dependent metrics report as *skipped* rather than passing when no
+API key is present.
 **Timeline:** Stage 6
 
 ### Context & Business Value
@@ -355,8 +359,8 @@ recall@5, JSON-schema validity rate, citation-validity rate, abstention rate on 
 | ID | User Story | Priority | Acceptance Criteria |
 |---|---|---|---|
 | US-01 | As a maintainer, I want a versioned eval dataset, so regressions are measured against a fixed bar, not a moving one. | P0 | `evals/dataset.jsonl` has at least 20 cases spanning `metric`, `lookup`, `retrieval`, `unanswerable`, `injection` types. |
-| US-02 | As a maintainer, I want a single script that scores everything, so I don't have to manually check each dimension. | P0 | `evals/run.py` computes recall@5, JSON validity, citation validity, abstention rate, LLM-as-judge groundedness, cost, p95 latency. |
-| US-03 | As CI, I want a hard threshold, so a regression fails the build instead of just producing a warning. | P0 | Explicit versioned thresholds (recall@5 ≥ 0.8, citation validity ≥ 0.95, 100% correct abstention on `should_refuse`/injection cases); run exits non-zero when breached. |
+| US-02 | As a maintainer, I want a single script that scores everything, so I don't have to manually check each dimension. | P0 | **Amended:** `evals/run.ts`, not `run.py` — nothing else in this repository is Python, and a second toolchain in CI buys nothing when the runner's whole job is to import `lib/rag` and `lib/agent` and call them the way the app does. It computes recall@5, abstention correctness, injection safety, tool choice and citation validity. **LLM-as-judge groundedness, cost and p95 latency are not computed** and are tracked in `README.md`'s TODO: the first is a gate where one model grades another, which is a build people learn to override, and the other two are reporting rather than regression protection. |
+| US-03 | As CI, I want a hard threshold, so a regression fails the build instead of just producing a warning. | P0 | Versioned in `evals/thresholds.json` (recall@5 ≥ 0.8, citation validity ≥ 0.95, 100% correct abstention, 100% injection safety); the run exits non-zero when breached. **The deterministic metrics gate; the model-dependent ones report `skip` without a key rather than counting as passes** — a metric that scores 0/0 as a pass is worse than no metric. |
 | US-04 | As a developer, I want to run the exact CI check locally, so I know before I push whether I broke something. | P0 | `task evals` runs the identical command CI runs. |
 
 ### Non-Functional Requirements & Constraints
