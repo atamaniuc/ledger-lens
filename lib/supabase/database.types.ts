@@ -13,6 +13,76 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      chunks: {
+        Row: {
+          chunk_no: number
+          content: string
+          content_hash: string
+          content_tsv: unknown
+          created_at: string
+          document_id: string | null
+          embedding: string
+          embedding_model: string
+          id: number
+          invoice_id: string | null
+          org_id: string
+          source_kind: string | null
+          updated_at: string
+        }
+        Insert: {
+          chunk_no: number
+          content: string
+          content_hash: string
+          content_tsv?: unknown
+          created_at?: string
+          document_id?: string | null
+          embedding: string
+          embedding_model: string
+          id?: never
+          invoice_id?: string | null
+          org_id: string
+          source_kind?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chunk_no?: number
+          content?: string
+          content_hash?: string
+          content_tsv?: unknown
+          created_at?: string
+          document_id?: string | null
+          embedding?: string
+          embedding_model?: string
+          id?: never
+          invoice_id?: string | null
+          org_id?: string
+          source_kind?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chunks_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chunks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_quality_results: {
         Row: {
           check_name: string
@@ -63,6 +133,47 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "pipeline_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          body: string
+          content_hash: string
+          created_at: string
+          id: string
+          kind: string
+          org_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          kind: string
+          org_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]

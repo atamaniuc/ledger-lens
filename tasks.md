@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: planned, not started.** Stage 4's list is archived at
+**Status: in progress — Batches A and B done.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -70,30 +70,46 @@ does not have to infer them from the tasks.
 
 ## Batch B — Corpus schema (one commit)
 
-- [ ] **T4** Migration `stage5_documents_and_chunks`: `create extension if not
-      exists vector`; `documents` (`org_id`, `title`, `kind`, `body`,
-      `content_hash`, timestamps); `chunks` (`org_id`, `source_kind` check
-      `('document','invoice')`, `source_id`, `chunk_no`, `content`,
-      `embedding vector(384)`, `embedding_model text not null`, `content_hash`,
-      `unique (org_id, source_kind, source_id, chunk_no)`).
+- [x] **T4** Migration `stage5_documents_and_chunks`: `create extension if not
+      exists vector with schema extensions`; `documents` (`org_id`, `title`,
+      `kind`, `body`, `content_hash`, timestamps); `chunks` (`org_id`,
+      `chunk_no`, `content`, `content_hash`, `embedding
+      extensions.vector(384)`, `embedding_model text not null`).
       `embedding_model` is not decoration: it is how a re-embed after a model
       change is detectable instead of silent.
-- [ ] **T5** Indexes in the same migration: HNSW on `chunks.embedding`
+      **Changed while writing it, and this is the line that says why:** the
+      planned polymorphic `(source_kind, source_id)` pair with a
+      `unique (org_id, source_kind, source_id, chunk_no)` key became two
+      nullable foreign keys — `document_id`, `invoice_id` — with a
+      `num_nonnulls(...) = 1` check, two partial unique indexes, and
+      `source_kind` as a *generated* column. A polymorphic id cannot carry a
+      foreign key or `ON DELETE CASCADE` against two tables at once, so the
+      original shape would have left orphan chunks behind a deleted document
+      and let the discriminator drift from what it discriminates. ADR 0008 does
+      not name the key, so it needs no amendment.
+- [x] **T5** Indexes in the same migration: HNSW on `chunks.embedding`
       (`vector_cosine_ops`), a generated `tsvector` column + GIN for the
       full-text half of the fusion, and `org_id` indexes on both tables.
-- [ ] **T6** RLS in the same migration — `enable row level security` on both,
+- [x] **T6** RLS in the same migration — `enable row level security` on both,
       select-own-org policies following the Stage 2 shape
       (`org_id in (select org_id from memberships where user_id = (select auth.uid()))`).
-- [ ] **T7** Grants in the same migration, following
+- [x] **T7** Grants in the same migration, following
       `20260818094500_stage2_explicit_data_api_grants.sql`: `anon` nothing,
       `authenticated` SELECT only, `service_role` verb-by-verb.
-- [ ] **T8** `docs/DATABASE_SCHEMA.md` — both tables documented; `task types`
+- [x] **T8** `docs/DATABASE_SCHEMA.md` — both tables documented; `task types`
       regenerated and committed with the migration.
 
-**Verification:** `task dev-reset --yes` applies clean from empty;
-`task types-check` green; `get_advisors` shows no new warning against the
-recorded baseline; a non-member `org_id` selects zero rows from `chunks` in
-`psql`, not an error.
+**Verification (done):** `task dev-reset --yes` applied clean from empty;
+`task check` and `supabase db lint --level warning` green; generated types
+regenerated and committed. In `psql`, impersonating `authenticated`: Acme's
+user sees only Acme's chunk, Globex's only Globex's, a signed-in user with no
+membership sees zero rows rather than an error, and `anon` is refused at the
+grant before any policy runs. Both halves of `chunks_exactly_one_source`
+reject as expected, and `source_kind` / `content_tsv` populate themselves.
+
+`get_advisors` is a **hosted-project** check and the Stage 5 migrations have
+not been pushed there — it is re-run against the 2026-08-18 baseline at
+close-out (Batch K), not per batch.
 
 **Files:** 1 migration, `docs/DATABASE_SCHEMA.md`, generated types.
 

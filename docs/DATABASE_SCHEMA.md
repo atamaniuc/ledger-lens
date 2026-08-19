@@ -20,9 +20,13 @@ one-column change.
 ## Extensions
 
 ```sql
-create extension if not exists vector;
+create extension if not exists vector with schema extensions;
 create extension if not exists pgcrypto;
 ```
+
+Both live in the `extensions` schema, which is where Supabase puts them and
+what a `search_path`-pinned function has to qualify against — hence
+`extensions.vector(384)` and `extensions.vector_cosine_ops` below.
 
 ---
 
@@ -169,34 +173,93 @@ create table data_quality_results (
 
 ## Documents and RAG
 
+Shipped in `20260819160000_stage5_documents_and_chunks.sql`. Architecture is
+[ADR 0008](../.claude/adr/0008-retrieval-embeds-in-the-edge-runtime-with-gte-small-hybrid-search-is-one-security-invoker-function.md):
+384-dimension `gte-small` embeddings computed by the Edge Runtime, and one
+`SECURITY INVOKER` search function fusing a vector half with a lexical half.
+
 ```sql
 create table documents (
-  id         uuid primary key default gen_random_uuid(),
-  org_id     uuid not null references orgs(id),
-  title      text not null,
-  source_uri text,
-  created_at timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  org_id       uuid not null references orgs(id) on delete cascade,
+  title        text not null,
+  kind         text not null
+               check (kind in ('payment_terms','dispute_note','memo','contract','policy')),
+  body         text not null,
+  content_hash text not null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (org_id, title)
 );
+create index documents_org_id_idx on documents (org_id);
 
 create table chunks (
-  id           bigserial primary key,
-  org_id       uuid not null references orgs(id),
-  document_id  uuid not null references documents(id) on delete cascade,
-  chunk_index  int not null,
-  content      text not null,
-  embedding    vector(1536),
-  embed_model  text not null,
-  tsv tsvector generated always as (to_tsvector('english', content)) stored,
-  indexed_at   timestamptz not null default now()
+  id          bigint generated always as identity primary key,
+  org_id      uuid not null references orgs(id) on delete cascade,
+  document_id uuid references documents(id) on delete cascade,
+  invoice_id  uuid references invoices(id) on delete cascade,
+  source_kind text generated always as (
+                case when document_id is not null then 'document' else 'invoice' end
+              ) stored,
+  chunk_no    int not null check (chunk_no >= 0),
+  content     text not null,
+  content_hash text not null,
+  embedding   extensions.vector(384) not null,
+  embedding_model text not null,
+  content_tsv tsvector generated always as (to_tsvector('english', content)) stored,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  constraint chunks_exactly_one_source check (num_nonnulls(document_id, invoice_id) = 1)
 );
-create index on chunks using hnsw (embedding vector_cosine_ops);
-create index on chunks using gin (tsv);
-create index on chunks (org_id);
+
+create unique index chunks_document_chunk_no_key
+  on chunks (document_id, chunk_no) where document_id is not null;
+create unique index chunks_invoice_chunk_no_key
+  on chunks (invoice_id, chunk_no) where invoice_id is not null;
+
+create index chunks_embedding_hnsw_idx
+  on chunks using hnsw (embedding extensions.vector_cosine_ops);
+create index chunks_content_tsv_idx on chunks using gin (content_tsv);
 ```
+
+Three things here are decisions rather than defaults.
+
+**The corpus has two halves and one table.** `documents` holds text that
+exists nowhere else — payment terms, dispute notes, month-end memos.
+Invoice rows are the other half and are *not* copied into `documents`; they
+are chunked straight from `invoices`, so a figure has one home rather than a
+copy that can drift from it.
+
+**The parent is a foreign key, not a polymorphic id.** Two nullable columns
+with a `num_nonnulls(...) = 1` check buy referential integrity and
+`ON DELETE CASCADE`, which a `(source_kind, source_id)` pair cannot have
+against two tables at once. `source_kind` survives as a *generated* column,
+so the discriminator callers read can never disagree with the columns it
+comes from. The upsert keys are partial unique indexes for the same reason —
+`ON CONFLICT` can infer one, and a constraint cannot say "only when this
+parent is the populated one".
+
+**`embedding_model` is stored per row.** Changing the embedding model
+changes `extensions.vector(384)` — a column type, so a migration and a full
+re-embed. This column is what makes a half-migrated corpus a query rather
+than a memory.
+
+`chunks` is the one table in this schema where `service_role` holds
+`DELETE`. Everything else is append-only because it records what arrived;
+`chunks` is a derived index of *current* text, and a document that loses a
+paragraph has to lose its tail chunks or retrieval keeps answering from text
+the document no longer contains.
 
 ---
 
 ## Audit — append-only
+
+**Not yet shipped** — lands in Stage 5's Batch F. The shape below predates
+[ADR 0009](../.claude/adr/0009-the-agent-executes-under-the-users-jwt-with-four-read-only-tools-and-no-send-capability.md)
+and will change with it: `request_id` becomes `correlation_id` (the
+project-wide logging contract in `CLAUDE.md`), and rows are written by a
+`SECURITY DEFINER` function that stamps `auth.uid()` itself, with no INSERT
+grant to `authenticated` — an audit log its subject can write to is not one.
 
 ```sql
 create table audit_log (
@@ -219,6 +282,11 @@ revoke update, delete on audit_log from public;
 ---
 
 ## LLM call traces
+
+**Not yet shipped** — Batch F, alongside `audit_log`. Per ADR 0009,
+`cost_usd` becomes `cost_cents` computed at write time from a versioned
+price table, so a historical row keeps the price actually paid, and
+`request_id` becomes `correlation_id`.
 
 ```sql
 create table llm_calls (
