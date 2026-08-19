@@ -91,12 +91,12 @@ never `NaN`.
 
 ## Batch C — Refresh and observability (one commit)
 
-- [ ] **T8a** Owns the subscription: the **exported constant**
+- [x] **T8a** Owns the subscription: the **exported constant**
       (`pipeline_runs` on INSERT/UPDATE, `data_quality_results` on INSERT,
       never `*`) and the bridge from those events to `router.refresh()`.
       `realtime.setAuth(token)` before subscribing. Two signals coalesced
       inside a short window, so four inserted check rows cause one re-render.
-- [ ] **T8b** Observability: who owns `correlation_id` for a dashboard page
+- [x] **T8b** Observability: who owns `correlation_id` for a dashboard page
       request and across the Realtime lifecycle; a disconnect logs **once**
       with that id, not per retry.
 
