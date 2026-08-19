@@ -54,3 +54,41 @@ export function verifyCitations(answer: string, context: RetrievedContext): Cita
     hasNoCitations: citations.length === 0,
   };
 }
+
+export type AnswerSegment =
+  | { kind: "text"; text: string }
+  | { kind: "citation"; citation: Citation };
+
+/**
+ * Splits an answer into prose and citation markers so a UI can render the
+ * markers as something other than literal text.
+ *
+ * It re-scans with the same regex `verifyCitations` used rather than taking
+ * the citation list as the source of truth, because the two must agree about
+ * *where* in the string a marker sits. A marker that somehow escaped the
+ * check is rendered unverified, which is the safe direction to be wrong in.
+ */
+export function segmentAnswer(
+  answer: string,
+  citations: readonly Citation[],
+): AnswerSegment[] {
+  const byKey = new Map(citations.map((citation) => [`${citation.kind}:${citation.id}`, citation]));
+  const segments: AnswerSegment[] = [];
+  let cursor = 0;
+
+  for (const match of answer.matchAll(CITATION_RE)) {
+    const kind = match[1].toLowerCase() as Citation["kind"];
+    const id = match[2].trim();
+    const start = match.index ?? 0;
+
+    if (start > cursor) segments.push({ kind: "text", text: answer.slice(cursor, start) });
+    segments.push({
+      kind: "citation",
+      citation: byKey.get(`${kind}:${id}`) ?? { kind, id, verified: false },
+    });
+    cursor = start + match[0].length;
+  }
+
+  if (cursor < answer.length) segments.push({ kind: "text", text: answer.slice(cursor) });
+  return segments;
+}

@@ -342,3 +342,30 @@ export async function fetchLineage(
   if (error) return failed(error.message);
   return { ok: true, data: data ?? [] };
 }
+
+/**
+ * The lineage behind one invoice, found by the external id an answer cited.
+ *
+ * There is no `org_id` filter here for the usual reason, and it matters more
+ * than usual: both tenants ingest the same mock dataset, so the same
+ * `external_id` legitimately exists in each of them. RLS is what makes this
+ * return the caller's row rather than someone else's.
+ *
+ * `null` — not an error — when nothing matches. An answer can cite an invoice
+ * that does not exist, and telling those two cases apart is the whole point.
+ */
+export async function fetchInvoiceLineage(
+  supabase: Client,
+  externalId: string,
+): Promise<QueryResult<LineagePayload | null>> {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("run_id, raw_event_id")
+    .eq("external_id", externalId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) return failed(error.message);
+  if (!data) return { ok: true, data: null };
+  return { ok: true, data: { runIds: [data.run_id], rawEventIds: [data.raw_event_id] } };
+}

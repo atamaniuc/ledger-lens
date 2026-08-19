@@ -100,25 +100,44 @@ test.describe("Stage 4 — the dashboard", () => {
   }) => {
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
 
-    await page.goto("/dashboard");
-    await expect(page.getByTestId("freshness")).toHaveAttribute(
-      "data-freshness",
-      "fresh",
-    );
+    // The suite ingests once and reuses the rows, so "fresh" stops being true
+    // two hours later for reasons that have nothing to do with the badge.
+    // Shift the whole org forward so its newest ingest is now, preserving the
+    // relative order other assertions read, and shift it back afterwards.
+    const [{ delta }] = await sql<{ delta: string | null }[]>`
+      select (now() - max(ingested_at))::text as delta
+        from raw_events where org_id = ${ORG_A}`;
+    // `max` over no rows is null, and `ingested_at + null::interval` would
+    // null out every row this suite depends on with nothing to restore from.
+    if (delta === null) throw new Error("ORG_A has no raw_events; the fixture never ingested");
 
-    // Push every ingest past the two-hour threshold, then put it back. Faster
-    // and more precise than waiting, and it exercises the boundary rather
-    // than a mocked clock.
-    await sql`update raw_events set ingested_at = ingested_at - interval '3 hours'
+    await sql`update raw_events set ingested_at = ingested_at + ${delta}::interval
                where org_id = ${ORG_A}`;
+
     try {
-      await page.reload();
+      await page.goto("/dashboard");
       await expect(page.getByTestId("freshness")).toHaveAttribute(
         "data-freshness",
-        "stale",
+        "fresh",
       );
+
+      // Push every ingest past the two-hour threshold, then put it back.
+      // Faster and more precise than waiting, and it exercises the boundary
+      // rather than a mocked clock.
+      await sql`update raw_events set ingested_at = ingested_at - interval '3 hours'
+                 where org_id = ${ORG_A}`;
+      try {
+        await page.reload();
+        await expect(page.getByTestId("freshness")).toHaveAttribute(
+          "data-freshness",
+          "stale",
+        );
+      } finally {
+        await sql`update raw_events set ingested_at = ingested_at + interval '3 hours'
+                   where org_id = ${ORG_A}`;
+      }
     } finally {
-      await sql`update raw_events set ingested_at = ingested_at + interval '3 hours'
+      await sql`update raw_events set ingested_at = ingested_at - ${delta}::interval
                  where org_id = ${ORG_A}`;
     }
   });

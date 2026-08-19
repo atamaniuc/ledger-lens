@@ -9,6 +9,7 @@ import {
   type LineagePayload,
 } from "@/lib/dashboard/queries";
 import { createClient } from "@/lib/supabase/server-client";
+import { CopilotPanel } from "@/components/dashboard/copilot-panel";
 import { DataHealthPanel } from "@/components/dashboard/data-health-panel";
 import { FreshnessBadge } from "@/components/dashboard/freshness-badge";
 import { InvoicesTable } from "@/components/dashboard/invoices-table";
@@ -123,11 +124,10 @@ export default async function DashboardPage({
             <>
               <MetricTiles result={metrics} lineage={lineage} />
 
-              {/* Two thirds of content, one third reserved. The empty column
-                  is Stage 5's copilot chat panel: US-07 was written P0 but
-                  depends on an agent that does not exist yet, so the layout
-                  holds its place and renders nothing into it rather than
-                  being re-cut later. */}
+              {/* Two thirds of content, one third of state and questions.
+                  The copilot sits above the live run list because it is the
+                  column's reason for existing (US-07); the run list is what
+                  filled the space while the agent did not exist yet. */}
               <div className="grid gap-section lg:grid-cols-3">
                 <div className="flex flex-col gap-section lg:col-span-2">
                   <DataHealthPanel result={health} />
@@ -138,6 +138,7 @@ export default async function DashboardPage({
                   data-testid="copilot-slot"
                   className="flex flex-col gap-section"
                 >
+                  <CopilotPanel />
                   {runs.ok ? (
                     <PipelineStatusLive runs={runs.data} />
                   ) : (

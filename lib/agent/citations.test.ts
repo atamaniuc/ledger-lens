@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { verifyCitations } from "./citations";
+import { segmentAnswer, verifyCitations } from "./citations";
 
 const context = { chunkIds: [12, 34], invoiceExternalIds: ["inv_00007"] };
 
@@ -61,5 +61,49 @@ describe("verifyCitations", () => {
     // reformatted id has not cited the row it claims to.
     const check = verifyCitations("[chunk:012]", context);
     expect(check.citations[0].verified).toBe(false);
+  });
+});
+
+describe("segmentAnswer", () => {
+  const cited = verifyCitations("Net 30 [chunk:12] and [chunk:999].", context).citations;
+
+  it("splits prose from markers and keeps the order", () => {
+    const segments = segmentAnswer("Net 30 [chunk:12] and [chunk:999].", cited);
+
+    expect(segments).toEqual([
+      { kind: "text", text: "Net 30 " },
+      { kind: "citation", citation: { kind: "chunk", id: "12", verified: true } },
+      { kind: "text", text: " and " },
+      { kind: "citation", citation: { kind: "chunk", id: "999", verified: false } },
+      { kind: "text", text: "." },
+    ]);
+  });
+
+  it("loses no text", () => {
+    // The same invariant the chunker has: rendering must not be able to drop
+    // part of an answer on the floor.
+    const answer = "Before [invoice:inv_00007] middle [chunk:12] after";
+    const rebuilt = segmentAnswer(answer, cited)
+      .map((segment) =>
+        segment.kind === "text"
+          ? segment.text
+          : `[${segment.citation.kind}:${segment.citation.id}]`,
+      )
+      .join("");
+
+    expect(rebuilt).toBe(answer);
+  });
+
+  it("marks a marker missing from the citation list unverified", () => {
+    const segments = segmentAnswer("[chunk:12]", []);
+    expect(segments).toEqual([
+      { kind: "citation", citation: { kind: "chunk", id: "12", verified: false } },
+    ]);
+  });
+
+  it("returns an answer with no markers as a single text segment", () => {
+    expect(segmentAnswer("Payment terms are Net 30.", [])).toEqual([
+      { kind: "text", text: "Payment terms are Net 30." },
+    ]);
   });
 });

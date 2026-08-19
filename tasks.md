@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A through I done. The agent is built and its safety claims are tested; the UI (J) and close-out (K) remain.** Stage 4's list is archived at
+**Status: in progress — Batches A through J done. The agent is built, its safety claims are tested, and the panel is on the dashboard; close-out (K) remains, and it is the first thing that needs an `ANTHROPIC_API_KEY`.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -451,33 +451,68 @@ rather than a hope.
 
 ## Batch J — The chat panel (one commit)
 
-- [ ] **T35** `components/dashboard/copilot-panel.tsx` — the reserved third
-      column in `app/dashboard/page.tsx` (its comment at line ~126 names this
-      task). TanStack Query mutation against T30; renders citations as links into
-      the existing `LineageDrillDown` selection context where the citation is an
-      invoice; loading, empty, error and **unverified-answer** states all visible.
-- [ ] **T36** Design tokens only — no hardcoded hex or px (`CLAUDE.md` Frontend).
-      Load the `dataviz` skill only if a metric rendering appears; plain text
-      answers do not need it.
-- [ ] **T37** Wire into `app/dashboard/page.tsx`, replacing the reserved empty
-      column and its Stage 5 comment.
+- [x] **T35** `components/dashboard/copilot-panel.tsx`. Six states — idle,
+      asking, answered, **unconfigured**, failed, and the unverified-answer
+      banner on top of an answer. Citations render through `segmentAnswer`
+      (new, in `lib/agent/citations.ts`, with the same "loses no text"
+      invariant the chunker has); an invoice citation resolves through
+      `fetchInvoiceLineage` and opens the same `LineageDrillDown` drawer a
+      metric tile opens, and a citation that resolves to nothing says so
+      instead of opening an empty drawer.
+      **Deviation from this plan, deliberate:** no TanStack Query. The
+      dependency is in `package.json` but is used nowhere in the repo, and
+      this is one imperative POST with no cache to share, nothing to refetch
+      and nothing to invalidate — `useMutation` would mean adding a
+      `QueryClientProvider` to wrap a single `fetch`. The panel uses
+      `useState` + `fetch`, matching `LineageDrillDown`. See the open question
+      below about the unused dependency.
+- [x] **T36** Design tokens only. Also **made the gate real**: `app/globals.css`
+      and `components/ui/status-badge.tsx` both claimed `task check` greps for
+      hardcoded colours and pixels, and nothing did. `lib/dashboard/design-tokens.test.ts`
+      now walks `app/` and `components/` for hex, `rgb()`/`hsl()`, and `px`,
+      exempting `globals.css`. Mutation-checked: a planted `#ff0000` and `4px`
+      both turn it red.
+- [x] **T37** Wired into `app/dashboard/page.tsx`; the reserved-column comment
+      is gone and the copilot sits above the live run list.
 
-**Verification:** the page renders signed in with the panel populated; no
-`service_role` reference anywhere in the client bundle (the Stage 4 token grep,
-re-run).
+**Verification:** `task check` green (144 unit tests). `tests/stage5-agent.spec.ts`
+(started here, finished in K) — 6 browser tests pass: the panel renders in the
+third column, an empty question cannot be sent, a 503 reads as an operator
+problem rather than a failed question and the dashboard is unaffected, a
+verified invoice citation opens lineage, an invented citation stays visible and
+flagged, an abstention does not render as an error, and a failed turn shows its
+`correlation_id`. Screenshotted signed in as `alice@acme.test` with an answer
+rendered.
 
-**Files:** 1 component, `app/dashboard/page.tsx`. A `*.stories.tsx` is **not**
-required — this is a one-off page section, not a shared component
-(`CLAUDE.md` Frontend).
+**From the reviewer pass, fixed here:** a 200 response whose body is not an
+answer (a dev-server error page, a proxy interstitial) was cast straight to the
+result type, putting a `TypeError` inside render — and a throw during render
+unmounts the whole client tree, so the panel would have taken the dashboard
+down with it. Now validated and routed to the failed state, with a browser test
+asserting the rest of the page survives. The freshness fix below also gained a
+null guard: `max()` over no rows is null, and `ingested_at + null::interval`
+would have nulled every row with nothing left to restore from.
+
+**Also fixed here, out of plan:** `tests/stage4-dashboard.spec.ts`'s freshness
+test was a time bomb — it asserted `fresh` on first load without establishing
+it, so it passed when written and failed the moment the fixture aged past two
+hours. It now shifts the org's ingest times forward (preserving relative order)
+and restores them.
+
+**Files:** 1 component, `app/dashboard/page.tsx`, `lib/agent/citations.ts`,
+`lib/dashboard/queries.ts`, 2 test files. A `*.stories.tsx` is **not** required
+— this is a one-off page section, not a shared component (`CLAUDE.md` Frontend).
 
 ---
 
 ## Batch K — Close-out (one commit)
 
-- [ ] **T38** `tests/stage5-agent.spec.ts` — the browser flow: sign in, ask,
-      see an answer with citations; as `bob@globex.test`, no Acme content is
-      reachable through the panel. Fabricated rows cleaned up by a per-run tag,
-      as `tests/stage4-dashboard.spec.ts` does, because Stage 3's reconciliation
+- [ ] **T38** `tests/stage5-agent.spec.ts` — **started in Batch J**, which
+      covers the panel's own states against a stubbed route. What is left needs
+      a key: sign in, ask a real question, see a real answer with citations;
+      and as `bob@globex.test`, no Acme content reachable through the panel.
+      Fabricated rows cleaned up by a per-run tag, as
+      `tests/stage4-dashboard.spec.ts` does, because Stage 3's reconciliation
       check is tenant-wide.
 - [ ] **T39** `PROGRESS.md` — Stage 5 to done, Stage 6 to next, plus its "what it
       cost and what it caught" line and any new entry in the known-gaps list
@@ -524,3 +559,9 @@ required — this is a one-off page section, not a shared component
   alongside Sonnet 5 and Haiku 4.5 entries, so a change is a constant rather
   than a hunt. The token ceiling that goes with it is still Batch H's to set,
   against the latency the loop actually shows.
+- **`@tanstack/react-query` is an unused dependency.** It has been in
+  `package.json` since Stage 4 and nothing in `app/`, `components/`, `lib/` or
+  `tests/` imports it; Batch J decided against introducing it for one POST. It
+  should either be used by something in Stage 6 or dropped. Deliberately not
+  swept into Batch J's commit — a dependency change is its own decision, not a
+  side effect of building a panel.
