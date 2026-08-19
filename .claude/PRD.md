@@ -270,7 +270,7 @@ Sign in (magic link) → land on single dashboard page → tiles + freshness bad
 
 ## RAG & Agent
 
-**Status:** Draft
+**Status:** Approved — architecture agreed before implementation; see ADR 0008 (retrieval) and ADR 0009 (agent execution). This entry also absorbs the Dashboard entry's US-07, which was specified P0 in a stage containing no agent and was moved here during Stage 4 — the chat panel ships in Batch J alongside the agent it displays.
 **Timeline:** Stage 5. Where the target role's core anxiety lives.
 
 ### Context & Business Value
