@@ -13,6 +13,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/database.types";
 import { logAgentAction, logLlmCall, type StepOutcome } from "./audit";
+import { verifyCitations, type Citation } from "./citations";
 import { AGENT_MODEL } from "./pricing";
 import { PROMPT_VERSION, SYSTEM_PROMPT } from "./prompt";
 import { runTool, toolDefinitions, type ToolContext } from "./tools";
@@ -27,6 +28,15 @@ export const TOKEN_CEILING = 120_000;
  * nothing but a longer wait before the budget kills it.
  */
 export const MAX_RESPONSE_TOKENS = 4_096;
+
+/**
+ * What the agent says when retrieval came back empty. US-06 asks the model to
+ * admit when it does not know; this is the mechanism behind that, because a
+ * prompt asking a model not to hallucinate is a request and not calling the
+ * model is a guarantee.
+ */
+export const ABSTENTION_ANSWER =
+  "I don't have data on that. Nothing in this organization's invoices or documents matches the question.";
 
 export interface AgentTurnRequest {
   question: string;
@@ -51,12 +61,24 @@ export interface AgentTurnResult {
   toolsUsed: string[];
   retrievedChunkIds: number[];
   citedInvoiceIds: string[];
+  /** Every id the answer cited, each marked verified against what was retrieved. */
+  citations: Citation[];
+  /**
+   * False when the answer cited an id that was never in a tool result this
+   * turn. The answer is still returned — the flag is the signal, and deleting
+   * the citation would hide it.
+   */
+  verified: boolean;
   usage: { inputTokens: number; outputTokens: number };
 }
 
 interface RetrievedEvidence {
   chunkIds: number[];
   invoiceExternalIds: string[];
+  /** At least one tool returned rows this turn. */
+  anyData: boolean;
+  /** At least one search came back with nothing. */
+  searchedAndFoundNothing: boolean;
 }
 
 function textOf(message: Anthropic.Message): string {
@@ -73,14 +95,24 @@ function collectEvidence(toolName: string, result: unknown, into: RetrievedEvide
   if (toolName === "search_documents") {
     const chunks = (result as { chunks?: { chunk_id: number }[] }).chunks ?? [];
     for (const chunk of chunks) into.chunkIds.push(chunk.chunk_id);
+    if (chunks.length > 0) into.anyData = true;
+    else into.searchedAndFoundNothing = true;
   }
   if (toolName === "list_invoices") {
     const invoices = (result as { invoices?: { external_id: string }[] }).invoices ?? [];
     for (const invoice of invoices) into.invoiceExternalIds.push(invoice.external_id);
+    if (invoices.length > 0) into.anyData = true;
+  }
+  if (toolName === "get_revenue_summary") {
+    const count = (result as { invoice_count?: number }).invoice_count ?? 0;
+    if (count > 0) into.anyData = true;
   }
   if (toolName === "draft_customer_email") {
     const invoice = (result as { invoice?: { external_id: string } }).invoice;
-    if (invoice) into.invoiceExternalIds.push(invoice.external_id);
+    if (invoice) {
+      into.invoiceExternalIds.push(invoice.external_id);
+      into.anyData = true;
+    }
   }
 }
 
@@ -104,7 +136,12 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: request.question },
   ];
-  const evidence: RetrievedEvidence = { chunkIds: [], invoiceExternalIds: [] };
+  const evidence: RetrievedEvidence = {
+    chunkIds: [],
+    invoiceExternalIds: [],
+    anyData: false,
+    searchedAndFoundNothing: false,
+  };
   const toolsUsed: string[] = [];
 
   let inputTokens = 0;
@@ -154,6 +191,11 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       },
     });
 
+    const check = verifyCitations(answer, {
+      chunkIds: evidence.chunkIds,
+      invoiceExternalIds: evidence.invoiceExternalIds,
+    });
+
     return {
       answer,
       outcome,
@@ -162,6 +204,8 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       toolsUsed,
       retrievedChunkIds: [...new Set(evidence.chunkIds)],
       citedInvoiceIds: [...new Set(evidence.invoiceExternalIds)],
+      citations: check.citations,
+      verified: !check.hasUnverified,
       usage: { inputTokens, outputTokens },
     };
   };
@@ -274,7 +318,17 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       }
     }
 
-    messages.push({ role: "user", content: results });
     stepNo++;
+
+    // US-06, as a mechanism rather than an instruction: a search that found
+    // nothing, with no other tool having returned data, ends the turn here —
+    // *before* the model is asked to compose an answer over an empty
+    // context. Asking it not to hallucinate would be a request; not calling
+    // it is a guarantee.
+    if (evidence.searchedAndFoundNothing && !evidence.anyData) {
+      return await finish("abstained", ABSTENTION_ANSWER, "retrieval returned nothing");
+    }
+
+    messages.push({ role: "user", content: results });
   }
 }

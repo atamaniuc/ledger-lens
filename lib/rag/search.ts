@@ -11,6 +11,15 @@ import { embedTexts, type EmbedOptions } from "./embed";
 
 export const DEFAULT_MATCH_LIMIT = 5;
 
+/**
+ * Cosine-similarity floor on the vector half, measured against this corpus
+ * and `gte-small` (migration 20260819200000 carries the numbers). Below it a
+ * result is a nearest neighbour rather than an answer — and without a floor,
+ * "empty retrieval" is a state a vector search never reaches, so US-06's
+ * abstention could never fire.
+ */
+export const DEFAULT_MIN_SIMILARITY = 0.78;
+
 export interface RetrievedChunk {
   chunk_id: number;
   source_kind: "document" | "invoice";
@@ -18,6 +27,7 @@ export interface RetrievedChunk {
   document_title: string | null;
   invoice_id: string | null;
   content: string;
+  similarity: number | null;
   vector_rank: number | null;
   lexical_rank: number | null;
   rrf_score: number;
@@ -25,6 +35,8 @@ export interface RetrievedChunk {
 
 export interface SearchOptions {
   matchLimit?: number;
+  /** Pass 0 to disable the floor entirely — an explicit choice, not a default. */
+  minSimilarity?: number;
   embed?: EmbedOptions;
   correlationId?: string;
   /** Skips the embedding round trip when the caller already has the vector. */
@@ -60,6 +72,7 @@ export async function searchChunks(
     query_embedding: JSON.stringify(embedding),
     query_text: trimmed,
     match_limit: opts.matchLimit ?? DEFAULT_MATCH_LIMIT,
+    min_similarity: opts.minSimilarity ?? DEFAULT_MIN_SIMILARITY,
   });
 
   if (error) throw new RetrievalError(`search_chunks failed: ${error.message}`);

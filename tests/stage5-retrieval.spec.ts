@@ -178,13 +178,40 @@ test.describe("Stage 5 — hybrid retrieval", () => {
     }
   });
 
-  test("a query that matches nothing returns nothing, not an error", async () => {
-    // The difference abstention depends on (US-06): empty is an answer.
+  test("a question this corpus cannot answer returns nothing", async () => {
+    // The relevance floor, and the reason it exists: a nearest-neighbour
+    // search always has nearest neighbours, so without a floor US-06's
+    // abstention could never fire — the agent would compose an answer over
+    // five confident, irrelevant chunks.
     const supabase = await clientFor("alice@acme.test");
-    const results = await searchChunks(
-      supabase,
-      "zzzqqqxyzzy unrelatedgibberish tokenthatappearsnowhere",
-    );
-    expect(Array.isArray(results)).toBe(true);
+
+    for (const query of [
+      "what is our parental leave policy?",
+      "how do I bake sourdough bread at home?",
+      "who won the 1998 world cup final?",
+    ]) {
+      const results = await searchChunks(supabase, query);
+      expect(results, `"${query}" should retrieve nothing`).toHaveLength(0);
+    }
+  });
+
+  test("the floor is a parameter, not a wall", async () => {
+    // Asking for everything is allowed — it just has to be asked for.
+    const supabase = await clientFor("alice@acme.test");
+    const results = await searchChunks(supabase, "what is our parental leave policy?", {
+      minSimilarity: 0,
+    });
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  test("a relevant question stays well clear of the floor", async () => {
+    // The positive control for the floor: if it ever drifts up into the
+    // relevant band, this goes red before recall does.
+    const supabase = await clientFor("alice@acme.test");
+    const results = await searchChunks(supabase, "what is our early settlement discount?");
+
+    expect(results.length).toBeGreaterThan(0);
+    const best = results.find((chunk) => chunk.similarity !== null);
+    expect(best?.similarity ?? 0).toBeGreaterThan(0.8);
   });
 });

@@ -246,6 +246,15 @@ changes `extensions.vector(384)` — a column type, so a migration and a full
 re-embed. This column is what makes a half-migrated corpus a query rather
 than a memory.
 
+**Retrieval has a measured relevance floor.** `search_chunks(...)` takes a
+`min_similarity` parameter defaulting to 0.78, applied to the vector half
+only. Without it "empty retrieval" is a state a nearest-neighbour search never
+reaches — it always has nearest neighbours — so the agent's abstention (US-06)
+could never fire, and an unanswerable question came back with five confident,
+irrelevant chunks. Migration `20260819200000` carries the measurements the
+number comes from. The lexical half is not filtered: a full-text match is a
+term the user actually typed, which is evidence on its own terms.
+
 `chunks` is the one table in this schema where `service_role` holds
 `DELETE`. Everything else is append-only because it records what arrived;
 `chunks` is a derived index of *current* text, and a document that loses a

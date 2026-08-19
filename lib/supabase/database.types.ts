@@ -646,6 +646,7 @@ export type Database = {
       search_chunks: {
         Args: {
           match_limit?: number
+          min_similarity?: number
           query_embedding: string
           query_text: string
         }
@@ -657,6 +658,7 @@ export type Database = {
           invoice_id: string
           lexical_rank: number
           rrf_score: number
+          similarity: number
           source_kind: string
           vector_rank: number
         }[]
