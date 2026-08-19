@@ -15,17 +15,17 @@ order; there is a real dependency between each and the next.
 
 ## Batch A — Access foundation (one commit)
 
-- [ ] **T1** `bun add @supabase/ssr`; `lib/supabase/server-client.ts`
+- [x] **T1** `bun add @supabase/ssr`; `lib/supabase/server-client.ts`
       (`createServerClient`, cookie-backed) and `lib/supabase/browser-client.ts`
       (`createBrowserClient`).
-- [ ] **T2** Root `proxy.ts`, named export `proxy`, matcher
+- [x] **T2** Root `proxy.ts`, named export `proxy`, matcher
       `['/dashboard/:path*']` — **not** `middleware.ts`, which Next 16.3.1
       deprecates. Supabase's handler body, Next's filename. Runs on the
       `nodejs` runtime, which is not configurable.
-- [ ] **T3** `no-restricted-imports` forbidding `lib/supabase/service-client`
+- [x] **T3** `no-restricted-imports` forbidding `lib/supabase/service-client`
       outside `app/api/**` and `supabase/functions/**`, plus a committed
       fixture proving the rule fires.
-- [ ] **T4** `app/login/page.tsx` (magic link), `app/auth/callback/route.ts`,
+- [x] **T4** `app/login/page.tsx` (magic link), `app/auth/callback/route.ts`,
       and `app/page.tsx` (still create-next-app boilerplate) replaced with a
       session-aware redirect.
 
@@ -35,6 +35,18 @@ asserts the session rotates and the page renders (local `jwt_expiry` is
 3600s, so waiting out a token is not a test); deleting the lint rule fails
 the fixture; the magic-link round trip completes against Mailpit; a grep for
 `middleware.ts` across `app/` and the repo root returns nothing.
+
+**Found while building it, worth keeping:**
+
+- GoTrue ignores an `emailRedirectTo` that is not in `site_url` or
+  `additional_redirect_urls` — it does not error, it silently substitutes
+  `site_url`, so the code lands on `/` and the flow dies at a route that does
+  not handle it. `supabase/config.toml` now lists both loopback spellings of
+  `/**`.
+- A newly created route *segment* (`app/auth/callback/`) is not picked up by a
+  running `next dev`; new files inside an existing segment are. The dev
+  container needs a restart after adding one, which looks exactly like a 404
+  from a typo.
 
 ## Batch B1 — Realtime publication (one commit, single agent)
 

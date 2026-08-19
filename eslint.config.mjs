@@ -5,6 +5,46 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // An unused disable directive is an error, not a warning. That is what
+    // makes the boundary fixture below a real gate: delete the rule and its
+    // `eslint-disable` comment becomes unused, so lint goes red instead of
+    // quietly passing over a rule nobody enforces any more.
+    linterOptions: {
+      reportUnusedDisableDirectives: "error",
+    },
+  },
+  {
+    // The service-role key bypasses RLS. Importing this client into anything
+    // that renders a page would work perfectly, return every tenant's rows,
+    // and pass any test that only checks the numbers are right (ADR 0007).
+    // The file-level comments are advice; this is enforcement.
+    //
+    // `app/api/**` is exempt because those routes act as the pipeline rather
+    // than as a user. `supabase/functions/**` is exempt by being outside
+    // this config entirely — it is checked by `deno check`.
+    files: ["**/*.ts", "**/*.tsx"],
+    ignores: ["app/api/**", "lib/supabase/service-client.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@/lib/supabase/service-client",
+                "**/lib/supabase/service-client",
+                "./service-client",
+                "../service-client",
+              ],
+              message:
+                "The service-role client bypasses RLS. Outside app/api/** and supabase/functions/**, read through lib/supabase/server-client.ts or browser-client.ts so Postgres decides what comes back (ADR 0007).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

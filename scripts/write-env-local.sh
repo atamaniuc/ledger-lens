@@ -33,9 +33,10 @@ value_of() {
 
 api_url="$(value_of API_URL)"
 service_key="$(value_of SERVICE_ROLE_KEY)"
+anon_key="$(value_of ANON_KEY)"
 
-if [ -z "$api_url" ] || [ -z "$service_key" ]; then
-  echo "could not read API_URL/SERVICE_ROLE_KEY from 'supabase status -o env'" >&2
+if [ -z "$api_url" ] || [ -z "$service_key" ] || [ -z "$anon_key" ]; then
+  echo "could not read API_URL/SERVICE_ROLE_KEY/ANON_KEY from 'supabase status -o env'" >&2
   exit 1
 fi
 
@@ -58,6 +59,17 @@ cat > .env.local <<ENV
 
 SUPABASE_URL=$api_url
 SUPABASE_SERVICE_ROLE_KEY=$service_key
+
+# Stage 4 (Dashboard). The browser reaches Supabase over the published port;
+# the server, when it runs inside the dev container, reaches it over the
+# compose network as http://kong:8000 (compose.yaml overrides SUPABASE_URL
+# for that). NEXT_PUBLIC_SUPABASE_URL is never overridden — it is baked into
+# the client bundle and has to work from outside every container.
+#
+# The anon key is public by design: RLS is what protects the data, and this
+# key only ever reaches Postgres as the `authenticated` (or `anon`) role.
+NEXT_PUBLIC_SUPABASE_URL=$api_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon_key
 
 # Shared secrets the two ingestion entry points require. Both entry points
 # reject every request when their secret is unset, so these have to exist
