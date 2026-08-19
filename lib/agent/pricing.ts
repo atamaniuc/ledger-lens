@@ -21,8 +21,23 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   "claude-opus-5": { inputPerMTokUsd: 5, outputPerMTokUsd: 25 },
   "claude-sonnet-5": { inputPerMTokUsd: 3, outputPerMTokUsd: 15 },
   "claude-haiku-4-5": { inputPerMTokUsd: 1, outputPerMTokUsd: 5 },
+
+  // Free tiers, priced at zero because that is what they cost — not because
+  // the model is unknown. `costCents` returns null for a model this table has
+  // never heard of, and the two cases have to stay distinguishable: a null in
+  // `llm_calls.cost_cents` is an accounting gap to chase, a 0 is a fact.
+  // Rate limits, not money, are what bounds these.
+  "llama-3.3-70b-versatile": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "moonshotai/kimi-k2-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "meta/llama-3.3-70b-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "nvidia/llama-3.3-nemotron-super-49b-v1.5": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
 };
 
+/**
+ * The model used when nothing else is configured. Which model a turn *did*
+ * run on comes from the client (`lib/agent/providers`) and is stored per row,
+ * so this constant never rewrites history.
+ */
 export const AGENT_MODEL = "claude-opus-5";
 
 /**

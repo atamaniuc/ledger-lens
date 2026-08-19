@@ -1,6 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { runAgentTurn } from "@/lib/agent/loop";
+import { createModelClient, providerSummary } from "@/lib/agent/providers";
 import { createClient } from "@/lib/supabase/server-client";
 
 // Stage 5's chat entry point. ADR 0009: the agent runs under the calling
@@ -83,11 +83,18 @@ export async function POST(req: NextRequest) {
   }
   const membership = memberships[0];
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    // Named plainly rather than surfacing as a 500 from inside the SDK: an
+  // Any configured provider will do — Anthropic, or one of the free
+  // OpenAI-compatible tiers. The agent's safety properties do not come from
+  // the vendor (ADR 0009), so this is configuration rather than a decision.
+  const model = createModelClient();
+  if (!model) {
+    // Named plainly rather than surfacing as a 500 from inside a client: an
     // unconfigured deployment is an operator problem, not a user's question.
     return NextResponse.json(
-      { error: "the copilot is not configured on this deployment" },
+      {
+        error: "the copilot is not configured on this deployment",
+        detail: providerSummary(),
+      },
       { status: 503 },
     );
   }
@@ -98,7 +105,7 @@ export async function POST(req: NextRequest) {
       orgId: membership.org_id,
       correlationId,
       supabase,
-      anthropic: new Anthropic(),
+      model,
     });
 
     return NextResponse.json({ correlation_id: correlationId, ...result });

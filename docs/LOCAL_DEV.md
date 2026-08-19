@@ -417,8 +417,28 @@ task evals -- --verbose # print what each retrieval case actually returned
 
 Needs the stack running and the index built (`task index`). It scores
 `evals/dataset.jsonl` against `evals/thresholds.json` and exits non-zero when
-a threshold is breached. Without an `ANTHROPIC_API_KEY` the two
+a threshold is breached. Without a model provider configured, the two
 model-dependent metrics report `skip` — they are never counted as passes.
+
+### Giving the copilot a model
+
+Set one key in `.env.local` and the chat route stops answering 503:
+
+```bash
+GROQ_API_KEY=…      # free tier, https://console.groq.com/keys
+NVIDIA_API_KEY=…    # free tier, https://build.nvidia.com
+ANTHROPIC_API_KEY=… # paid
+```
+
+The first configured provider in that order wins — Anthropic, then Groq, then
+NVIDIA. `LLM_PROVIDER=groq` pins one, and then a missing key is an error
+rather than a silent fallback to a different provider. `LLM_BASE_URL` plus
+`LLM_API_KEY` and `LLM_MODEL` point at anything else that speaks
+`/chat/completions`, including a local Ollama or vLLM.
+
+The model must support tool calling. An agent whose model cannot call a
+function has no way to reach any data, and the failure looks like a copilot
+that answers everything from nothing. `.env.example` lists defaults that do.
 
 Playwright starts the dev server itself if one is not already running, and
 reuses yours if it is. `.env.local` is read by `playwright.config.ts`, so

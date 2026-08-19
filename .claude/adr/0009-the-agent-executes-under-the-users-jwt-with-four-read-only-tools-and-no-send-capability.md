@@ -236,3 +236,45 @@ every `llm_calls` and `audit_log` row was stamped with whichever org the query
 happened to return: a silently misattributed audit trail, against the PRD's
 "zero unaudited agent actions". The route now returns 409 and says so.
 Choosing an org is a Stage 6 feature.
+
+---
+
+## Amendment — 2026-08-19 (provider abstraction)
+
+**The model vendor is configuration, not architecture.** This ADR was written
+against `claude-opus-5` and named it in `lib/agent/pricing.ts` as a constant.
+It is now one of several: `lib/agent/providers` resolves a `ModelClient` from
+the environment, and Groq and NVIDIA NIM — both free-tier and both speaking
+the OpenAI chat-completions API — are supported alongside Anthropic.
+
+Nothing in the safety argument moves. RLS scopes what a tool can read, the
+registry bounds what a tool can do, the audit rows are written by definer
+functions, and citations are verified against what a tool actually returned.
+Every one of those is enforced outside the model, which is the whole reason
+this ADR could be written as a capability argument rather than a behavioural
+one — and it is why swapping the vendor is a configuration change rather than
+a new risk assessment.
+
+**The adapter translates, it does not reimplement.** The loop's message shape
+stays Anthropic's, because content blocks carry text and tool calls in one
+ordered list and the OpenAI shape does not; translating that direction loses
+nothing, and the other direction would flatten it. `AgentTurnRequest.anthropic`
+is now `AgentTurnRequest.model`, typed as the narrow interface the loop
+actually uses — which the Anthropic SDK satisfies through a thin wrapper and
+every test stub satisfies directly, so a stub cannot drift from what
+production runs.
+
+**What is deliberately not claimed.** Answer quality is not equal across
+providers, and this amendment does not assert that it is. Stage 6's eval set
+is the instrument: point `LLM_PROVIDER` at one and run `task evals`. The four
+deterministic metrics are provider-independent by construction; tool choice
+and citation validity are exactly the ones that will move.
+
+**A named provider that is not configured is an error, not a fallback.**
+`LLM_PROVIDER=groq` with no `GROQ_API_KEY` fails loudly. Falling back would
+mean a deployment that asked for a free tier quietly answered on a paid one,
+and the only trace would be the model name on `llm_calls` rows nobody reads.
+
+Free-tier models are priced at zero in the table rather than left unknown, so
+`llm_calls.cost_cents` keeps its distinction: `null` is an accounting gap to
+chase, `0` is a fact. What bounds those providers is rate limits, not money.

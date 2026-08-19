@@ -180,10 +180,19 @@ async function scoreAgent(): Promise<Score[]> {
   }
 
   // Imported lazily so the deterministic tier does not pay for the SDK.
-  const [{ default: Anthropic }, { runAgentTurn }] = await Promise.all([
-    import("@anthropic-ai/sdk"),
+  const [{ createModelClient }, { runAgentTurn }] = await Promise.all([
+    import("../lib/agent/providers"),
     import("../lib/agent/loop"),
   ]);
+
+  const model = createModelClient();
+  if (!model) {
+    const skipped = "no model provider is configured";
+    return [
+      { name: "tool choice", passed: 0, total: subset.length, threshold: 1, skipped },
+      { name: "citation validity", passed: 0, total: 0, threshold: thresholds.citation_validity, skipped },
+    ];
+  }
 
   let correctTool = 0;
   let verified = 0;
@@ -198,7 +207,7 @@ async function scoreAgent(): Promise<Score[]> {
       orgId: membership!.org_id,
       correlationId: `eval-${testCase.id}`,
       supabase,
-      anthropic: new Anthropic(),
+      model,
     });
 
     if (result.toolsUsed.includes(testCase.expect_tool ?? "")) correctTool++;

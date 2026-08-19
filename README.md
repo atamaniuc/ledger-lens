@@ -153,12 +153,19 @@ graded another, which is a gate people learn to override; the other two are
 reporting, not regression protection. The four deterministic metrics
 (recall@5, abstention, injection safety, citation validity) are what gate.
 
-**No turn has ever run against a real model.** There is no `ANTHROPIC_API_KEY`
-in the development environment. The agent loop is tested against a stubbed
-model and a real database — the right way round, since every safety claim is
-about capability rather than wording — and the eval runner reports its
-model-dependent metrics as `skip`, never as passes. With a key, `task evals`
-scores them and nothing else changes.
+**No turn has run against a real model here.** No provider key is set in this
+development environment, so nothing in the repository has yet spoken to a
+model. The agent loop is tested against a stubbed model and a real database —
+the right way round, since every safety claim is about capability rather than
+wording — and the eval runner reports its model-dependent metrics as `skip`,
+never as passes.
+
+Fixing it costs one environment variable, and it does not have to cost money:
+`GROQ_API_KEY` or `NVIDIA_API_KEY` (both free tiers, both OpenAI-compatible)
+work as well as `ANTHROPIC_API_KEY`. See `.env.example`. What is *not* claimed
+is that answer quality is equal across them — `task evals` is the instrument
+for that, and its tool-choice and citation-validity metrics are exactly the
+ones that will move.
 
 **The CI workflow has never executed.** This repository has no git remote, so
 `.github/workflows/ci.yml` is written but unrun.
@@ -201,7 +208,7 @@ habit.
 | Auth & live updates | Supabase Auth (magic link), Supabase Realtime |
 | Backend | Next.js route handlers, Deno (Supabase Edge Functions) |
 | Database | Postgres via Supabase — RLS, `pgvector` (HNSW), `tsvector`/GIN, `pgcrypto` |
-| AI | Anthropic API (`claude-opus-5`), `gte-small` embeddings in the Edge Runtime, hybrid RAG (vector + full-text, RRF), 4-tool scoped agent |
+| AI | Anthropic, Groq or NVIDIA NIM (one adapter, chosen by env), `gte-small` embeddings in the Edge Runtime, hybrid RAG (vector + full-text, RRF), 4-tool scoped agent |
 | Background work | Postgres queue (`SKIP LOCKED`) + event-driven webhook path |
 | Infrastructure | Pulumi (TypeScript) — see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
 | Tooling | Bun (install, unit tests, scripts), Node 22 (build, serve), Task, Docker (Supabase stack), Playwright, GitHub Actions |

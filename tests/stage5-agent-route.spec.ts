@@ -105,24 +105,36 @@ test.describe("Stage 5 — the chat route", () => {
     request,
   }) => {
     // This asserts the state of *this* environment as much as the code: with
-    // no ANTHROPIC_API_KEY set, the route answers 503 with an operator-facing
-    // message rather than a 500 from the SDK's constructor. When a key is
-    // configured the same call reaches the model, so the assertion follows
-    // the environment rather than pretending it does not exist.
+    // no provider configured, the route answers 503 with an operator-facing
+    // message rather than a 500 from inside a client. When any provider is
+    // configured — Anthropic or one of the free OpenAI-compatible tiers — the
+    // same call reaches a model, so the assertion follows the environment
+    // rather than pretending it does not exist.
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
+
+    const configured =
+      process.env.ANTHROPIC_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.NVIDIA_API_KEY ??
+      (process.env.LLM_API_KEY && process.env.LLM_BASE_URL ? "generic" : undefined);
 
     const res = await context.request.post("/api/agent/chat", {
       data: { question: "what are our payment terms?" },
     });
 
-    if (process.env.ANTHROPIC_API_KEY) {
+    if (configured) {
       expect(res.status(), await res.text()).toBe(200);
       const body = await res.json();
       expect(body.correlation_id).toBeTruthy();
       expect(typeof body.answer).toBe("string");
     } else {
       expect(res.status()).toBe(503);
-      expect((await res.json()).error).toContain("not configured");
+      const body = await res.json();
+      expect(body.error).toContain("not configured");
+      // The 503 names what is missing. An operator should not have to read
+      // the source to find out which variable to set.
+      expect(body.detail).toContain("ANTHROPIC_API_KEY");
+      expect(body.detail).toContain("GROQ_API_KEY");
     }
   });
 });

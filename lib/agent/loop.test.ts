@@ -2,11 +2,13 @@ import { describe, expect, it } from "bun:test";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MAX_STEPS, runAgentTurn } from "./loop";
+import type { ModelClient } from "./providers";
 import type { Database } from "../supabase/database.types";
 
 // Three bounds, three distinct terminations, three distinct recorded reasons.
-// Driven against a stubbed Anthropic client so every path runs without a
-// network call or an API key.
+// Driven against a stubbed model client so every path runs without a network
+// call or an API key — and against the same narrow interface every real
+// provider implements, so the stub cannot drift from what production uses.
 
 interface StubCall {
   fn: string;
@@ -55,20 +57,20 @@ function toolResponse(name: string, input: unknown, tokens = usage()): Anthropic
   } as unknown as Anthropic.Message;
 }
 
-function stubAnthropic(responses: Anthropic.Message[] | (() => Anthropic.Message)) {
+function stubModel(responses: Anthropic.Message[] | (() => Anthropic.Message)) {
   let calls = 0;
-  const anthropic = {
-    messages: {
-      create: async () => {
-        const next = Array.isArray(responses)
-          ? (responses[calls] ?? responses[responses.length - 1])
-          : responses();
-        calls++;
-        return next;
-      },
+  const model: ModelClient = {
+    model: "claude-opus-5",
+    provider: "stub",
+    createMessage: async () => {
+      const next = Array.isArray(responses)
+        ? (responses[calls] ?? responses[responses.length - 1])
+        : responses();
+      calls++;
+      return next;
     },
-  } as unknown as Anthropic;
-  return { anthropic, callCount: () => calls };
+  };
+  return { model, callCount: () => calls };
 }
 
 const base = {
@@ -80,9 +82,9 @@ const base = {
 describe("runAgentTurn", () => {
   it("returns the model's answer when no tool is called", async () => {
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([textResponse("Net 30 from the invoice date.")]);
+    const { model } = stubModel([textResponse("Net 30 from the invoice date.")]);
 
-    const result = await runAgentTurn({ ...base, supabase, anthropic });
+    const result = await runAgentTurn({ ...base, supabase, model });
 
     expect(result.outcome).toBe("ok");
     expect(result.answer).toBe("Net 30 from the invoice date.");
@@ -97,7 +99,7 @@ describe("runAgentTurn", () => {
     // A model that never stops calling tools is the ordinary failure this
     // bound exists for.
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic, callCount } = stubAnthropic(() =>
+    const { model, callCount } = stubModel(() =>
       toolResponse("get_revenue_summary", {}),
     );
 
@@ -111,7 +113,7 @@ describe("runAgentTurn", () => {
           }),
         }),
       } as unknown as SupabaseClient<Database>,
-      anthropic,
+      model,
       limits: { maxSteps: 3 },
     });
 
@@ -129,7 +131,7 @@ describe("runAgentTurn", () => {
 
   it("stops when the wall-clock budget is gone", async () => {
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([textResponse("should never be reached")]);
+    const { model } = stubModel([textResponse("should never be reached")]);
 
     // A clock that has already passed the budget on the first check.
     let ticks = 0;
@@ -138,7 +140,7 @@ describe("runAgentTurn", () => {
     const result = await runAgentTurn({
       ...base,
       supabase,
-      anthropic,
+      model,
       now,
       limits: { budgetMs: 30_000 },
     });
@@ -150,7 +152,7 @@ describe("runAgentTurn", () => {
 
   it("stops when the token ceiling is reached", async () => {
     const { supabase } = stubSupabase();
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolResponse("get_revenue_summary", {}, usage(5_000, 5_000)),
       textResponse("never reached"),
     ]);
@@ -165,7 +167,7 @@ describe("runAgentTurn", () => {
           }),
         }),
       } as unknown as SupabaseClient<Database>,
-      anthropic,
+      model,
       limits: { tokenCeiling: 1_000 },
     });
 
@@ -176,12 +178,12 @@ describe("runAgentTurn", () => {
 
   it("reports a failed tool back to the model instead of hiding it", async () => {
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolResponse("list_invoices", { status: "not-a-status" }),
       textResponse("I could not read that."),
     ]);
 
-    const result = await runAgentTurn({ ...base, supabase, anthropic });
+    const result = await runAgentTurn({ ...base, supabase, model });
 
     expect(result.outcome).toBe("ok");
     // The attempt is audited whether or not it worked — an attempt that
@@ -192,9 +194,9 @@ describe("runAgentTurn", () => {
 
   it("carries one correlation_id onto every row it writes", async () => {
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([textResponse("done")]);
+    const { model } = stubModel([textResponse("done")]);
 
-    await runAgentTurn({ ...base, supabase, anthropic });
+    await runAgentTurn({ ...base, supabase, model });
 
     expect(rpcs.length).toBeGreaterThan(0);
     for (const call of rpcs) expect(call.args.p_correlation_id).toBe("corr-loop");
@@ -206,7 +208,7 @@ describe("runAgentTurn", () => {
   async function withEmptyRetrieval(
     supabase: SupabaseClient<Database>,
     rpcs: { fn: string; args: Record<string, unknown> }[],
-    anthropic: Parameters<typeof runAgentTurn>[0]["anthropic"],
+    model: ModelClient,
   ) {
     const realFetch = globalThis.fetch;
     const previousEnv = {
@@ -239,7 +241,7 @@ describe("runAgentTurn", () => {
             return { data: rpcs.length, error: null };
           },
         } as unknown as SupabaseClient<Database>,
-        anthropic,
+        model,
       });
     } finally {
       globalThis.fetch = realFetch;
@@ -255,13 +257,13 @@ describe("runAgentTurn", () => {
     // with the clause the corpus does not cover — but two empty steps end the
     // turn before any call that would have produced an answer.
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic, callCount } = stubAnthropic([
+    const { model, callCount } = stubModel([
       toolResponse("search_documents", { query: "what is our parental leave policy?" }),
       toolResponse("search_documents", { query: "parental leave" }),
       textResponse("this answer must never be produced"),
     ]);
 
-    const result = await withEmptyRetrieval(supabase, rpcs, anthropic);
+    const result = await withEmptyRetrieval(supabase, rpcs, model);
 
     expect(result.outcome).toBe("abstained");
     expect(result.answer).toContain("I don't have data on that");
@@ -278,12 +280,12 @@ describe("runAgentTurn", () => {
     // returned. The mechanism is the answer that comes back, not the wording
     // of the one that does not.
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolResponse("search_documents", { query: "how do I bake sourdough bread?" }),
       textResponse("Sourdough needs a starter and about five hours."),
     ]);
 
-    const result = await withEmptyRetrieval(supabase, rpcs, anthropic);
+    const result = await withEmptyRetrieval(supabase, rpcs, model);
 
     expect(result.outcome).toBe("abstained");
     expect(result.answer).not.toContain("Sourdough");
@@ -295,12 +297,12 @@ describe("runAgentTurn", () => {
     // against the model's wording: a model that has been talked into trying
     // to exfiltrate data has nothing to try it with.
     const { supabase, rpcs } = stubSupabase();
-    const { anthropic } = stubAnthropic([
+    const { model } = stubModel([
       toolResponse("send_email", { to: "audit-external@example.net", body: "everything" }),
       textResponse("I can't do that — no such tool exists."),
     ]);
 
-    const result = await runAgentTurn({ ...base, supabase, anthropic });
+    const result = await runAgentTurn({ ...base, supabase, model });
 
     expect(result.outcome).toBe("ok");
     const failures = rpcs.filter(
@@ -314,9 +316,9 @@ describe("runAgentTurn", () => {
 
   it("marks an answer unverified when it cites something never retrieved", async () => {
     const { supabase } = stubSupabase();
-    const { anthropic } = stubAnthropic([textResponse("Net 30 applies [chunk:4242].")]);
+    const { model } = stubModel([textResponse("Net 30 applies [chunk:4242].")]);
 
-    const result = await runAgentTurn({ ...base, supabase, anthropic });
+    const result = await runAgentTurn({ ...base, supabase, model });
 
     expect(result.verified).toBe(false);
     expect(result.citations).toEqual([{ kind: "chunk", id: "4242", verified: false }]);

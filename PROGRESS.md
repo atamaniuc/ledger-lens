@@ -76,8 +76,12 @@ Carried forward deliberately, not dropped:
   stories to shared components. The four states a story would have shown —
   default, loading, empty, error — are each asserted in the end-to-end suite
   against the real page instead.
-- **No turn has ever run against a real model.** This environment has no
-  `ANTHROPIC_API_KEY`. The loop is tested against a stubbed model and a real
+- **No turn has run against a real model here.** This environment has no
+  provider key set. Since the provider abstraction landed that is one variable
+  away and need not cost anything — `GROQ_API_KEY` or `NVIDIA_API_KEY` (free
+  tiers, OpenAI-compatible) work as well as `ANTHROPIC_API_KEY` — but nothing
+  in this repository has yet spoken to a model.
+  The loop is tested against a stubbed model and a real
   database — which is the right way round for the safety claims, since every one
   of them is about capability rather than wording — and the route's own spec
   branches on the variable and currently asserts the 503 path. What is *not*
@@ -269,6 +273,27 @@ this project moved: `text-muted` became `text-muted-foreground`, which is
 shadcn's name for exactly what it already meant. The vendored components are
 exempted from the design-token gate by name, one line each, so adding one stays
 a visible decision.
+
+**Provider abstraction.** "The copilot is not configured on this deployment"
+is a bad answer when a working one costs an environment variable, so the model
+vendor became configuration: `lib/agent/providers` resolves a client from the
+environment, and Groq and NVIDIA NIM sit alongside Anthropic. The adapter is
+hand-written against `/chat/completions` rather than a second vendor SDK —
+what was needed is one POST and two translations.
+
+The translation is the whole risk, and one line of it carries almost all of
+it: `finish_reason: "tool_calls"` must become `stop_reason: "tool_use"`.
+Getting that wrong does not raise anything — the agent would answer without
+ever running the tool it had just asked for. It has its own test, as does the
+case where a provider omits `finish_reason` entirely and the presence of a
+call is the only signal.
+
+Two decisions worth the line. A named provider that is not configured fails
+loudly rather than falling back, because a deployment that asked for a free
+tier and quietly answered on a paid one leaves no trace but a model name on
+rows nobody reads. And free-tier models are priced at zero in the table rather
+than left unknown, so `cost_cents` keeps its distinction: `null` is an
+accounting gap, `0` is a fact.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip
