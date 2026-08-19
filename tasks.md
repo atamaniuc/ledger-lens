@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A through G done. Retrieval is measured and holds.** Stage 4's list is archived at
+**Status: in progress — Batches A through H done. Retrieval is measured and holds.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -345,26 +345,44 @@ incomparable units. A model handed a number will quote it.
 
 ## Batch H — The loop (one commit)
 
-- [ ] **T28** `lib/agent/loop.ts` — Anthropic tool-use loop: **max 6 steps, 30s
+- [x] **T28** `lib/agent/loop.ts` — Anthropic tool-use loop: **max 6 steps, 30s
       wall-clock budget, token ceiling**, each bound enforced by the loop and
       each breach ending the turn with a stated reason rather than a truncated
       answer. Every step writes `llm_calls` via T23 under the request's single
       `correlation_id`.
-- [ ] **T29** `lib/agent/prompt.ts` — the system prompt as a versioned constant,
+- [x] **T29** `lib/agent/prompt.ts` — the system prompt as a versioned constant,
       so Stage 6 can diff a prompt change against an eval result.
-- [ ] **T30** `app/api/agent/chat/route.ts` — authenticated route, user JWT via
+- [x] **T30** `app/api/agent/chat/route.ts` — authenticated route, user JWT via
       `lib/supabase/server-client.ts`, `correlation_id` accepted or generated,
       one `audit_log` row per tool call with `actor_type='agent'` and
       `on_behalf_of=user_id`. No streaming (PRD out-of-scope).
-- [ ] **T31** Unit tests against a stubbed Anthropic client: step cap reached,
+- [x] **T31** Unit tests against a stubbed Anthropic client: step cap reached,
       timeout reached, token ceiling reached — three distinct terminations, three
       distinct recorded reasons.
 
-**Verification:** `task check`; a real question through `curl` with a signed-in
-session returns an answer and leaves matching `llm_calls` + `audit_log` rows
-sharing one `correlation_id`.
+**Verification (done):** `bun test lib/agent/loop.test.ts` drives all three
+bounds against a stubbed Anthropic client — step cap, wall clock and token
+ceiling each end the turn with their own `outcome` and their own stated
+reason, and every row written in a turn carries one `correlation_id`.
+`tests/stage5-agent-route.spec.ts` asserts the route's gates over HTTP:
+unauthenticated is refused *before* the body is read (so a stranger cannot
+tell a well-formed request from a malformed one), an empty or over-long
+question is a 400, and an unconfigured deployment answers 503 rather than
+failing inside the SDK.
 
-**Files:** `lib/agent/loop.ts`, `lib/agent/prompt.ts`, route, tests.
+**The environment this was built in has no `ANTHROPIC_API_KEY`,** so no turn
+has yet run against the real model. Everything above is real; "the model
+answers sensibly" is not yet evidence, and the route spec asserts the 503
+branch while following the environment rather than pretending otherwise. The
+first thing to do with a key is Batch K's end-to-end pass.
+
+**One design point decided here:** a turn that ends on a bound writes its own
+terminal `llm_calls` row — zero tokens, because no call was made, and the
+`outcome` naming the bound. Without it the last row would say `ok` about a
+turn that was cut short, which is the confusion `outcome` exists to prevent.
+
+**Files:** `lib/agent/loop.ts`, `lib/agent/prompt.ts`,
+`app/api/agent/chat/route.ts`, `.env.example`, loop tests, 1 e2e spec.
 
 ---
 
