@@ -54,6 +54,30 @@ describe("splitIntoChunks", () => {
     expect(splitIntoChunks(noisy)).toEqual(splitIntoChunks(text));
   });
 
+  it("loses no text, whatever the punctuation", () => {
+    // The regression that produced this test: the first tokenizer matched
+    // sentences with a regex, and a regex skips what it cannot match. A
+    // decimal point ("interest at 1.5 percent per month.") made it drop the
+    // words in front of it, so `interest` vanished from the index while the
+    // chunk still read as ordinary prose. Silent loss, plausible output.
+    const text =
+      "Invoices are issued on Net 30 terms. Unpaid invoices accrue interest at 1.5 percent per month. " +
+      "Escalate to collections after 60 days. Contact a.brown@example.com or ext. 4021 for exceptions!? " +
+      "Reference numbers look like INV-1.2 and must not be split.";
+    const joined = splitIntoChunks(text).join(" ");
+    for (const word of ["interest", "1.5", "a.brown@example.com", "ext.", "INV-1.2", "collections"]) {
+      expect(joined).toContain(word);
+    }
+    // Nothing dropped: every non-space character survives the round trip.
+    expect(joined.replace(/\s/g, "")).toContain(text.replace(/\s/g, ""));
+  });
+
+  it("does not treat a decimal point as a sentence end", () => {
+    expect(splitIntoChunks("Interest is 1.5 percent monthly.")).toEqual([
+      "Interest is 1.5 percent monthly.",
+    ]);
+  });
+
   it("hard-cuts a single sentence longer than the ceiling", () => {
     const chunks = splitIntoChunks("x".repeat(2500), { maxChars: 900, overlapChars: 100 });
     expect(chunks.length).toBeGreaterThan(1);

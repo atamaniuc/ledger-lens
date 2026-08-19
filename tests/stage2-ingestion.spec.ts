@@ -111,13 +111,26 @@ test.describe("Privileges", () => {
     expect(rows.map((r) => `${r.table_name}.${r.privilege_type}`)).toEqual([]);
   });
 
-  test("no Data API role holds DELETE or TRUNCATE", async () => {
+  test("no Data API role holds DELETE or TRUNCATE, except the one that is meant to", async () => {
+    // Everything the pipeline writes is append-only, because it records what
+    // arrived and an edited record is a lost one.
+    //
+    // `chunks` is the single exception and it is named here rather than
+    // waived by loosening the query: it is a derived index of *current* text
+    // (Stage 5), so a document that loses a paragraph has to lose its tail
+    // chunks — otherwise retrieval keeps answering from text the document no
+    // longer contains. A second entry appearing in this list is a regression,
+    // not a precedent.
+    const allowed = ["service_role:chunks.DELETE"];
+
     const rows = await sql`
       select table_name, grantee, privilege_type
         from information_schema.role_table_grants
        where table_schema = 'public'
          and grantee in ('authenticated', 'service_role')
          and privilege_type in ('DELETE', 'TRUNCATE')`;
-    expect(rows.map((r) => `${r.grantee}:${r.table_name}.${r.privilege_type}`)).toEqual([]);
+    expect(rows.map((r) => `${r.grantee}:${r.table_name}.${r.privilege_type}`).sort()).toEqual(
+      allowed,
+    );
   });
 });

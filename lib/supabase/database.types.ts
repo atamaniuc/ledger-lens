@@ -502,6 +502,24 @@ export type Database = {
           status: string
         }[]
       }
+      search_chunks: {
+        Args: {
+          match_limit?: number
+          query_embedding: string
+          query_text: string
+        }
+        Returns: {
+          chunk_id: number
+          content: string
+          document_id: string
+          document_title: string
+          invoice_id: string
+          lexical_rank: number
+          rrf_score: number
+          source_kind: string
+          vector_rank: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

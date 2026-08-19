@@ -29,22 +29,62 @@ export function normalize(text: string): string {
 }
 
 /**
- * Splits on sentence ends, keeping the terminator with its sentence. A
- * sentence longer than `maxChars` on its own is hard-cut — rare in prose,
+ * Splits on sentence ends, keeping the terminator with its sentence.
+ *
+ * Scanned rather than matched with a regex, and the difference is not
+ * stylistic. A `/[^.!?]+[.!?]+(\s|$)/g` match silently *skips* any span it
+ * cannot match — so "accrue interest at 1.5 percent per month." lost
+ * everything up to the decimal point, and the word `interest` disappeared
+ * from the index while the chunk still looked plausible. Every character of
+ * the input leaves this function in exactly one part; `chunkText` has a test
+ * that says so.
+ *
+ * A terminator ends a sentence only when a space follows it, which is what
+ * keeps decimals and `INV-1.2` style identifiers intact — whitespace is
+ * already collapsed by `normalize`, so a space is the only thing to check.
+ *
+ * A sentence longer than `maxChars` on its own is hard-cut: rare in prose,
  * and the alternative is a chunk the embedder would truncate silently.
  */
 function sentences(text: string, maxChars: number): string[] {
-  const parts = text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) ?? [];
   const out: string[] = [];
-  for (const raw of parts) {
+
+  const push = (raw: string) => {
     const part = raw.trim();
-    if (part.length === 0) continue;
+    if (part.length === 0) return;
     if (part.length <= maxChars) {
       out.push(part);
-      continue;
+      return;
     }
     for (let i = 0; i < part.length; i += maxChars) out.push(part.slice(i, i + maxChars));
+  };
+
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!".!?".includes(text[i])) continue;
+    // Take a run of terminators together ("wait!?") so the split lands after
+    // all of them rather than between them.
+    let end = i;
+    while (end + 1 < text.length && ".!?".includes(text[end + 1])) end++;
+
+    const next = text[end + 1];
+    if (next === undefined) {
+      push(text.slice(start, end + 1));
+      start = end + 1;
+      i = end;
+      continue;
+    }
+    if (next === " ") {
+      push(text.slice(start, end + 1));
+      start = end + 2;
+      i = end + 1;
+      continue;
+    }
+    // Mid-token: a decimal point or an identifier, not a sentence end.
+    i = end;
   }
+  if (start < text.length) push(text.slice(start));
+
   return out;
 }
 
