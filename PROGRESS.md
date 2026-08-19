@@ -52,12 +52,23 @@ while every impersonated check kept passing.
   the local stack, which does have them, reports no schema errors. Deploying
   Stage 5 and re-running advisors is the first close-out item that needs a
   hosted database.
-- **The full eval set, 2026-08-19, `groq/openai/gpt-oss-20b`:** recall@5 1.00
-  (8/8), abstention 1.00 (5/5), injection safety 1.00 (2/2), tool choice 1.00
-  (5/5), citation validity 1.00 (5/5). Every case scored; the run took 55s,
-  most of it waiting out the free tier's token-per-minute limit. This is one
-  model on one day — the point of versioning `evals/thresholds.json` is that
-  the next number is compared against this one rather than against a memory.
+- **The eval set, 2026-08-19, `groq/openai/gpt-oss-20b`.** Two readings, and
+  the second one is the honest one.
+
+  Before uncited answers counted as unverified: all five metrics 1.00, every
+  case scored. After: recall@5 1.00 (8/8), abstention 1.00 (5/5), injection
+  1.00 (2/2), tool choice 1.00 (4/4), **citation validity 0.50 (2/4) — FAIL**.
+  Nothing about the model changed between those two runs; what changed is that
+  an answer citing nothing stopped counting as verified. The first green was
+  wrong, and the gate is doing its job by being red.
+
+  The two misses are worth naming: one answer cited nothing at all, and one
+  wrote `[invoice:open]` — citing a *status* as an invoice id. Both are the
+  kind of thing a reader would never catch by eye.
+
+  Three cases went unscored: the account hit Groq's free daily ceiling
+  (200,000 tokens) partway through. Unscored is reported separately from a
+  miss and still exits the run non-zero.
 - **Retrieval recall@5 = 1.00 (5/5), every target at rank 1.** Measured in Batch
   E, before the agent existed, so that ADR 0008's model choice could be reversed
   cheaply if it failed. Five hand-written queries is a floor, not a measurement —
@@ -88,7 +99,11 @@ Carried forward deliberately, not dropped:
   with the provider's own wait time rather than a generic failure, but the
   limit is real, and a reasoning model makes it much worse: `qwen3.6-27b`
   spent 4,672 output tokens on one answer against an 8,000 TPM limit, nearly
-  all of it thinking that gets discarded.
+  all of it thinking that gets discarded. There is a daily ceiling too
+  (200,000 tokens on Groq's free tier), which a few full eval runs will
+  exhaust — `EVALS_TPM` paces against the per-minute limit, nothing paces
+  against the per-day one, and nothing should: the answer there is a paid tier
+  or another day.
 - **Citation verification is not a groundedness check.** It proves every cited
   id was retrieved; it says nothing about a claim made *without* a citation.
   Observed live: a small model answered "no invoices are currently overdue"
@@ -339,6 +354,30 @@ provider's own wait. And the shipped Groq default was `llama-3.3-70b-versatile`,
 written from memory — it does not exist, and returned 404. Defaults are now
 checked against the provider's own model list, and a 404 names the variable to
 change.
+
+**Two dialogues that looked fine and were not.** Both came from the same
+place: the model answering a question about invoices without ever querying
+invoices. Asked "which invoices are overdue, and what are our payment terms?"
+it searched the documents, answered the terms half correctly, and *invented*
+"no invoices are currently overdue". Asked "what is an average invoice now?"
+it silently added a `status: open` filter nobody requested and reported
+$2,778.40 — the correct average of open invoices, and not the $2,663.48 the
+dashboard tile shows for all 180.
+
+The second one exposed a real defect rather than a prompt weakness.
+`verified` meant "no cited id was unverified", so an answer that cited
+*nothing* had nothing to fail and came back verified — and the model had
+written its source as `【get_revenue_summary】`, which is a tool name in
+decorative brackets, not a citation. A figure that disagreed with the
+dashboard was displayed with no warning at all. An uncited answer is now
+unverified and says so in its own words; an abstention is exempt, because
+citing something for the absence of evidence would be the contradiction.
+
+The prompt half is a prompt fix, versioned as such (`2026-08-19.2`): a
+compound question needs a tool per part, a claim about invoices needs an
+invoice tool behind it, and a filter the question did not ask for is a
+different question. Both dialogues are eval cases now, and the tool-choice
+metric can require more than one tool per case.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

@@ -107,3 +107,22 @@ describe("segmentAnswer", () => {
     ]);
   });
 });
+
+describe("what counts as a citation", () => {
+  it("does not accept a tool name in decorative brackets", () => {
+    // Observed live: a model wrote "The average open invoice is
+    // $2,778.40\u3010get_revenue_summary\u3011". A tool name is not a
+    // citation — it names where the model says it looked, not the row.
+    const check = verifyCitations(
+      "The average open invoice is $2,778.40\u3010get_revenue_summary\u3011.",
+      context,
+    );
+    expect(check.citations).toHaveLength(0);
+    expect(check.hasNoCitations).toBe(true);
+  });
+
+  it("does not accept the bracket form with a tool name inside", () => {
+    const check = verifyCitations("Total is $1 [get_revenue_summary].", context);
+    expect(check.citations).toHaveLength(0);
+  });
+});

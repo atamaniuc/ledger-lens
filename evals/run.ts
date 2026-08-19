@@ -37,6 +37,17 @@ const MAX_BACKOFF_MS = 45_000;
  * tries with a floor under the suggested wait is what it took for Groq's
  * 8,000 TPM to get through five agent cases; three was not enough.
  */
+/**
+ * Tokens per minute to stay under, from `EVALS_TPM`; 0 disables the pacing.
+ *
+ * Reacting to 429s is not enough on a free tier. A turn here costs 2–5k
+ * tokens and Groq's free limit is 8,000 per rolling minute, so a run that
+ * only backs off after being refused spends its retries being refused again —
+ * measured: one case of seven scored. The default matches the tier this
+ * project is documented against; a paid account should raise it.
+ */
+const TPM_BUDGET = Number(process.env.EVALS_TPM ?? 8_000);
+
 const MAX_ATTEMPTS = 5;
 const MIN_BACKOFF_MS = 6_000;
 
@@ -47,6 +58,10 @@ interface Case {
   query: string;
   expect_document?: string;
   expect_tool?: string;
+  /** A compound question needs a tool for each half, not one and a guess. */
+  also_expect_tool?: string;
+  /** The question named no filter, so the tool call must not invent one. */
+  expect_no_filter?: boolean;
   forbidden_tool?: string;
 }
 
@@ -114,6 +129,31 @@ interface Score {
 }
 
 const failures: string[] = [];
+
+// A rolling one-minute window of what has been spent, so the runner can wait
+// *before* a call it knows will be refused rather than after.
+const spent: { at: number; tokens: number }[] = [];
+
+function spentLastMinute(): number {
+  const cutoff = Date.now() - 60_000;
+  while (spent.length > 0 && spent[0].at < cutoff) spent.shift();
+  return spent.reduce((sum, entry) => sum + entry.tokens, 0);
+}
+
+async function waitForBudget(estimate: number): Promise<void> {
+  if (TPM_BUDGET <= 0) return;
+
+  while (spentLastMinute() + estimate > TPM_BUDGET && spent.length > 0) {
+    // Wait for the oldest entry to age out of the window, plus a moment.
+    const wait = Math.max(1_000, spent[0].at + 60_000 - Date.now() + 500);
+    console.log(
+      `  pacing: ${spentLastMinute()} of ${TPM_BUDGET} tokens used this minute, waiting ${(
+        wait / 1000
+      ).toFixed(0)}s`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
 
 function note(id: string, message: string): void {
   failures.push(`${id}: ${message}`);
@@ -211,6 +251,7 @@ async function scoreAgent(): Promise<Score[]> {
   let verified = 0;
   let answered = 0;
   let unscored = 0;
+  let estimate = 4_000;
 
   for (const testCase of subset) {
     const supabase = await clientFor(testCase.user);
@@ -223,6 +264,7 @@ async function scoreAgent(): Promise<Score[]> {
     let result: Awaited<ReturnType<typeof runAgentTurn>> | null = null;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS && result === null; attempt++) {
+      await waitForBudget(estimate);
       try {
         result = await runAgentTurn({
           question: testCase.query,
@@ -249,8 +291,19 @@ async function scoreAgent(): Promise<Score[]> {
       continue;
     }
 
-    if (result.toolsUsed.includes(testCase.expect_tool ?? "")) correctTool++;
-    else note(testCase.id, `expected ${testCase.expect_tool}, used [${result.toolsUsed.join(", ")}]`);
+    const used = result.usage.inputTokens + result.usage.outputTokens;
+    spent.push({ at: Date.now(), tokens: used });
+    // The next case is likely to cost what this one did, and a first guess
+    // that is too low only costs one 429 before it corrects itself.
+    estimate = Math.max(estimate, used);
+
+    const wanted = [testCase.expect_tool, testCase.also_expect_tool].filter(
+      (name): name is string => typeof name === "string",
+    );
+    const missing = wanted.filter((name) => !result.toolsUsed.includes(name));
+
+    if (missing.length === 0) correctTool++;
+    else note(testCase.id, `expected [${wanted.join(", ")}], used [${result.toolsUsed.join(", ")}]`);
 
     answered++;
     if (result.verified) verified++;

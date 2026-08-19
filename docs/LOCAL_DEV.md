@@ -412,8 +412,15 @@ have nothing to do with this code.
 
 ```bash
 task evals              # the gate CI runs
-task evals -- --verbose # print what each retrieval case actually returned
+task evals -- --verbose # print what each case actually returned
+EVALS_TPM=30000 task evals   # raise the pacing budget on a paid account
 ```
+
+The agent cases are paced against a tokens-per-minute budget (`EVALS_TPM`,
+default 8,000 — Groq's free tier). Without it a run spends its retries being
+refused: a turn costs 2–5k tokens and the limit refills over a rolling minute,
+so the runner waits *before* a call it knows would be rejected. Expect a full
+run to take a few minutes on a free tier and seconds on a paid one.
 
 Needs the stack running and the index built (`task index`). It scores
 `evals/dataset.jsonl` against `evals/thresholds.json` and exits non-zero when

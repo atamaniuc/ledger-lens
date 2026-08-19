@@ -18,3 +18,5 @@
 {"id":"met-03","type":"metric","user":"bob@globex.test","query":"what is our total invoiced value?","expect_tool":"get_revenue_summary"}
 {"id":"loo-01","type":"lookup","user":"alice@acme.test","query":"list three open invoices","expect_tool":"list_invoices"}
 {"id":"loo-02","type":"lookup","user":"alice@acme.test","query":"which invoices are in draft status?","expect_tool":"list_invoices"}
+{"id":"met-04","type":"metric","user":"alice@acme.test","query":"what is an average invoice now?","expect_tool":"get_revenue_summary","expect_no_filter":true}
+{"id":"mix-01","type":"metric","user":"alice@acme.test","query":"which invoices are overdue, and what are our payment terms?","expect_tool":"list_invoices","also_expect_tool":"search_documents"}

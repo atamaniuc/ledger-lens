@@ -269,9 +269,9 @@ function Answer({
           data-testid="copilot-unverified"
           className="rounded-control bg-status-warn-surface px-snug py-tight text-xs text-status-warn"
         >
-          This answer cites something that was not in anything the copilot read.
-          The citation is marked below and left where it is — treat the claim it
-          supports as unverified.
+          {result.uncited
+            ? "This answer cites nothing, so none of it can be traced back to a row the copilot read. Check the figures against the panels on this page before using them."
+            : "This answer cites something that was not in anything the copilot read. The citation is marked below and left where it is — treat the claim it supports as unverified."}
         </p>
       )}
 

@@ -7,7 +7,11 @@ const input = z.object({
   status: z
     .enum(["draft", "open", "paid", "void"])
     .nullish()
-    .describe("Only count invoices in this status. Omit for every status."),
+    .describe(
+      "Only count invoices in this status. Omit it unless the question named a status — " +
+        "an average over open invoices only is a different figure from the average the " +
+        "dashboard shows.",
+    ),
   // The date format is checked in the body, not by the schema — see
   // ./index.ts. A malformed date should come back to the model as a tool
   // error it can correct, not as a rejected request that ends the turn.

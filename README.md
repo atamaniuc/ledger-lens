@@ -153,11 +153,14 @@ graded another, which is a gate people learn to override; the other two are
 reporting, not regression protection. The four deterministic metrics
 (recall@5, abstention, injection safety, citation validity) are what gate.
 
-**The copilot has run for real, on a free tier.** `groq/openai/gpt-oss-20b`
-scores 1.00 on all five eval metrics (recall@5 8/8, abstention 5/5, injection
-2/2, tool choice 5/5, citation validity 5/5). One model on one day — the
-numbers are versioned in `evals/thresholds.json` so the next run is compared
-against them rather than against a memory.
+**The copilot has run for real, on a free tier — and the eval set is red.**
+`groq/openai/gpt-oss-20b` scores 1.00 on recall@5, abstention, injection
+safety and tool choice, and **0.50 on citation validity**, against a 0.95 bar.
+One answer cited nothing; another wrote `[invoice:open]`, citing a status as
+an invoice id. Left red on purpose: a gate that is green because its
+definition was too lenient is worse than one that is red. The numbers are
+versioned in `evals/thresholds.json` so the next run is compared against these
+rather than against a memory.
 
 **Free-tier rate limits are the binding constraint, not cost.** The agent
 resends its system prompt and four tool schemas on every step, about 2.7k

@@ -78,10 +78,12 @@ export interface AgentTurnResult {
   citations: Citation[];
   /**
    * False when the answer cited an id that was never in a tool result this
-   * turn. The answer is still returned — the flag is the signal, and deleting
-   * the citation would hide it.
+   * turn, **or** when it cited nothing at all. The answer is still returned —
+   * the flag is the signal, and deleting the citation would hide it.
    */
   verified: boolean;
+  /** True when an answer was produced with no citation of any kind. */
+  uncited: boolean;
   usage: { inputTokens: number; outputTokens: number };
 }
 
@@ -232,7 +234,19 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       retrievedChunkIds: [...new Set(evidence.chunkIds)],
       citedInvoiceIds: [...new Set(evidence.invoiceExternalIds)],
       citations: check.citations,
-      verified: !check.hasUnverified,
+      // An answer that cites nothing is not verified either, and calling it
+      // verified was the more dangerous of the two mistakes: a model that
+      // wrote "The average open invoice is $2,778.40" with a tool name in
+      // decorative brackets produced no citations at all, so there was
+      // nothing to fail — and the panel showed no warning over a figure that
+      // silently disagreed with the dashboard.
+      //
+      // An abstention is exempt, because "I don't have data on that" is a
+      // statement about the absence of evidence and citing something for it
+      // would be the contradiction.
+      verified:
+        !check.hasUnverified && !(outcome === "ok" && check.hasNoCitations),
+      uncited: outcome === "ok" && check.hasNoCitations,
       usage: { inputTokens, outputTokens },
     };
   };
