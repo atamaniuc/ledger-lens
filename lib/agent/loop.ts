@@ -93,8 +93,18 @@ function collectEvidence(toolName: string, result: unknown, into: RetrievedEvide
   if (!result || typeof result !== "object") return;
 
   if (toolName === "search_documents") {
-    const chunks = (result as { chunks?: { chunk_id: number }[] }).chunks ?? [];
-    for (const chunk of chunks) into.chunkIds.push(chunk.chunk_id);
+    const chunks =
+      (result as { chunks?: { chunk_id: number; invoice_external_id: string | null }[] })
+        .chunks ?? [];
+    for (const chunk of chunks) {
+      into.chunkIds.push(chunk.chunk_id);
+      // An invoice-derived chunk reads "Invoice inv_00007 for customer …", so
+      // the model can cite the invoice from a search alone. Recording only the
+      // chunk id here made a correct citation come back unverified.
+      if (chunk.invoice_external_id !== null) {
+        into.invoiceExternalIds.push(chunk.invoice_external_id);
+      }
+    }
     if (chunks.length > 0) into.anyData = true;
     else into.searchedAndFoundNothing = true;
   }

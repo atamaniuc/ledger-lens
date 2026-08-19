@@ -26,6 +26,12 @@ export interface RetrievedChunk {
   document_id: string | null;
   document_title: string | null;
   invoice_id: string | null;
+  /**
+   * The id a citation is written with. Carried alongside the uuid because the
+   * agent cites `[invoice:<external_id>]` — without it a true citation made
+   * from a search result cannot be verified (migration 20260819210000).
+   */
+  invoice_external_id: string | null;
   content: string;
   similarity: number | null;
   vector_rank: number | null;
@@ -79,7 +85,7 @@ export async function searchChunks(
   return (data ?? []) as RetrievedChunk[];
 }
 
-/** The ids an answer is allowed to cite, for the check in Batch I. */
+/** The ids an answer is allowed to cite, given what a search returned. */
 export function citableIds(chunks: RetrievedChunk[]): {
   chunkIds: Set<number>;
   invoiceIds: Set<string>;
@@ -87,7 +93,9 @@ export function citableIds(chunks: RetrievedChunk[]): {
   return {
     chunkIds: new Set(chunks.map((chunk) => chunk.chunk_id)),
     invoiceIds: new Set(
-      chunks.map((chunk) => chunk.invoice_id).filter((id): id is string => id !== null),
+      chunks
+        .map((chunk) => chunk.invoice_external_id)
+        .filter((id): id is string => id !== null),
     ),
   };
 }

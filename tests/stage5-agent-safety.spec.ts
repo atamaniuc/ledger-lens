@@ -154,6 +154,41 @@ test.describe("Stage 5 — the safety claims", () => {
     });
   });
 
+  test("an invoice cited from a search result verifies", async () => {
+    // The reviewer pass found this the wrong way round: invoice chunks read
+    // "Invoice inv_00007 for customer …", the prompt asks for
+    // [invoice:<external_id>], and the tool result carried only the uuid — so
+    // a *correct* citation came back unverified and the dashboard warned
+    // about a right answer. A warning that fires on correct answers is worse
+    // than no warning.
+    const supabase = await clientFor("alice@acme.test");
+    const [{ external_id: externalId }] = await sql<{ external_id: string }[]>`
+      select i.external_id
+        from chunks c join invoices i on i.id = c.invoice_id
+       where c.org_id = ${ORG_A} limit 1`;
+
+    const { anthropic } = stubAnthropic([
+      toolUse("search_documents", { query: externalId }),
+      text(`It is open [invoice:${externalId}].`),
+    ]);
+
+    const result = await runAgentTurn({
+      question: `tell me about ${externalId}`,
+      orgId: ORG_A,
+      correlationId: `safety-invoice-cite-${Date.now()}`,
+      supabase,
+      anthropic,
+    });
+
+    expect(result.retrievedChunkIds.length).toBeGreaterThan(0);
+    expect(result.verified).toBe(true);
+    expect(result.citations).toContainEqual({
+      kind: "invoice",
+      id: externalId,
+      verified: true,
+    });
+  });
+
   test("the poisoned document is retrieved, and there is nothing it can make the agent do", async () => {
     // The PRD's North Star, stated as a capability rather than a hope: the
     // fixture document (supabase/seed.sql, T17) instructs the reader to export

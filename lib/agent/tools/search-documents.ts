@@ -22,6 +22,8 @@ export interface SearchedChunk {
   source_kind: "document" | "invoice";
   document_title: string | null;
   invoice_id: string | null;
+  /** What a citation is written with; see migration 20260819210000. */
+  invoice_external_id: string | null;
   content: string;
 }
 
@@ -33,7 +35,8 @@ export const searchDocuments: AgentTool<SearchDocumentsInput, SearchDocumentsRes
   name: "search_documents",
   description:
     "Hybrid search over the organization's documents (payment terms, dispute notes, memos, " +
-    "policies) and invoice text. Cite results by chunk_id. An empty result means the corpus " +
+    "policies) and invoice text. Cite a chunk as [chunk:<chunk_id>], and an invoice as " +
+    "[invoice:<invoice_external_id>] when the chunk carries one. An empty result means the corpus " +
     "does not contain an answer — say so rather than guessing.",
   effect: "read",
   input,
@@ -52,6 +55,7 @@ export const searchDocuments: AgentTool<SearchDocumentsInput, SearchDocumentsRes
         source_kind: chunk.source_kind,
         document_title: chunk.document_title,
         invoice_id: chunk.invoice_id,
+        invoice_external_id: chunk.invoice_external_id,
         content: chunk.content,
       })),
     };

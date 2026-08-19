@@ -655,6 +655,7 @@ export type Database = {
           content: string
           document_id: string
           document_title: string
+          invoice_external_id: string
           invoice_id: string
           lexical_rank: number
           rrf_score: number

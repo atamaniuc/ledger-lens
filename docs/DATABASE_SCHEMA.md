@@ -255,6 +255,14 @@ irrelevant chunks. Migration `20260819200000` carries the measurements the
 number comes from. The lexical half is not filtered: a full-text match is a
 term the user actually typed, which is evidence on its own terms.
 
+**`search_chunks` returns `invoice_external_id`, not just the uuid.** An
+invoice chunk's text reads "Invoice inv_00007 for customer …", and the agent
+cites invoices by that external id. While the function returned only
+`invoice_id`, a citation the agent read correctly out of a chunk could not be
+verified against what it had retrieved, so the dashboard flagged correct
+answers as unverified — the one warning a reader should never learn to ignore.
+Migration `20260819210000`.
+
 `chunks` is the one table in this schema where `service_role` holds
 `DELETE`. Everything else is append-only because it records what arrived;
 `chunks` is a derived index of *current* text, and a document that loses a
