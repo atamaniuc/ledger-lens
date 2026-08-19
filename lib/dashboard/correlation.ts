@@ -27,3 +27,20 @@ export function logDashboard(
 ): void {
   console.log(JSON.stringify({ correlation_id: correlationId, event, ...fields }));
 }
+
+/**
+ * Run something and report how long it took.
+ *
+ * The clock reading lives here rather than in the page because `Date.now()`
+ * is impure, and React's lint rules — rightly — refuse it in a component
+ * body: a render that reads the clock is a render that cannot be replayed.
+ * Measuring inside a plain function keeps the component pure and the number
+ * honest.
+ */
+export async function timed<T>(
+  work: () => Promise<T>,
+): Promise<{ result: T; durationMs: number }> {
+  const started = Date.now();
+  const result = await work();
+  return { result, durationMs: Date.now() - started };
+}

@@ -87,3 +87,30 @@ cross-invocation state that Stage 2 doesn't ask for.
   one `MAX_PAGES_PER_RUN` constant and stays correct at any dataset size.
 
 See also: `.omc/skills/adr/SKILL.md`.
+
+---
+
+## Amendment — 2026-08-19 (Stage 4)
+
+Stage 4 shipped without a cron, so the "Stage 4's cron firing on top of a
+manual trigger" case named above has not arrived and the advisory lock is
+still not needed. That is a deferral with a date on it rather than a problem
+solved.
+
+The dashboard triggers nothing. It reads, and it listens to Realtime for
+changes other things make; ingestion is still started by an authenticated
+`POST /api/ingestion/run`, one invocation at a time, by a person. Two
+overlapping runs for one `org_id` remain impossible in practice for the same
+reason they were when this ADR was written.
+
+**The precondition is now attached to a specific piece of work: the first real
+deploy**, when `infra/` and the Pulumi program appear and a schedule becomes
+something that can exist. Whatever creates that schedule creates the exclusion
+in the same change — an advisory lock keyed on `org_id` taken by
+`/api/ingestion/run`, or a `jobs`-table row with `SKIP LOCKED`, decided then
+against how the scheduler actually invokes the route. Shipping a cron without
+it would reintroduce exactly the cursor race this ADR describes, and it would
+show up as duplicate `raw_events` rather than as an error.
+
+Recorded here rather than in a backlog note because this ADR is where someone
+adding the schedule will look.

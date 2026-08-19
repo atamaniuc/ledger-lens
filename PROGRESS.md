@@ -12,8 +12,8 @@ The single source of truth for what is built and what is next. `README.md` and
 | 2 — Ingestion & Transform | done | Polling route + webhook Edge Function, atomic ingest in Postgres (ADR [0003](.claude/adr/0003-bounded-per-invocation-polling-ingestion-no-job-queue.md), [0004](.claude/adr/0004-atomic-single-record-ingest-in-postgres-not-two-client-round-trips.md)) |
 | 3 — Data Quality & Reconciliation | done | Four checks in one Postgres function per `run_id` (ADR [0005](.claude/adr/0005-data-quality-checks-in-one-postgres-function-reconciliation-accounts-for-quarantined-value.md)) |
 | — Local dev loop | done | Containerised toolchain, `task` command surface, generated types (ADR [0006](.claude/adr/0006-the-app-is-containerised-the-supabase-stack-is-not-duplicated.md)) |
-| **4 — Dashboard** | **in progress** | Authenticated page over Stages 1–3 (ADR [0007](.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md)); tasks in [`tasks.md`](tasks.md) |
-| 5 — RAG & Agent | not started | Depends on 4 |
+| 4 — Dashboard | done | Authenticated page over Stages 1–3, reading under the user's own JWT (ADR [0007](.claude/adr/0007-the-dashboard-reads-through-the-users-own-jwt-rls-is-the-only-authorization.md)) |
+| **5 — RAG & Agent** | **next** | Hybrid retrieval and a four-tool agent under the same policies |
 | 6 — Evals + CI gate | not started | Depends on 5 |
 | 7 — Stretch | not started | Optional, independent |
 
@@ -49,6 +49,15 @@ while every impersonated check kept passing.
 
 Carried forward deliberately, not dropped:
 
+- **No Storybook.** Deferred to Stage 7. It is a large install and a second
+  build surface for a project with one page and no CI, and CLAUDE.md scopes
+  stories to shared components. The four states a story would have shown —
+  default, loading, empty, error — are each asserted in the end-to-end suite
+  against the real page instead.
+- **US-07, the copilot chat panel, is not built.** It was written P0 in the
+  PRD but depends on an agent that does not exist until Stage 5. Stage 4's
+  layout reserves the column and renders nothing into it rather than being
+  re-cut later.
 - **No CI.** `task check` and `task e2e` are habits, not gates. Nothing enforces
   them on a push. Closed by Stage 6.
 - **No cross-invocation lock.** Two overlapping runs for one `org_id` would
@@ -108,6 +117,26 @@ invocation with no `run_id` was treated as a zero-row batch and failed the same
 check. Both now abstain with a stated reason. Every check is asserted both ways —
 that it passes on healthy data *and* that it can go red. A check that cannot go
 red is decoration.
+
+**Stage 4.** Three findings worth the space. GoTrue does not error on an
+`emailRedirectTo` outside its allow-list — it substitutes `site_url`, so the
+magic-link code landed on `/` and the flow died at a route with no handler.
+Bun's inspector advertises CDP but returns an empty `/json/list`, so
+IntelliJ's Node.js attach finds no target; and under `task dev` the useful
+inspector is the forked server on 9231, not the CLI on 9230, which is why
+breakpoints looked dead. And the Realtime bridge re-subscribed on every
+refresh, because the server mints a fresh `correlation_id` per render and the
+effect depended on it — a channel tearing itself down in response to the
+refresh it had just caused, invisible because everything still reported
+connected.
+
+The design decisions that cost the most thought: the publication carries
+`data_quality_results` as well as `pipeline_runs`, because the verdict is
+written after `closeRun()` and a bridge watching runs alone refreshes before
+it exists; the subscription never listens for DELETE, because RLS is not
+applied to delete events and `*` would broadcast other tenants' primary keys;
+and the panel keeps *missing*, *no verdict* and *fail* as three different
+states, because collapsing any two turns the dashboard into a confident lie.
 
 **Local dev loop.** Briefly containerised end to end, then pulled back to the
 machine — ADR 0006 records both the reasoning and what the container round trip

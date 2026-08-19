@@ -67,6 +67,16 @@ export function LiveRefreshProvider({
   // Refs, not state: changing these must not re-render, and the effect below
   // must not re-subscribe when they change.
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The server mints a fresh correlation id on every render, and
+  // `router.refresh()` is a render — so depending on the prop directly would
+  // tear down and re-open the channel after every refresh the channel itself
+  // triggered. Events landing in that gap would be lost, and the loop would
+  // be invisible because everything still looks connected. Held in a ref so
+  // the log line stays current while the subscription stays put.
+  const correlation = useRef(correlationId);
+  useEffect(() => {
+    correlation.current = correlationId;
+  }, [correlationId]);
   // A disconnect logs once, not once per retry. Realtime retries on a backoff
   // and a flapping connection would otherwise fill the console with the same
   // line, which is how a real signal gets ignored.
@@ -126,7 +136,7 @@ export function LiveRefreshProvider({
         if (!reportedDown.current) {
           reportedDown.current = true;
           console.warn("[dashboard] realtime degraded", {
-            correlation_id: correlationId,
+            correlation_id: correlation.current,
             status,
           });
         }
@@ -144,9 +154,18 @@ export function LiveRefreshProvider({
         if (channel) void supabase.removeChannel(channel);
       });
     };
-  }, [correlationId, scheduleRefresh]);
+  }, [scheduleRefresh]);
 
   const value = useMemo(() => ({ state, refreshCount }), [state, refreshCount]);
 
-  return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
+  return (
+    <LiveContext.Provider value={value}>
+      {/* The state, in the DOM. A test that inserts a row before the channel
+          reaches SUBSCRIBED is testing nothing, so it needs something to wait
+          on that is not a timeout. */}
+      <div data-testid="live-state" data-live={state} className="contents">
+        {children}
+      </div>
+    </LiveContext.Provider>
+  );
 }

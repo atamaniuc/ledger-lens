@@ -1,5 +1,9 @@
 # Stage 4 — Dashboard: task list
 
+**Status: done.** Every batch is committed; the close-out results are in
+`PROGRESS.md`. Kept as the record of what was planned against what shipped —
+T9 is the one line that changed, and it says why.
+
 Architecture is fixed by ADR 0007 (including its 2026-08-19 amendment) and the
 "## Dashboard" entry in `.claude/PRD.md`. Branch: `stage-4-dashboard`.
 
@@ -108,17 +112,28 @@ exactly one log line.
 
 ## Batch D — Design system (one commit)
 
-- [ ] **T9** shadcn/ui init (Tailwind v4) + Storybook init; `components.json`
-      fixes the component root.
-- [ ] **T10** Token contract — one source for colour, spacing and badge
+- [x] **T9** ~~shadcn/ui init (Tailwind v4) + Storybook init~~ — **both
+      dropped, deliberately.** shadcn's CLI scaffolds components into the repo
+      and brings `clsx`, `tailwind-merge`, `class-variance-authority` and a
+      Radix tree with it. Stage 4 needs a badge, a panel, a table and an
+      empty state, all of which are one element with token classes;
+      `components/ui/status-badge.tsx` is the whole primitive set and depends
+      on nothing new. Storybook is deferred to Stage 7: it is a large install
+      and a second build surface for a project with one page and no CI, and
+      CLAUDE.md now scopes stories to shared components. The four states a
+      story would have shown — default, loading, empty, error — are each
+      asserted in the end-to-end suite instead, against the real page rather
+      than a fixture.
+- [x] **T10** Token contract — one source for colour, spacing and badge
       states, plus a proof component rendering from tokens only.
-- [ ] **T10a** Selection boundary: `components/dashboard/selection-context.tsx`,
+- [x] **T10a** Selection boundary: `components/dashboard/selection-context.tsx`,
       a client context holding the selected metric and T6b's lineage payload.
       Owns selection only — no data fetching. **Blocks T11 and T15.**
 
-**Done when:** Storybook builds and runs; this exact command returns nothing —
-`grep -rEn "#[0-9a-fA-F]{3,8}\b|[0-9]+(\.[0-9]+)?px" <components-root> --include="*.tsx" --include="*.ts"`;
-selecting a tile then clearing it round-trips without a re-fetch.
+**Done when:** this exact command returns nothing —
+`grep -rEn "#[0-9a-fA-F]{3,8}\b|[0-9]+(\.[0-9]+)?px" components/ --include="*.tsx" --include="*.ts"`;
+selecting a tile then clearing it round-trips without a re-fetch. (Storybook
+dropped — see T9.)
 
 ## Batch E — Surfaces (two commits: E1 server panels, E2 client panels)
 
@@ -129,37 +144,37 @@ means the badge, the tile and the table primitives — ship a co-located
 sections do not need one.
 
 **E1 (server):**
-- [ ] **T11** `MetricTiles` (US-02) — each tile wraps its figure in T10a's
+- [x] **T11** `MetricTiles` (US-02) — each tile wraps its figure in T10a's
       client trigger. No selection state lives here.
-- [ ] **T12** `FreshnessBadge` (US-03) — renders `unknown` when the freshness
+- [x] **T12** `FreshnessBadge` (US-03) — renders `unknown` when the freshness
       query itself fails; never defaults to fresh.
-- [ ] **T13** `DataHealthPanel` (US-04) — four checks from one run, failing
+- [x] **T13** `DataHealthPanel` (US-04) — four checks from one run, failing
       check red and not collapsible. Distinguishes **"no verdict"** (a closed
       run with no results — a real state, since the ingestion route catches a
       checks failure and continues) from "everything passed", and *missing*
       from *failing*.
-- [ ] **T14** `InvoicesTable` (US-02) — consumes T6b's cursor contract.
+- [x] **T14** `InvoicesTable` (US-02) — consumes T6b's cursor contract.
 
 **E2 (client):**
-- [ ] **T15** `LineageDrillDown` (US-05) — reads T10a's context, then reads
+- [x] **T15** `LineageDrillDown` (US-05) — reads T10a's context, then reads
       lineage rows under the user's JWT via `browser-client`.
-- [ ] **T16** `PipelineStatusLive` (US-06) — a **consumer** of T8a's bridge,
+- [x] **T16** `PipelineStatusLive` (US-06) — a **consumer** of T8a's bridge,
       not a second subscriber. Renders run rows and a visible degraded state
       on disconnect; declares no channel of its own.
 
 ## Batch F — Composition and close-out (two commits: F1 page + e2e, F2 DoD)
 
-- [ ] **T17** `app/dashboard/page.tsx` assembling T11–T16, mounting T10a's
+- [x] **T17** `app/dashboard/page.tsx` assembling T11–T16, mounting T10a's
       provider; empty state when the org has no data; the reserved empty
       column for Stage 5's chat panel.
-- [ ] **T18** `tests/stage4-dashboard.spec.ts` — sessions created
+- [x] **T18** `tests/stage4-dashboard.spec.ts` — sessions created
       programmatically as `tests/rls.spec.ts` does; `afterAll` deletes every
       fabricated row keyed by a per-run tag, because Stage 3's reconciliation
       check is tenant-wide, not run-scoped.
-- [ ] **T19** Amend ADR 0003: cron deferred to the first real deploy alongside
+- [x] **T19** Amend ADR 0003: cron deferred to the first real deploy alongside
       `infra/` and Pulumi, with the advisory-lock precondition recorded
       against that work rather than forgotten.
-- [ ] **T20** Definition of Done close-out — reviewer pass on the full diff;
+- [x] **T20** Definition of Done close-out — reviewer pass on the full diff;
       `get_advisors` re-checked against the 2026-08-18 baseline; this file
       ticked; `PROGRESS.md` updated in the same commit (it is the only status
       document — `README.md` and `docs/PROJECT_OVERVIEW.md` link to it).

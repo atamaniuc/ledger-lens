@@ -193,6 +193,26 @@ export function buildDataHealth(
   };
 }
 
+/** US-06. The recent runs the live panel lists. Newest first. */
+export async function fetchRecentRuns(
+  supabase: Client,
+  limit = 8,
+): Promise<QueryResult<RunSummary[]>> {
+  const { data, error } = await supabase
+    .from("pipeline_runs")
+    .select(
+      "id, kind, source, status, started_at, finished_at, rows_read, rows_written, rows_quarantined, rows_deduplicated",
+    )
+    // `started_at`, not `finished_at`: a run still going has no finish time,
+    // and a live panel that hides in-flight runs until they end is not live.
+    .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit);
+
+  if (error) return failed(error.message);
+  return { ok: true, data: data ?? [] };
+}
+
 // --- invoices, cursor-paginated ---------------------------------------------
 
 export const INVOICE_PAGE_SIZE = 25;
