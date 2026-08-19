@@ -1,6 +1,6 @@
 # Stage 5 — RAG & Agent: task list
 
-**Status: in progress — Batches A through F done. Retrieval is measured and holds.** Stage 4's list is archived at
+**Status: in progress — Batches A through G done. Retrieval is measured and holds.** Stage 4's list is archived at
 [`.claude/tasks/stage-4-dashboard.md`](.claude/tasks/stage-4-dashboard.md) as the
 record of what was planned against what shipped.
 
@@ -307,23 +307,39 @@ Tested both writers.
 
 ## Batch G — Four tools, and no fifth (one commit)
 
-- [ ] **T25** `lib/agent/tools/` — `get_revenue_summary`, `list_invoices`,
+- [x] **T25** `lib/agent/tools/` — `get_revenue_summary`, `list_invoices`,
       `search_documents` (auto-execute, read-only) and `draft_customer_email`
       (returns a draft object; no transport exists in the repo to send it).
       Each takes the request-scoped user client. Zod schema per tool, converted
       once to the Anthropic tool JSON schema — one definition, not two.
-- [ ] **T26** `lib/agent/tools/index.ts` — the registry, plus a unit test that
+- [x] **T26** `lib/agent/tools/index.ts` — the registry, plus a unit test that
       asserts the registry has **exactly four** entries. US-04 is a countable
       claim; a test is what keeps it one.
-- [ ] **T27** Per-tool unit tests including the cross-org case: each tool called
+- [x] **T27** Per-tool unit tests including the cross-org case: each tool called
       with Globex's JWT and an Acme `org_id`/`invoice_id` returns empty, not
       another tenant's row.
 
-**Verification:** `bun test lib`; the four-tool assertion fails if a fifth is
-added.
+**Verification (done):** `bun test lib/agent` — the registry test fails if a
+fifth tool appears, if a tool declares an effect other than `read`/`draft`, or
+if any tool's schema grows an `org_id`. `runTool` rejects a bad enum value and
+an over-large `limit` **before** any query runs, asserted by a stub that
+throws if it is touched. `tests/stage5-tools.spec.ts` runs all four against
+the real database as both users; full `task e2e` green.
 
-**Files:** 4 tool modules + registry + tests (≈6 files, at the batch size limit —
-splitting them would ship a registry without its tools).
+**What the cross-tenant test had to be rewritten to say:** both tenants ingest
+the same mock-provider dataset, so an `external_id` legitimately exists in
+both — Stage 2's tenant-scoped idempotency working as designed. The first
+draft of the test asserted Globex got *no* row for Acme's identifier and was
+wrong to. Identifiers prove nothing here; row ids do, and the documents corpus
+(where the tenants genuinely differ) is where a leak shows up as a wrong
+answer rather than a wrong id. The tool now returns `invoice_id` for exactly
+that reason, which also gives US-02 something to cite.
+
+**One thing tightened while writing it:** `get_revenue_summary` returns `null`
+totals when the rows span more than one currency, instead of a sum across
+incomparable units. A model handed a number will quote it.
+
+**Files:** 4 tool modules, `types.ts`, registry + unit tests, 1 e2e spec.
 
 ---
 
