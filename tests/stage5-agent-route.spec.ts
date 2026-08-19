@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signInBrowser } from "./helpers/auth";
+import { ORG_B, sql } from "./helpers/db";
 import { localStack } from "./helpers/stack";
 
 // Stage 5, Batch H: the chat route's guard rails, asserted over HTTP.
@@ -50,6 +51,53 @@ test.describe("Stage 5 — the chat route", () => {
     });
     expect(res.status()).toBe(400);
     expect((await res.json()).error).toContain("1000");
+  });
+
+  test("a correlation_id that is not a string is replaced, not passed through", async ({
+    context,
+    request,
+  }) => {
+    // From the reviewer pass: `body.correlation_id` is whatever JSON the
+    // caller sent. An object reached `log_llm_call`, whose column is `text`,
+    // and came back as a 500 on every request from that client. It is also
+    // the caller picking a chain id, which is how one tenant's requests get
+    // to shadow another's in the logs.
+    await signInBrowser(context, request, apiUrl, "alice@acme.test");
+
+    const res = await context.request.post("/api/agent/chat", {
+      data: { question: "what are our payment terms?", correlation_id: { not: "a string" } },
+    });
+
+    // Whatever the environment does next, it must not be a 500 caused by the
+    // id, and the id that comes back must be a usable one.
+    expect(res.status()).not.toBe(500);
+    const body = await res.json();
+    if (body.correlation_id) expect(typeof body.correlation_id).toBe("string");
+  });
+
+  test("an account in two organizations is refused rather than silently scoped to one", async ({
+    context,
+    request,
+  }) => {
+    // The tools carry no org_id filter — RLS decides — so a second membership
+    // widens what the answer is built from while the audit rows keep naming
+    // one org. Refusing is the honest answer until org selection exists.
+    const [{ id: userId }] = await sql<{ id: string }[]>`
+      select id from auth.users where email = 'alice@acme.test'`;
+    await sql`insert into memberships (user_id, org_id, role)
+              values (${userId}, ${ORG_B}, 'member')
+              on conflict do nothing`;
+    try {
+      await signInBrowser(context, request, apiUrl, "alice@acme.test");
+      const res = await context.request.post("/api/agent/chat", {
+        data: { question: "what are our payment terms?" },
+      });
+
+      expect(res.status()).toBe(409);
+      expect((await res.json()).error).toContain("more than one organization");
+    } finally {
+      await sql`delete from memberships where user_id = ${userId} and org_id = ${ORG_B}`;
+    }
   });
 
   test("an unconfigured deployment says so instead of failing inside the SDK", async ({

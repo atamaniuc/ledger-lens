@@ -200,19 +200,14 @@ describe("runAgentTurn", () => {
     for (const call of rpcs) expect(call.args.p_correlation_id).toBe("corr-loop");
   });
 
-  it("abstains without asking the model to compose over an empty context", async () => {
-    // US-06 as a mechanism: the second model call never happens. A prompt
-    // telling a model not to hallucinate is a request; not calling it is a
-    // guarantee.
-    const { supabase, rpcs } = stubSupabase();
-    const { anthropic, callCount } = stubAnthropic([
-      toolResponse("search_documents", { query: "what is our parental leave policy?" }),
-      textResponse("this answer must never be produced"),
-    ]);
-
-    // The real search path runs, including its embedding round trip, with
-    // fetch and the environment stubbed — so this exercises the tool as
-    // written rather than a stand-in for it.
+  // The real search path runs, including its embedding round trip, with fetch
+  // and the environment stubbed — so these exercise the tool as written
+  // rather than a stand-in for it, against a search that finds nothing.
+  async function withEmptyRetrieval(
+    supabase: SupabaseClient<Database>,
+    rpcs: { fn: string; args: Record<string, unknown> }[],
+    anthropic: Parameters<typeof runAgentTurn>[0]["anthropic"],
+  ) {
     const realFetch = globalThis.fetch;
     const previousEnv = {
       url: process.env.SUPABASE_URL,
@@ -232,9 +227,8 @@ describe("runAgentTurn", () => {
         { status: 200 },
       )) as unknown as typeof fetch;
 
-    let result: Awaited<ReturnType<typeof runAgentTurn>>;
     try {
-      result = await runAgentTurn({
+      return await runAgentTurn({
         ...base,
         supabase: {
           ...supabase,
@@ -253,10 +247,46 @@ describe("runAgentTurn", () => {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousEnv.anon;
       process.env.EMBED_SHARED_SECRET = previousEnv.secret;
     }
+  }
+
+  it("abstains without asking the model to compose over an empty context", async () => {
+    // US-06 as a mechanism: the model is never asked to compose. It gets one
+    // more step after the first empty search — a compound question can begin
+    // with the clause the corpus does not cover — but two empty steps end the
+    // turn before any call that would have produced an answer.
+    const { supabase, rpcs } = stubSupabase();
+    const { anthropic, callCount } = stubAnthropic([
+      toolResponse("search_documents", { query: "what is our parental leave policy?" }),
+      toolResponse("search_documents", { query: "parental leave" }),
+      textResponse("this answer must never be produced"),
+    ]);
+
+    const result = await withEmptyRetrieval(supabase, rpcs, anthropic);
 
     expect(result.outcome).toBe("abstained");
     expect(result.answer).toContain("I don't have data on that");
-    expect(callCount()).toBe(1);
+    // Two tool-selection calls, and never the third that would have composed.
+    expect(callCount()).toBe(2);
+    expect(result.answer).not.toContain("must never be produced");
+    expect(rpcs.some((r) => r.args.p_outcome === "abstained")).toBe(true);
+  });
+
+  it("discards an answer composed over an empty context", async () => {
+    // The other half of US-06, and the reason the short-circuit is not the
+    // only guard: a model that answers instead of searching again has still
+    // written over nothing, so what it wrote is thrown away rather than
+    // returned. The mechanism is the answer that comes back, not the wording
+    // of the one that does not.
+    const { supabase, rpcs } = stubSupabase();
+    const { anthropic } = stubAnthropic([
+      toolResponse("search_documents", { query: "how do I bake sourdough bread?" }),
+      textResponse("Sourdough needs a starter and about five hours."),
+    ]);
+
+    const result = await withEmptyRetrieval(supabase, rpcs, anthropic);
+
+    expect(result.outcome).toBe("abstained");
+    expect(result.answer).not.toContain("Sourdough");
     expect(rpcs.some((r) => r.args.p_outcome === "abstained")).toBe(true);
   });
 

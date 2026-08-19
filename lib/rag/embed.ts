@@ -20,11 +20,18 @@ export const DEFAULT_TIMEOUT_MS = 20_000;
 
 export class EmbeddingError extends Error {
   readonly status?: number;
+  /**
+   * False for a fault a second identical request cannot fix — a 4xx, or a
+   * response whose shape is wrong. Retrying those costs a full round trip to
+   * arrive at the same failure.
+   */
+  readonly retryable: boolean;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, retryable?: boolean) {
     super(message);
     this.name = "EmbeddingError";
     this.status = status;
+    this.retryable = retryable ?? (status === undefined || status >= 500);
   }
 }
 
@@ -106,19 +113,27 @@ export async function embedTexts(texts: string[], opts: EmbedOptions = {}): Prom
 
       const body = (await response.json()) as EmbedResponse;
       if (!Array.isArray(body?.embeddings) || body.embeddings.length !== texts.length) {
-        throw new EmbeddingError("embed function returned the wrong number of vectors");
+        throw new EmbeddingError(
+          "embed function returned the wrong number of vectors",
+          undefined,
+          false,
+        );
       }
       for (const vector of body.embeddings) {
         if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS) {
           // Caught here rather than at the insert, where the message would be
           // a Postgres type error several layers from the cause.
-          throw new EmbeddingError("embed function returned a vector of the wrong width");
+          throw new EmbeddingError(
+            "embed function returned a vector of the wrong width",
+            undefined,
+            false,
+          );
         }
       }
       return body.embeddings;
     } catch (error) {
       if (error instanceof EmbeddingError) {
-        if (error.status !== undefined && error.status < 500) throw error;
+        if (!error.retryable) throw error;
         lastError = error;
       } else {
         // Abort (timeout) and transport failures both land here.

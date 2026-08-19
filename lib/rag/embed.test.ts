@@ -173,3 +173,26 @@ describe("batched", () => {
     expect(batched([])).toEqual([]);
   });
 });
+
+describe("embedTexts — what is worth retrying", () => {
+  it("does not retry a response whose shape is wrong", async () => {
+    // A deterministic bug in the function's output cannot be fixed by asking
+    // it again; retrying only pays for a second round trip to fail the same
+    // way. Counted, because "did not retry" is the whole assertion.
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return new Response(
+        JSON.stringify({
+          embeddings: [[0.1, 0.2]],
+          model: "gte-small",
+          dimensions: EMBEDDING_DIMENSIONS,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+
+    await expect(embedTexts(["one"], { ...ENV, fetchImpl })).rejects.toThrow(/wrong width/);
+    expect(calls).toBe(1);
+  });
+});

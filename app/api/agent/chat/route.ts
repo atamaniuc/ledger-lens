@@ -43,23 +43,45 @@ export async function POST(req: NextRequest) {
 
   // CLAUDE.md: one correlation_id per request chain, accepted from the caller
   // or minted here, and carried by every llm_calls and audit_log row below.
+  //
+  // Validated rather than taken as given. `body.correlation_id` is whatever
+  // JSON the caller sent: an object or a number reaches `log_llm_call`, whose
+  // column is `text`, and comes back as a 500 on every request from that
+  // client. An over-long or arbitrary value also lets a caller shadow another
+  // request's chain in the logs.
+  const supplied = req.headers.get("x-correlation-id") ?? body?.correlation_id;
   const correlationId =
-    req.headers.get("x-correlation-id") ?? body?.correlation_id ?? crypto.randomUUID();
+    typeof supplied === "string" && /^[\w.:-]{1,128}$/.test(supplied)
+      ? supplied
+      : crypto.randomUUID();
 
   // Read under RLS, so this returns only orgs the user actually belongs to —
   // it is a lookup, not an authorization check.
-  const { data: membership, error: membershipError } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("memberships")
     .select("org_id")
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
 
   if (membershipError) {
     return NextResponse.json({ error: membershipError.message }, { status: 500 });
   }
-  if (!membership) {
+  if (!memberships || memberships.length === 0) {
     return NextResponse.json({ error: "no organization for this user" }, { status: 403 });
   }
+  // Refused rather than guessed. The tools carry no `org_id` filter — RLS
+  // decides what they see — so for a user in two orgs the answer would be
+  // built from both while every llm_calls and audit_log row got stamped with
+  // whichever one an arbitrary `limit(1)` happened to return. That is a
+  // silently misattributed audit trail, against the PRD's "zero unaudited
+  // agent actions". Choosing an org is a Stage 6 feature; until it exists,
+  // saying so is the honest answer.
+  if (memberships.length > 1) {
+    return NextResponse.json(
+      { error: "this account belongs to more than one organization, which the copilot cannot scope to yet" },
+      { status: 409 },
+    );
+  }
+  const membership = memberships[0];
 
   if (!process.env.ANTHROPIC_API_KEY) {
     // Named plainly rather than surfacing as a 500 from inside the SDK: an

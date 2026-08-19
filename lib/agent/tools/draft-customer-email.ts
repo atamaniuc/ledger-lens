@@ -72,6 +72,11 @@ export const draftCustomerEmail: AgentTool<DraftCustomerEmailInput, CustomerEmai
       .from("invoices")
       .select("id, external_id, customer, amount_cents, currency, status, issued_at")
       .eq("external_id", args.external_id)
+      // Both tenants ingest the same mock dataset, so one `external_id`
+      // legitimately exists in more than one org. A user who belongs to two
+      // of them sees both rows through RLS, and `maybeSingle` on its own
+      // turns a perfectly valid invoice id into a PGRST116 error.
+      .limit(1)
       .maybeSingle();
 
     if (error) throw new Error(`draft_customer_email failed: ${error.message}`);

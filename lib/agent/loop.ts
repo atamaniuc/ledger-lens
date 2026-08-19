@@ -30,6 +30,18 @@ export const TOKEN_CEILING = 120_000;
 export const MAX_RESPONSE_TOKENS = 4_096;
 
 /**
+ * Consecutive steps that return no data before the turn abstains.
+ *
+ * Not 1. A compound question — "which invoices are overdue, and what is our
+ * late-fee policy?" — can begin with a search for the half the corpus does
+ * not contain, and abstaining on that first empty result throws away the half
+ * `list_invoices` could have answered. One empty search is a clause that
+ * found nothing; two consecutive empty steps is a question this data cannot
+ * answer.
+ */
+export const EMPTY_STEPS_BEFORE_ABSTAINING = 2;
+
+/**
  * What the agent says when retrieval came back empty. US-06 asks the model to
  * admit when it does not know; this is the mechanism behind that, because a
  * prompt asking a model not to hallucinate is a request and not calling the
@@ -158,6 +170,7 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
   let outputTokens = 0;
   let stepNo = 0;
   let lastText = "";
+  let emptySteps = 0;
 
   const finish = async (
     outcome: StepOutcome,
@@ -247,13 +260,21 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
     }
 
     const calledAt = now();
-    const response = await request.anthropic.messages.create({
-      model: AGENT_MODEL,
-      max_tokens: MAX_RESPONSE_TOKENS,
-      system: SYSTEM_PROMPT,
-      tools: toolDefinitions() as Anthropic.Tool[],
-      messages,
-    });
+    // The turn budget is only a bound if the call inside it is bounded too.
+    // Checking the clock at the top of the loop cannot stop a model call that
+    // never returns, and the outcome would only be recorded on an iteration
+    // that never happens — so the remaining budget is handed to the SDK as
+    // the request's own timeout.
+    const response = await request.anthropic.messages.create(
+      {
+        model: AGENT_MODEL,
+        max_tokens: MAX_RESPONSE_TOKENS,
+        system: SYSTEM_PROMPT,
+        tools: toolDefinitions() as Anthropic.Tool[],
+        messages,
+      },
+      { timeout: Math.max(1_000, budgetMs - (calledAt - startedAt)) },
+    );
 
     inputTokens += response.usage?.input_tokens ?? 0;
     outputTokens += response.usage?.output_tokens ?? 0;
@@ -279,6 +300,14 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
     });
 
     if (toolUses.length === 0) {
+      // The backstop for US-06. The model has stopped calling tools and is
+      // answering; if nothing it called ever returned data, whatever it wrote
+      // was written over an empty context and is discarded rather than
+      // returned. The short-circuit below is what usually catches this — this
+      // is what catches the case where the model reached for text first.
+      if (evidence.searchedAndFoundNothing && !evidence.anyData) {
+        return await finish("abstained", ABSTENTION_ANSWER, "retrieval returned nothing");
+      }
       return await finish("ok", lastText, null);
     }
 
@@ -288,6 +317,7 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
     // result has to go back in a single user message — splitting them
     // teaches the model to stop making parallel calls.
     const results: Anthropic.ToolResultBlockParam[] = [];
+    const succeeded: Anthropic.ToolUseBlock[] = [];
     for (const use of toolUses) {
       toolsUsed.push(use.name);
       try {
@@ -298,14 +328,7 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
           tool_use_id: use.id,
           content: JSON.stringify(result),
         });
-        await logAgentAction(request.supabase, {
-          orgId: request.orgId,
-          correlationId: request.correlationId,
-          action: use.name,
-          entity: "tool_call",
-          entityId: use.id,
-          details: { args: use.input, step_no: stepNo },
-        });
+        succeeded.push(use);
       } catch (error) {
         // A failed tool is reported to the model, not hidden from it — and
         // the attempt is audited either way, because an attempt that failed
@@ -328,14 +351,39 @@ export async function runAgentTurn(request: AgentTurnRequest): Promise<AgentTurn
       }
     }
 
-    stepNo++;
+    // Outside the try on purpose. `logAgentAction` throws when the audit
+    // write fails, and inside the try that throw was caught by the
+    // tool-failure handler above — which then told the model a successful
+    // tool had failed and wrote a `tool_call_failed` row for a call that
+    // succeeded, masking the real cause behind a mislabelled trail.
+    for (const use of succeeded) {
+      await logAgentAction(request.supabase, {
+        orgId: request.orgId,
+        correlationId: request.correlationId,
+        action: use.name,
+        entity: "tool_call",
+        entityId: use.id,
+        details: { args: use.input, step_no: stepNo },
+      });
+    }
 
-    // US-06, as a mechanism rather than an instruction: a search that found
-    // nothing, with no other tool having returned data, ends the turn here —
-    // *before* the model is asked to compose an answer over an empty
-    // context. Asking it not to hallucinate would be a request; not calling
-    // it is a guarantee.
-    if (evidence.searchedAndFoundNothing && !evidence.anyData) {
+    stepNo++;
+    if (evidence.anyData) emptySteps = 0;
+    else emptySteps++;
+
+    // US-06, as a mechanism rather than an instruction: with nothing to
+    // answer from, the turn ends here — *before* the model is asked to
+    // compose over an empty context. Asking a model not to hallucinate is a
+    // request; not calling it is a guarantee.
+    //
+    // It waits for a second empty step, which the reviewer pass found
+    // necessary. "Which invoices are overdue, and what is our late-fee
+    // policy?" can start with a search for the policy; if the corpus has no
+    // such document, abstaining right there throws away the half the agent
+    // could have answered from `list_invoices`. One empty search is a clause
+    // that found nothing; two consecutive steps with nothing to show is a
+    // question this data cannot answer.
+    if (evidence.searchedAndFoundNothing && !evidence.anyData && emptySteps >= EMPTY_STEPS_BEFORE_ABSTAINING) {
       return await finish("abstained", ABSTENTION_ANSWER, "retrieval returned nothing");
     }
 

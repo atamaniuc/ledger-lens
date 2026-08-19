@@ -183,3 +183,56 @@ termination is then invisible to the audit trail — the process dies with the
 last step unrecorded, which is exactly the turn someone will need to
 reconstruct. Bounds enforced in the loop produce a recorded reason; a killed
 function produces a gap.
+
+---
+
+## Amendment — 2026-08-19 (reviewer pass, Batch J)
+
+**Abstention no longer fires on the first empty search.** The decision above
+says empty retrieval short-circuits "*before* the model is asked to compose".
+As written, the code fired that short-circuit at the end of any step where a
+search returned nothing and no tool had yet returned data — which is not the
+same condition. "Which invoices are overdue, and what is our late-fee policy?"
+can begin with a search for the half the corpus does not contain, and the turn
+ended there, throwing away the half `list_invoices` would have answered. The
+mechanism was cutting off correct answers, not preventing wrong ones.
+
+Two changes, both in `lib/agent/loop.ts`:
+
+- The short-circuit waits for `EMPTY_STEPS_BEFORE_ABSTAINING` (2) consecutive
+  steps that return no data. One empty search is a clause that found nothing;
+  two consecutive empty steps is a question this data cannot answer.
+- A backstop was added where the model stops calling tools and answers: if
+  nothing it called ever returned data, what it wrote is discarded and the
+  abstention is returned instead.
+
+The guarantee is unchanged in substance and slightly weaker in letter: the
+model is still never asked to compose over an empty context in the ordinary
+path, and an answer composed over one is now never *returned* even if it is
+written. The property that matters — the user cannot receive a confident
+answer built on nothing — is now enforced at two points rather than one.
+
+**Two other corrections from the same pass**, neither of which changes a
+decision:
+
+- The successful-tool audit write sat inside the `try` that wraps the tool
+  call. `logAgentAction` throws when the audit write fails, so that throw was
+  caught by the tool-failure handler, which told the model a successful tool
+  had failed and wrote `tool_call_failed` for a call that succeeded. The
+  audit trail was mislabelled exactly when it was most needed. It is now
+  written outside the `try`.
+- The 30-second turn budget was checked only at the top of the loop, and the
+  model call carried no timeout of its own — so a hung call could run past the
+  bound with nothing to stop it, and the `timeout` outcome would be recorded
+  on an iteration that never came. The remaining budget is now passed to the
+  SDK as the request's timeout, which is what makes the bound hold identically
+  on a laptop and on a platform whose own function timeout is longer.
+
+**A multi-org account is refused rather than guessed.** `POST
+/api/agent/chat` resolved the org with an arbitrary `limit(1)` over
+`memberships`. The tools carry no `org_id` filter — RLS decides what they see
+— so for a user in two orgs the answer would have been built from both while
+every `llm_calls` and `audit_log` row was stamped with whichever org the query
+happened to return: a silently misattributed audit trail, against the PRD's
+"zero unaudited agent actions". The route now returns 409 and says so.
+Choosing an org is a Stage 6 feature.

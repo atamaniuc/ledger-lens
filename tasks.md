@@ -505,6 +505,42 @@ and restores them.
 
 ---
 
+## Reviewer pass on the stage diff (between J and K)
+
+`/code-review medium` over the whole branch plus the working tree. Ten
+findings, all real; none were disputed. Fixed in three commits:
+
+- **An invoice cited from a search result could not be verified.** `search_chunks`
+  returned only `invoice_id`, a uuid, while the agent cites by `external_id`,
+  which it reads out of the chunk text — so a *correct* citation came back
+  unverified and the new panel warned about a right answer. Migration
+  `20260819210000` returns `invoice_external_id`; `citableIds()` was collecting
+  the uuid for the same purpose and was unreachable.
+- **Abstention fired on the first empty search**, discarding the half of a
+  compound question `list_invoices` could have answered. Now waits for
+  `EMPTY_STEPS_BEFORE_ABSTAINING` (2) consecutive empty steps, plus a backstop
+  that discards an answer composed over an empty context. ADR 0009 amended,
+  because the ADR states the mechanism.
+- **The successful-tool audit write sat inside the tool's `try`.** `logAgentAction`
+  throws on a failed audit write, so that throw was caught by the tool-failure
+  handler, which told the model a successful tool had failed and wrote
+  `tool_call_failed` for a call that succeeded — the trail was mislabelled
+  exactly when it mattered.
+- **The 30 s turn budget did not bound the model call.** The clock was only read
+  at the top of the loop; the remaining budget is now the SDK request's timeout.
+- **`draft_customer_email` used `maybeSingle()` with no `limit(1)`.** Both tenants
+  hold the same `external_id`, so a two-org user turned a valid id into PGRST116.
+- **A multi-org account was silently scoped to an arbitrary org** while the audit
+  rows named one of them. The route returns 409 now; org selection is Stage 6.
+- **`correlation_id` was taken from the body unvalidated** — a non-string reached
+  a `text` column as a 500, and any caller could shadow another chain in the logs.
+- **A wrong-shaped embedding response was retried**, paying a full round trip to
+  fail identically. `EmbeddingError` now carries `retryable`.
+- Two in the Batch J diff, fixed before it was committed: a non-JSON 200 body
+  crashing render, and a null-`delta` guard in the freshness test.
+
+---
+
 ## Batch K — Close-out (one commit)
 
 - [ ] **T38** `tests/stage5-agent.spec.ts` — **started in Batch J**, which

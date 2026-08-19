@@ -81,6 +81,7 @@ test.describe("Stage 5 — the safety claims", () => {
     const correlationId = `safety-abstain-${Date.now()}`;
     const { anthropic, callCount } = stubAnthropic([
       toolUse("search_documents", { query: "what is our parental leave policy?" }),
+      toolUse("search_documents", { query: "parental leave" }),
       text("A parental leave policy would normally give twelve weeks."),
     ]);
 
@@ -94,8 +95,11 @@ test.describe("Stage 5 — the safety claims", () => {
 
     expect(result.outcome).toBe("abstained");
     expect(result.answer).toContain("I don't have data on that");
-    // The plausible, invented second answer above was never reached.
-    expect(callCount()).toBe(1);
+    // Two tool-selection calls — the model gets a second avenue after one
+    // empty search — and never the third, which is the one that would have
+    // composed the plausible, invented answer stubbed above.
+    expect(callCount()).toBe(2);
+    expect(result.answer).not.toContain("twelve weeks");
 
     const [{ outcome }] = await sql<{ outcome: string }[]>`
       select outcome from llm_calls where correlation_id = ${correlationId}
@@ -239,6 +243,40 @@ test.describe("Stage 5 — the safety claims", () => {
        where correlation_id <> ${correlationId} and created_at > now() - interval '10 seconds'
          and action = 'send_email'`;
     expect(strays).toBe(0);
+  });
+
+  test("one empty search does not throw away the half of the question it could answer", async () => {
+    // The reviewer pass found the abstention firing too early: a compound
+    // question can begin with the clause the corpus does not contain, and
+    // ending the turn there discards the half `list_invoices` answers.
+    const supabase = await clientFor("alice@acme.test");
+    const correlationId = `safety-compound-${Date.now()}`;
+
+    const { anthropic } = stubAnthropic([
+      toolUse("search_documents", { query: "what is our parental leave policy?" }),
+      toolUse("list_invoices", { limit: 3 }),
+      text("There are open invoices; the corpus has no leave policy."),
+    ]);
+
+    const result = await runAgentTurn({
+      question: "which invoices are open, and what is our parental leave policy?",
+      orgId: ORG_A,
+      correlationId,
+      supabase,
+      anthropic,
+    });
+
+    expect(result.outcome).toBe("ok");
+    expect(result.toolsUsed).toEqual(["search_documents", "list_invoices"]);
+    expect(result.answer).toContain("open invoices");
+
+    const actions = await sql<{ action: string }[]>`
+      select action from audit_log where correlation_id = ${correlationId} order by id`;
+    expect(actions.map((row) => row.action)).toEqual([
+      "search_documents",
+      "list_invoices",
+      "turn_ended",
+    ]);
   });
 
   test("every tool call in a turn is audited, successful or not", async () => {
