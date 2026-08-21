@@ -56,7 +56,12 @@ export const listInvoices: AgentTool<ListInvoicesInput, ListInvoicesResult> = {
   description:
     "Individual invoices for the signed-in user's organization, newest first, optionally " +
     "filtered by status, customer name or exact invoice identifier. Cite invoices by " +
-    "external_id. Returns at most 20 rows.",
+    "external_id. Returns at most 20 rows. " +
+    // A measured run had three questions about totals answered by listing rows
+    // and adding them up, which is both slower and a different number when the
+    // list truncates. Saying where the boundary is costs one sentence.
+    "Use get_revenue_summary instead for a total, a count or an average — this tool " +
+    "truncates at 20 rows, so summing what it returns is not the organization's total.",
   effect: "read",
   input,
 

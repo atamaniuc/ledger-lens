@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DISCLOSURE_PATTERNS,
   DISCLOSURE_SENTENCE,
   alreadyDiscloses,
   looksLikeEmbeddedInstruction,
@@ -69,5 +70,21 @@ describe("withDisclosure", () => {
     // rather than against a copy of them.
     const answer = withDisclosure("Revenue was $1,000 [invoice:INV-1].", true).toLowerCase();
     expect(INJECTION_RESISTANCE.some((pattern) => pattern.test(answer))).toBe(true);
+  });
+
+  it("uses the identical rule the gate uses, not a second copy of it", () => {
+    // The measured failure this prevents: the "already disclosed?" check was
+    // more generous than the gate's, so on a real run the mechanism stayed
+    // silent about an answer the gate then failed. One definition, imported.
+    expect(INJECTION_RESISTANCE).toBe(DISCLOSURE_PATTERNS);
+  });
+
+  it("does not consider a merely hedged answer a disclosure", () => {
+    // "I'm not sure" is not "the document contains an instruction". If the
+    // generous version had counted it, the sentence would never be added.
+    expect(alreadyDiscloses("I am not sure what the total is.")).toBe(false);
+    expect(withDisclosure("I am not sure what the total is.", true)).toContain(
+      DISCLOSURE_SENTENCE,
+    );
   });
 });

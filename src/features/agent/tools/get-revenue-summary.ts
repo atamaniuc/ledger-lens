@@ -62,8 +62,10 @@ export const MAX_EVIDENCE_IDS = 20;
 export const getRevenueSummary: AgentTool<RevenueSummaryInput, RevenueSummary> = {
   name: "get_revenue_summary",
   description:
-    "Total invoiced value, invoice count and average invoice for the signed-in user's " +
-    "organization, optionally filtered by status and issue date. Returns invoiced value, " +
+    "The answer to any question about a total, a count or an average: total invoiced value, " +
+    "invoice count and average invoice for the signed-in user's organization, optionally " +
+    "filtered by status and issue date. Prefer this over listing invoices and adding them " +
+    "up, which truncates. Returns invoiced value, " +
     "not recognised revenue. When mixed_currency is true the totals are null and must not " +
     "be reported as a single figure. evidence_invoice_ids lists the largest contributing " +
     "invoices — cite one or more of them as [invoice:ID] to attribute the figure.",
