@@ -175,3 +175,4 @@ cut with `docs/LOCAL_DEV.md` (D-39). The typed env schema is
 <!-- proof: supabase/seed.sql --> <!-- proof: scripts/write-env-local.sh --> <!-- proof: supabase/.env.example --> <!-- proof: infra/README.md --> <!-- proof: py/modal/README.md -->
 <!-- proof: supabase/config.toml:enable_signup --> <!-- proof: tests/helpers/stack.ts --> <!-- proof: src/features/rag/embed.ts:WORKER_LIMIT_STATUS --> <!-- proof: src/features/rag/embed.ts:EMBED_BATCH_LIMIT --> <!-- proof: src/features/rag/embed.ts:MAX_ATTEMPTS -->
 <!-- proof: src/platform/config.ts:envSchema --> <!-- proof: .env.example --> <!-- proof: evals/thresholds.json -->
+# test
