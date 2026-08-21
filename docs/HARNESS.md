@@ -87,6 +87,8 @@ A lane that is "done" without those two is not done.
 | `task infra-plan` | Pulumi plans 23 resources with no credentials | no |
 | `task up` | clean clone → running app in one command | starts it |
 
+One-screen version of this page: [`docs/HARNESS-QUICKSTART.md`](HARNESS-QUICKSTART.md).
+
 ## Continuing in Claude Code / Codex / anything else
 
 - Point the tool at `AGENTS.md` (Claude Code already reads `CLAUDE.md` →
