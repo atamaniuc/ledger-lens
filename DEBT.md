@@ -35,6 +35,7 @@ Status: `☐` open · `◐` partly closed, with the remainder named in the crite
 | ☑ | D-50 | S1 | a new foreign key silently widened the blast radius of an old test: `truncate raw_events ... cascade` in the ingestion spec began deleting the seeded corpus once `documents.raw_event_id` existed, and five retrieval assertions failed in a spec that never mentions ingestion | `documents=0` after a full suite run, retrieval returning only invoice chunks; introduced by migration `20260821150000` | closed: ordered DELETEs replace the cascade, so the seeded documents (which carry no `raw_event_id`) survive; the reason is written where the next reader will change it |
 
 ## S2 — Blocks being called production-ready.
+| ☑ | D-52 | S1 | a free-tier model records cost_cents 0 while it still burns the provider's quota, so the daily **cost** cap could not stop a tester from exhausting Groq/NVIDIA/etc | llm_calls.cost_cents is 0 for every free model; AGENT_DAILY_COST_CAP_CENTS only sums cost | closed: `check_agent_budget` gained a daily **token** cap summed from llm_calls input+output tokens (migration 20260821200000), refused as 402 with resets_at before any model call; budget.ts/config.ts/.env.example carry AGENT_DAILY_TOKEN_CAP (default 200000, 0 disables), and tests/agent-token-cap.spec.ts proves both the route refusal and the SQL verdict |
 
 | Status | id | severity | what | evidence | closure criterion |
 |---|---|---|---|---|---|

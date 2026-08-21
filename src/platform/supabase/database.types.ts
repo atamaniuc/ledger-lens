@@ -915,6 +915,7 @@ export type Database = {
       check_agent_budget: {
         Args: {
           p_daily_cost_cap_cents: number
+          p_daily_token_cap: number
           p_org_id: string
           p_org_limit: number
           p_user_limit: number

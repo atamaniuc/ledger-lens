@@ -24,11 +24,19 @@ export const AGENT_ORG_RATE_LIMIT_ENV = "AGENT_ORG_RATE_LIMIT";
 export const AGENT_RATE_LIMIT_WINDOW_SECONDS_ENV = "AGENT_RATE_LIMIT_WINDOW_SECONDS";
 /** Daily spend cap in cents, from llm_calls.cost_cents. 0 disables the cap. */
 export const AGENT_DAILY_COST_CAP_CENTS_ENV = "AGENT_DAILY_COST_CAP_CENTS";
+/**
+ * Daily token budget per org, summed from llm_calls. 0 disables it. Counts
+ * tokens rather than cents because a free-tier model records cost 0 while it
+ * still burns the provider's quota — this is the guard that cannot be
+ * bypassed by pointing the copilot at a zero-cost model (D-52).
+ */
+export const AGENT_DAILY_TOKEN_CAP_ENV = "AGENT_DAILY_TOKEN_CAP";
 
 export const AGENT_USER_RATE_LIMIT_DEFAULT = 60;
 export const AGENT_ORG_RATE_LIMIT_DEFAULT = 300;
 export const AGENT_RATE_LIMIT_WINDOW_SECONDS_DEFAULT = 60 * 60;
 export const AGENT_DAILY_COST_CAP_CENTS_DEFAULT = 1_000; // $10.00
+export const AGENT_DAILY_TOKEN_CAP_DEFAULT = 200_000;
 
 function positiveIntFromEnv(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -53,6 +61,7 @@ export interface BudgetConfig {
   orgRateLimit: number;
   windowSeconds: number;
   dailyCostCapCents: number | null;
+  dailyTokenCap: number | null;
 }
 
 /** The whole budget configuration, for tests and for the route in one read. */
@@ -65,14 +74,25 @@ export function budgetConfig(): BudgetConfig {
       AGENT_RATE_LIMIT_WINDOW_SECONDS_DEFAULT,
     ),
     dailyCostCapCents: dailyCapCents(),
+    dailyTokenCap: dailyTokenCap(),
   };
+}
+
+/** The daily token budget, or null when disabled (0). */
+function dailyTokenCap(): number | null {
+  const raw = process.env[AGENT_DAILY_TOKEN_CAP_ENV];
+  if (raw === undefined || raw.trim() === "") return AGENT_DAILY_TOKEN_CAP_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return AGENT_DAILY_TOKEN_CAP_DEFAULT;
+  if (parsed <= 0) return null;
+  return Math.floor(parsed);
 }
 
 export type BudgetVerdict =
   | { allowed: true }
   | {
       allowed: false;
-      reason: "rate_limit" | "cost_cap";
+      reason: "rate_limit" | "cost_cap" | "token_cap";
       scope?: "user" | "org";
       /** Seconds until the window resets; always at least 1. */
       retryAfterSeconds: number;
@@ -115,6 +135,7 @@ export async function checkAgentBudget(
     p_org_limit: config.orgRateLimit,
     p_window_seconds: config.windowSeconds,
     p_daily_cost_cap_cents: config.dailyCostCapCents,
+    p_daily_token_cap: config.dailyTokenCap,
   });
 
   if (error) throw new BudgetError(`check_agent_budget failed: ${error.message}`);
@@ -124,7 +145,7 @@ export async function checkAgentBudget(
   // not a limit to paper over with a generic error.
   const raw = data as {
     allowed?: boolean;
-    reason?: "rate_limit" | "cost_cap";
+    reason?: "rate_limit" | "cost_cap" | "token_cap";
     scope?: "user" | "org";
     retry_after_seconds?: number;
     resets_at?: string;

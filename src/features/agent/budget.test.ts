@@ -4,6 +4,8 @@ import type { Database } from "@/platform/supabase/database.types";
 import {
   AGENT_DAILY_COST_CAP_CENTS_DEFAULT,
   AGENT_DAILY_COST_CAP_CENTS_ENV,
+  AGENT_DAILY_TOKEN_CAP_DEFAULT,
+  AGENT_DAILY_TOKEN_CAP_ENV,
   AGENT_ORG_RATE_LIMIT_DEFAULT,
   AGENT_ORG_RATE_LIMIT_ENV,
   AGENT_RATE_LIMIT_WINDOW_SECONDS_DEFAULT,
@@ -25,6 +27,7 @@ const ENV_KEYS = [
   AGENT_ORG_RATE_LIMIT_ENV,
   AGENT_RATE_LIMIT_WINDOW_SECONDS_ENV,
   AGENT_DAILY_COST_CAP_CENTS_ENV,
+  AGENT_DAILY_TOKEN_CAP_ENV,
 ] as const;
 
 const saved: Record<string, string | undefined> = {};
@@ -45,6 +48,7 @@ describe("budgetConfig", () => {
       orgRateLimit: AGENT_ORG_RATE_LIMIT_DEFAULT,
       windowSeconds: AGENT_RATE_LIMIT_WINDOW_SECONDS_DEFAULT,
       dailyCostCapCents: AGENT_DAILY_COST_CAP_CENTS_DEFAULT,
+      dailyTokenCap: AGENT_DAILY_TOKEN_CAP_DEFAULT,
     });
   });
 
@@ -53,11 +57,13 @@ describe("budgetConfig", () => {
     process.env[AGENT_ORG_RATE_LIMIT_ENV] = "70";
     process.env[AGENT_RATE_LIMIT_WINDOW_SECONDS_ENV] = "900";
     process.env[AGENT_DAILY_COST_CAP_CENTS_ENV] = "250";
+    process.env[AGENT_DAILY_TOKEN_CAP_ENV] = "30000";
     expect(budgetConfig()).toEqual({
       userRateLimit: 7,
       orgRateLimit: 70,
       windowSeconds: 900,
       dailyCostCapCents: 250,
+      dailyTokenCap: 30000,
     });
   });
 
@@ -77,6 +83,11 @@ describe("budgetConfig", () => {
   it("treats a zero daily cap as the cap being disabled", () => {
     process.env[AGENT_DAILY_COST_CAP_CENTS_ENV] = "0";
     expect(budgetConfig().dailyCostCapCents).toBeNull();
+  });
+
+  it("treats a zero token cap as the cap being disabled", () => {
+    process.env[AGENT_DAILY_TOKEN_CAP_ENV] = "0";
+    expect(budgetConfig().dailyTokenCap).toBeNull();
   });
 });
 
@@ -113,6 +124,7 @@ describe("checkAgentBudget", () => {
       p_org_limit: AGENT_ORG_RATE_LIMIT_DEFAULT,
       p_window_seconds: AGENT_RATE_LIMIT_WINDOW_SECONDS_DEFAULT,
       p_daily_cost_cap_cents: AGENT_DAILY_COST_CAP_CENTS_DEFAULT,
+      p_daily_token_cap: AGENT_DAILY_TOKEN_CAP_DEFAULT,
     });
   });
 

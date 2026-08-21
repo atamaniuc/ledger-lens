@@ -125,7 +125,7 @@ test.describe("the chat route request limits (D-18)", () => {
     await asUser(ALICE, async (tx) => {
       const rows = await tx.unsafe(`
         select public.check_agent_budget(
-          '${ORG_A}'::uuid, ${USER_LIMIT}, ${ORG_LIMIT}, ${WINDOW_SECONDS}, 1000000
+          '${ORG_A}'::uuid, ${USER_LIMIT}, ${ORG_LIMIT}, ${WINDOW_SECONDS}, 1000000, 2000000000
         )::text as verdict`);
       expect(String(rows[0].verdict)).toContain('"allowed": true');
     });
@@ -152,7 +152,7 @@ test.describe("the chat route request limits (D-18)", () => {
             ORG_LIMIT +
             ", " +
             WINDOW_SECONDS +
-            ", 1000000)::text as verdict",
+            ", 1000000, 2000000000)::text as verdict",
         );
         const verdict = String(rows[0].verdict);
         expect(verdict).toContain('"allowed": false');

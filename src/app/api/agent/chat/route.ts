@@ -430,7 +430,9 @@ export async function POST(req: NextRequest) {
         ? budget.scope === "org"
           ? "this organization has sent too many copilot requests"
           : "you have sent too many copilot requests"
-        : "this organization has reached its daily budget for the copilot",
+        : budget.reason === "token_cap"
+          ? "this organization has reached its daily token budget for the copilot"
+          : "this organization has reached its daily budget for the copilot",
       // retry_after_seconds matches the provider-429 mapping below;
       // retry_after is the name the spec's acceptance criteria use.
       retry_after: budget.retryAfterSeconds,

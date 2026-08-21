@@ -82,6 +82,11 @@ export const envSchema = z.object({
   AGENT_ORG_RATE_LIMIT: z.coerce.number().int().nonnegative().default(300),
   AGENT_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
   AGENT_DAILY_COST_CAP_CENTS: z.coerce.number().int().nonnegative().default(1000),
+  // Daily token budget per org, summed from llm_calls. Counts tokens, not
+  // cents, because a free tier records cost 0 while still burning the
+  // provider's quota — this is the guard that cannot be walked around by a
+  // zero-cost model (D-52). 0 disables it.
+  AGENT_DAILY_TOKEN_CAP: z.coerce.number().int().nonnegative().default(200_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
