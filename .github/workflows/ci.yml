@@ -64,6 +64,11 @@ jobs:
     name: end-to-end RLS proofs against the local stack
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # The most expensive job in the file: a dev server plus the whole stack,
+    # 175 tests on one worker. A documentation change does not deserve it, so
+    # the job only starts when something it can fail on moved. Everything here
+    # still runs for any code change, and on main it runs unconditionally.
+    if: "!startsWith(github.event_name, 'pull_request') || hashFiles('src/**', 'tests/**', 'supabase/**', 'evals/**', 'Taskfile.yml', 'playwright.config.ts', '.github/workflows/ci.yml') != ''"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -134,6 +139,10 @@ jobs:
   python:
     name: python services
     runs-on: ubuntu-latest
+    # The tests need a database (they run inside rolled-back transactions
+    # against the real schema), so this job pays for a Supabase stack. Only
+    # pay for it when a Python file, a migration, or the seeds moved.
+    if: "!startsWith(github.event_name, 'pull_request') || hashFiles('py/**', 'supabase/migrations/**', 'supabase/seed.sql', '.github/workflows/ci.yml') != ''"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
