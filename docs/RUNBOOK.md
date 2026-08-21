@@ -65,17 +65,21 @@ standalone destructive database rebuild — it prompts before dropping data.
 4. Docs: every changed claim carries a proof marker; `task docs-check`
    (inside `task check`) fails when a target disappears.
 
-### What CI runs, and the one job that is red on purpose
+### What CI runs, and why there are two badges
 
-Seven jobs, all running the same commands as above: `check`, `e2e`, `evals`,
-`python`, `infra`, `gitleaks`, `knip`. Six are green.
-<!-- proof: .github/workflows/ci.yml -->
+**`ci.yml`** — six jobs, all green, all running the same commands as above:
+`check`, `e2e`, `python`, `infra`, `gitleaks`, `knip`. This workflow answers
+"is the code correct". <!-- proof: .github/workflows/ci.yml -->
 
-`evals` is red, and the reason is the design: with no model key in the
+**`evals.yml`** — the measurement gate, red on purpose. With no model key in the
 repository the three model-dependent metrics report *not measured* and the run
 exits non-zero (D-24 — a measurement that did not happen is not a measurement
-that passed). The deterministic half still runs and passes there: recall@5
-1.00 (28/28), abstention 1.00 (15/15).
+that passed). The deterministic half runs there on every push and passes:
+recall@5 1.00 (28/28), abstention 1.00 (15/15).
+<!-- proof: .github/workflows/evals.yml -->
+
+They are separate files because a single red badge meaning "no key configured"
+gets read as "broken build", and that is its own kind of false claim.
 
 Two ways to change that, and both are a human's call. Add
 `secrets.GROQ_API_KEY` and accept that one push spends a free tier's entire
