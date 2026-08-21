@@ -96,6 +96,19 @@ export class RateLimitedError extends Error {
  */
 export class TurnCancelledError extends Error {}
 
+/** 1627 seconds is true and unreadable; "about 27 minutes" is what a person wants. */
+function humanize(seconds: number): string {
+  if (seconds >= 3600) {
+    const hours = Math.round(seconds / 3600);
+    return hours === 1 ? "an hour" : `about ${hours} hours`;
+  }
+  if (seconds >= 60) {
+    const minutes = Math.round(seconds / 60);
+    return minutes === 1 ? "a minute" : `about ${minutes} minutes`;
+  }
+  return `about ${seconds} seconds`;
+}
+
 function errorOf(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
     const { error } = body as { error?: unknown };
@@ -432,7 +445,7 @@ export function CopilotPanel({
           <p data-testid="copilot-rate-limited" className="text-sm text-status-warn">
             {turn.error?.message}
             {turn.error instanceof RateLimitedError && turn.error.retryAfterSeconds
-              ? ` — try again in about ${turn.error.retryAfterSeconds} seconds.`
+              ? ` — try again in about ${humanize(turn.error.retryAfterSeconds)}.`
               : " — try again shortly."}
           </p>
         )}

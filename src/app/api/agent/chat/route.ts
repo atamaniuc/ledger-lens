@@ -533,7 +533,8 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json(
         {
-          error: "every provider in the copilot's failover chain is rate-limited or unreachable right now",
+          error:
+            "the copilot's free model tier has used its daily allowance — this is the guard working, not a breakage",
           chain_exhausted: true,
           chain: chain.names,
           attempts: error.attempts,
