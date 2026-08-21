@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { EMBEDDING_MODEL, embedTexts, type EmbedOptions } from "./embed";
 import { queryEmbeddingCache } from "./embedding-cache";
 
-export const DEFAULT_MATCH_LIMIT = 5;
+const DEFAULT_MATCH_LIMIT = 5;
 
 /**
  * Cosine-similarity floor on the vector half, measured against this corpus
@@ -68,7 +68,7 @@ export interface SearchOptions {
   embedding?: number[];
 }
 
-export class RetrievalError extends Error {
+class RetrievalError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "RetrievalError";
@@ -117,17 +117,3 @@ export async function searchChunks(
   return (data ?? []) as RetrievedChunk[];
 }
 
-/** The ids an answer is allowed to cite, given what a search returned. */
-export function citableIds(chunks: RetrievedChunk[]): {
-  chunkIds: Set<number>;
-  invoiceIds: Set<string>;
-} {
-  return {
-    chunkIds: new Set(chunks.map((chunk) => chunk.chunk_id)),
-    invoiceIds: new Set(
-      chunks
-        .map((chunk) => chunk.invoice_external_id)
-        .filter((id): id is string => id !== null),
-    ),
-  };
-}

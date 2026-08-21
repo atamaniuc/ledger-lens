@@ -19,10 +19,10 @@
 // This module is the pure half: no filesystem, so it is unit-testable. The CLI
 // that walks the repository is scripts/verify-docs.ts.
 
-export const MARKER = /<!--\s*proof:\s*(.+?)\s*-->/g;
+const MARKER = /<!--\s*proof:\s*(.+?)\s*-->/g;
 
 /** Documents whose claims must be evidenced once the gate runs in strict mode. */
-export const MUST_CARRY_PROOF = ["README.md", "docs/ARCHITECTURE.md"];
+const MUST_CARRY_PROOF = ["README.md", "docs/ARCHITECTURE.md"];
 
 export interface Problem {
   file: string;
@@ -78,7 +78,7 @@ export function checkTarget(target: string, resolver: Resolver): string | null {
  * `...`, `[optional]`, `<angle>` — is what separates an illustration from an
  * assertion, and no real path in this repository contains any of it.
  */
-export function isSyntaxExample(target: string): boolean {
+function isSyntaxExample(target: string): boolean {
   return /\.\.\.|[[\]<>|]/.test(target);
 }
 

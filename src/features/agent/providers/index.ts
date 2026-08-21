@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { openAiCompatibleClient } from "./openai-compatible";
-import { ModelError, type ModelClient, type ModelRequestOptions } from "./types";
+import { ModelError, type ModelClient } from "./types";
 
 // Which model the copilot runs on, and where it comes from.
 //
@@ -16,7 +16,7 @@ import { ModelError, type ModelClient, type ModelRequestOptions } from "./types"
 // equal across providers. Stage 6's eval set is what measures that: point
 // `LLM_PROVIDER` at a provider and run `task evals`.
 
-export type { ModelClient, ModelRequestOptions };
+export type { ModelClient };
 export { ModelError };
 
 export interface ProviderSpec {
@@ -176,16 +176,12 @@ export function createModelClient(): ModelClient | null {
 
 // ADR 0010: the failover chain — an ordered preference list of providers, a
 // process-local cooldown map, and a clear 429 when the chain is exhausted.
+// The chain's own module (./chain) is the import site for everything else —
+// the tests import it there, and a barrel entry nobody imports is surface
+// with no user.
 export {
   ChainExhaustedError,
-  chainSummary,
-  createChain,
   createModelChain,
-  parseChain,
-  resolveChain,
   type ChainAttempt,
-  type ChainLink,
-  type ChainOptions,
-  type ChainStepResult,
   type ModelChain,
 } from "./chain";

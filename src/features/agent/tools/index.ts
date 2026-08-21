@@ -15,10 +15,7 @@ import { listInvoices } from "./list-invoices";
 import { searchDocuments } from "./search-documents";
 import type { AgentTool, ToolContext } from "./types";
 
-export type { AgentTool, ToolContext, ToolEffect } from "./types";
-export type { RevenueSummary, RevenueSummaryInput } from "./get-revenue-summary";
-export type { ListInvoicesResult, ListedInvoice } from "./list-invoices";
-export type { SearchDocumentsResult, SearchedChunk } from "./search-documents";
+export type { AgentTool, ToolContext } from "./types";
 export type { CustomerEmailDraft } from "./draft-customer-email";
 
 // Two rules about the published tool schemas, both learned the hard way from

@@ -17,15 +17,7 @@ import { JsonStdoutExporter, NoopExporter, OtlpJsonHttpExporter } from "./export
 import { Tracer, type StartSpanOptions, type TraceOptions } from "./tracer";
 import type { Span, SpanExporter, SpanStatus } from "./types";
 
-export type {
-  Span,
-  SpanAttributeValue,
-  SpanAttributes,
-  SpanExporter,
-  SpanKind,
-  SpanResource,
-  SpanStatus,
-} from "./types";
+export type { Span, SpanStatus } from "./types";
 export type { StartSpanOptions, TraceOptions } from "./tracer";
 
 let singleton: Tracer | null = null;
@@ -77,7 +69,3 @@ export function trace<T>(
   return getTracer().trace(name, fn, opts);
 }
 
-/** Flush the singleton's exporter (no-op for stdout). Never throws. */
-export function flush(): Promise<void> {
-  return getTracer().flush();
-}

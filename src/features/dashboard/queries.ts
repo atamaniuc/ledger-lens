@@ -80,7 +80,7 @@ export interface RunSummary {
  * catches a checks failure and continues, so a closed run can legitimately
  * carry fewer than four — or none.
  */
-export type CheckCell =
+type CheckCell =
   | { check_name: CheckName; state: "present"; result: CheckResult }
   | { check_name: CheckName; state: "missing" };
 
@@ -215,7 +215,7 @@ export async function fetchRecentRuns(
 
 // --- invoices, cursor-paginated ---------------------------------------------
 
-export const INVOICE_PAGE_SIZE = 25;
+const INVOICE_PAGE_SIZE = 25;
 
 export interface InvoiceRow {
   id: string;

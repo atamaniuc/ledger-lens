@@ -43,12 +43,12 @@ type AgentResponse = AgentTurnResult & { correlation_id: string };
  * Mirrors the loop's AgentStepEvent, kept here so the panel never imports
  * server internals it does not own the shape of.
  */
-export type StreamStepEvent =
+type StreamStepEvent =
   | { type: "step"; stepNo: number; tool: string; args: unknown }
   | { type: "tool_result"; stepNo: number; tool: string; summary: string }
   | { type: "tokens"; text: string };
 
-export interface AskOptions {
+interface AskOptions {
   /** Abort to cancel the running turn; the server audits it as cancelled. */
   signal: AbortSignal;
   /** Forwarded as events arrive, so the panel can render the turn as it runs. */

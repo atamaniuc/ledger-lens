@@ -21,7 +21,7 @@
     "evals": "tsx evals/run.ts",
     "index": "tsx scripts/index-corpus.ts",
     "capture-baseline": "tsx scripts/capture-reconciliation-baseline.ts",
-    "knip": "knip --max-issues 48"
+    "knip": "knip"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

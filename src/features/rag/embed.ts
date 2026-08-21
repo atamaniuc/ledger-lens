@@ -18,7 +18,7 @@ export const EMBEDDING_DIMENSIONS = 384;
  */
 export const EMBED_BATCH_LIMIT = 8;
 
-export const DEFAULT_TIMEOUT_MS = 20_000;
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 /**
  * The Edge Runtime's own status for "the worker was killed for using too much

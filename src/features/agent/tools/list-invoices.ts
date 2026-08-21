@@ -21,7 +21,7 @@ const input = z.object({
 
 export type ListInvoicesInput = z.infer<typeof input>;
 
-export interface ListedInvoice {
+interface ListedInvoice {
   /**
    * The invoice as the world outside this database names it, and what a
    * citation should be written with.
@@ -45,7 +45,7 @@ export interface ListedInvoice {
   paid_at: string | null;
 }
 
-export interface ListInvoicesResult {
+interface ListInvoicesResult {
   invoices: ListedInvoice[];
   /** True when more rows matched than were returned, so an answer can say so. */
   truncated: boolean;

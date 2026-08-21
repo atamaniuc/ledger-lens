@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MAX_STEPS, runAgentTurn } from "./loop";
+import {
+  ABSTENTION_ANSWER,
+  EMPTY_STEPS_BEFORE_ABSTAINING,
+  MAX_RESPONSE_TOKENS,
+  MAX_STEPS,
+  TOKEN_CEILING,
+  TURN_BUDGET_MS,
+  runAgentTurn,
+} from "./loop";
 import type { ModelClient } from "./providers";
 import type { Database } from "@/platform/supabase/database.types";
 
@@ -142,7 +150,7 @@ describe("runAgentTurn", () => {
       supabase,
       model,
       now,
-      limits: { budgetMs: 30_000 },
+      limits: { budgetMs: TURN_BUDGET_MS },
     });
 
     expect(result.outcome).toBe("timeout");
@@ -266,9 +274,10 @@ describe("runAgentTurn", () => {
     const result = await withEmptyRetrieval(supabase, rpcs, model);
 
     expect(result.outcome).toBe("abstained");
-    expect(result.answer).toContain("I don't have data on that");
-    // Two tool-selection calls, and never the third that would have composed.
-    expect(callCount()).toBe(2);
+    expect(result.answer).toBe(ABSTENTION_ANSWER);
+    // Two tool-selection calls (one per empty step), and never the third
+    // that would have composed — the count is the bound, asserted by name.
+    expect(callCount()).toBe(EMPTY_STEPS_BEFORE_ABSTAINING);
     expect(result.answer).not.toContain("must never be produced");
     expect(rpcs.some((r) => r.args.p_outcome === "abstained")).toBe(true);
   });
@@ -328,5 +337,14 @@ describe("runAgentTurn", () => {
 
   it("defaults to the six-step cap ADR 0009 states", () => {
     expect(MAX_STEPS).toBe(6);
+  });
+
+  it("pins the other ADR 0009 bounds next to the step cap", () => {
+    // The step cap is asserted above; the rest of the bounds this loop is
+    // documented to enforce get the same treatment, so a change to any of
+    // them is a change to a stated contract rather than a silent tweak.
+    expect(TURN_BUDGET_MS).toBe(30_000);
+    expect(TOKEN_CEILING).toBe(120_000);
+    expect(MAX_RESPONSE_TOKENS).toBe(4_096);
   });
 });

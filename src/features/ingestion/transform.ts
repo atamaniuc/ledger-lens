@@ -20,7 +20,7 @@ const rawInvoiceSchema = z.object({
   issued_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
 });
 
-export interface TransformedInvoice {
+interface TransformedInvoice {
   external_id: string;
   customer: string;
   amount_cents: number;

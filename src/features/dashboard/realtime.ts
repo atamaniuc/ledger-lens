@@ -11,7 +11,7 @@
 // later change that wants delete events has to solve the leak rather than
 // widen this list. See ADR 0007.
 
-export type RealtimeEvent = "INSERT" | "UPDATE";
+type RealtimeEvent = "INSERT" | "UPDATE";
 
 export interface SubscribedTable {
   table: string;

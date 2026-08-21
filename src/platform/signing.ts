@@ -12,7 +12,7 @@
 //      replay attack and is refused. `signRequest` is cheap and is meant to be
 //      called once per attempt, not once per batch.
 
-export const SIGNATURE_VERSION = "v1";
+const SIGNATURE_VERSION = "v1";
 
 export interface SignedHeaders {
   "x-webhook-timestamp": string;
@@ -27,12 +27,12 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /** The string both sides hash. Kept in one place so a change cannot land on one side only. */
-export function canonicalString(timestampMs: number, nonce: string, rawBody: string): string {
+function canonicalString(timestampMs: number, nonce: string, rawBody: string): string {
   return `${SIGNATURE_VERSION}:${timestampMs}:${nonce}:${rawBody}`;
 }
 
 /** A nonce the verifier's `^[A-Za-z0-9_-]{8,128}$` accepts. */
-export function newNonce(): string {
+function newNonce(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 

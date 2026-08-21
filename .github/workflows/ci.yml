@@ -69,6 +69,14 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.115.0
+      # Every job that runs a `task` target installs Task. The first real run
+      # had two jobs die with `task: command not found` (exit 127) because only
+      # the check job did — the whole point of "no CI-only script" is that CI
+      # runs the same commands, which means it needs the same runner.
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm install --frozen-lockfile
       - name: Start the stack and apply migrations and seed
         run: |
@@ -105,6 +113,14 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.115.0
+      # Every job that runs a `task` target installs Task. The first real run
+      # had two jobs die with `task: command not found` (exit 127) because only
+      # the check job did — the whole point of "no CI-only script" is that CI
+      # runs the same commands, which means it needs the same runner.
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm install --frozen-lockfile
       - name: Start the stack and apply migrations and seed
         run: |

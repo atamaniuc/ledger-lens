@@ -12,7 +12,7 @@
 // an entry can only ever be right, because the key is the exact text and the
 // model that produced the vector.
 
-export const DEFAULT_MAX_ENTRIES = 256;
+const DEFAULT_MAX_ENTRIES = 256;
 
 interface Entry {
   key: string;

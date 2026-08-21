@@ -15,7 +15,7 @@ export class RetryableError extends Error {
   }
 }
 
-export interface RetryInfo {
+interface RetryInfo {
   /** The attempt that just failed (1-based). */
   attempt: number;
   /** The attempt about to run. */

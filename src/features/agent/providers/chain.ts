@@ -30,7 +30,7 @@ import {
 } from "./types";
 
 /** The env var naming the ordered chain. `LLM_PROVIDER` pins one provider; this names several, in order. */
-export const CHAIN_ENV = "LLM_CHAIN";
+const CHAIN_ENV = "LLM_CHAIN";
 
 /**
  * Parses and validates `LLM_CHAIN`. A name the spec table does not know, or
@@ -116,7 +116,7 @@ export interface ChainAttempt {
   retryAfterMs?: number;
 }
 
-export interface ChainStepResult {
+interface ChainStepResult {
   message: Anthropic.Message;
   /** The provider that actually answered — stamped onto the llm_calls row. */
   provider: string;
@@ -126,7 +126,7 @@ export interface ChainStepResult {
 }
 
 /** The streaming twin of ChainStepResult (spec 0013). */
-export interface ChainStreamResult {
+interface ChainStreamResult {
   stream: ModelStream;
   /** The provider that actually answered — stamped onto the llm_calls row. */
   provider: string;
@@ -176,7 +176,7 @@ export class ChainExhaustedError extends ModelError {
   }
 }
 
-export interface ChainOptions {
+interface ChainOptions {
   now?: () => number;
   /**
    * The cooldown store. Defaults to the process-wide map, which is the point
@@ -461,13 +461,4 @@ export function createModelChain(): ModelChain | null {
   );
 }
 
-/** One line for logs: the chain in order, or what is missing. */
-export function chainSummary(): string {
-  const resolved = resolveChain();
-  if (resolved === null || resolved.length === 0) {
-    return `no model provider is configured — set one of ${PROVIDERS.map((p) => p.keyVar).join(", ")}`;
-  }
-  const names = resolved.map((entry) => entry.spec.name);
-  if (names.length === 1) return `${names[0]}/${resolved[0].model}`;
-  return `chain: ${names.join(" → ")} (preferred: ${names[0]})`;
-}
+

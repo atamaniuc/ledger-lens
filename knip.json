@@ -7,7 +7,7 @@
   "playwright": false,
   "entry": [
     "src/app/**/{page,layout,route,loading,error,not-found,proxy}.{ts,tsx}",
-    "src/proxy.ts",
+
     "tests/**/*.ts",
     "playwright.config.ts",
     // Co-located unit, component and story files are consumers: without them
@@ -16,12 +16,9 @@
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/*.stories.tsx",
-    "vitest.config.mts",
     "vitest.*.config.mts",
-    "vitest.browser.setup.ts",
     ".storybook/**/*.{ts,tsx}",
     // Developer entrypoints: run by task targets, not imported by the app.
-    "evals/run.ts",
     "scripts/*.ts"
   ],
   "ignore": [

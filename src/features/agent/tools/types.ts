@@ -24,7 +24,7 @@ export interface ToolContext {
  * nothing in this repository can send, write or reach the network on the
  * agent's behalf.
  */
-export type ToolEffect = "read" | "draft";
+type ToolEffect = "read" | "draft";
 
 export interface AgentTool<TInput = unknown, TOutput = unknown> {
   name: string;

@@ -19,7 +19,7 @@ const input = z.object({
 
 export type SearchDocumentsInput = z.infer<typeof input>;
 
-export interface SearchedChunk {
+interface SearchedChunk {
   chunk_id: number;
   source_kind: "document" | "invoice";
   document_title: string | null;
@@ -34,7 +34,7 @@ export interface SearchedChunk {
   content: string;
 }
 
-export interface SearchDocumentsResult {
+interface SearchDocumentsResult {
   chunks: SearchedChunk[];
 }
 

@@ -25,9 +25,9 @@ const input = z.object({
     .describe("Only count invoices issued on or before this date (YYYY-MM-DD)."),
 });
 
-export type RevenueSummaryInput = z.infer<typeof input>;
+type RevenueSummaryInput = z.infer<typeof input>;
 
-export interface RevenueSummary {
+interface RevenueSummary {
   invoice_count: number;
   /**
    * `null` when the rows span more than one currency. Summing across

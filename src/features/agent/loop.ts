@@ -127,7 +127,7 @@ export interface ConversationTurn {
  * to bill anyone, so an estimate is honest where a precise count would be
  * pretending.
  */
-export function estimateTurnTokens(turn: ConversationTurn): number {
+function estimateTurnTokens(turn: ConversationTurn): number {
   return Math.ceil((turn.question.length + turn.answer.length) / 4);
 }
 

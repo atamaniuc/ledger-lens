@@ -20,7 +20,7 @@
  * not need it, so the patterns look for an imperative aimed at "you"/"the
  * assistant" or the classic override phrasings, not for any mention of a rule.
  */
-export const EMBEDDED_INSTRUCTION_PATTERNS: readonly RegExp[] = [
+const EMBEDDED_INSTRUCTION_PATTERNS: readonly RegExp[] = [
   /\bignore\s+(all\s+|any\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)\b/i,
   /\bdisregard\s+(all\s+|any\s+)?(previous|prior|above|earlier|the)\s+\w+/i,
   /\byou\s+(must|should|need\s+to|are\s+required\s+to)\s+(send|email|export|forward|transfer|reveal|disclose|include|attach)\b/i,

@@ -111,7 +111,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
 }
 
 /** The parsed, cached environment; parses on first use. */
-export function env(): Env {
+function env(): Env {
   if (!cached) cached = loadEnv();
   return cached;
 }
@@ -120,51 +120,7 @@ export function env(): Env {
 // the schema. Each returns the validated type.
 export const getSupabaseUrl = (): string => env().SUPABASE_URL;
 export const getServiceRoleKey = (): string => env().SUPABASE_SERVICE_ROLE_KEY;
-export const getPublicSupabaseUrl = (): string => env().NEXT_PUBLIC_SUPABASE_URL;
-export const getPublicAnonKey = (): string => env().NEXT_PUBLIC_SUPABASE_ANON_KEY;
-export const getIngestionTriggerSecret = (): string => env().INGESTION_TRIGGER_SECRET;
-export const getWebhookSharedSecret = (): string => env().WEBHOOK_SHARED_SECRET;
-export const getEmbedSharedSecret = (): string => env().EMBED_SHARED_SECRET;
-export const getMockProviderBaseUrl = (): string | undefined => env().MOCK_PROVIDER_BASE_URL;
-export const getMockProviderSeed = (): number | undefined => env().MOCK_PROVIDER_SEED;
 export const getLlmProvider = (): Env["LLM_PROVIDER"] => env().LLM_PROVIDER;
-/** The failover chain as a list, empty when unset (decision 0010). */
-export const getLlmChain = (): string[] =>
-  (env().LLM_CHAIN ?? "")
-    .split(",")
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-
-export const getAppEnv = (): Env["APP_ENV"] => env().APP_ENV;
-export const getJudgeConfig = (): {
-  provider: Env["JUDGE_PROVIDER"];
-  model: string | undefined;
-  apiKey: string | undefined;
-  baseUrl: string | undefined;
-} => {
-  const e = env();
-  return {
-    provider: e.JUDGE_PROVIDER,
-    model: e.JUDGE_MODEL,
-    apiKey: e.JUDGE_API_KEY,
-    baseUrl: e.JUDGE_BASE_URL,
-  };
-};
-export const getIngestBudgetMs = (): number => env().INGEST_BUDGET_MS;
-export const getAgentLimits = (): {
-  userRequests: number;
-  orgRequests: number;
-  windowSeconds: number;
-  dailyCostCapCents: number;
-} => {
-  const e = env();
-  return {
-    userRequests: e.AGENT_USER_RATE_LIMIT,
-    orgRequests: e.AGENT_ORG_RATE_LIMIT,
-    windowSeconds: e.AGENT_RATE_LIMIT_WINDOW_SECONDS,
-    dailyCostCapCents: e.AGENT_DAILY_COST_CAP_CENTS,
-  };
-};
 
 /**
  * The seven chaos flags as explicitly configured. `undefined` means "not
