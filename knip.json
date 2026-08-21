@@ -35,6 +35,6 @@
     "py/**",
     "infra/**"
   ],
-  // evals/run.ts shells out to the supabase CLI.
-  "ignoreBinaries": ["supabase"]
+  // The evals runner shells out to supabase (stack status) and uv (the judge).
+  "ignoreBinaries": ["supabase", "uv"]
 }
