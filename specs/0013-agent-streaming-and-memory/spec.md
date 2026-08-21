@@ -1,6 +1,6 @@
 # 0013 — Agent Streaming, Cancellation and Memory
 
-**Status:** proposed · **Lane:** W3 (P1, after the gates in 0007 are green) · **Debt closed:** D-44
+**Status:** shipped · **Lane:** W3 (P1, after the gates in 0007 are green) · **Debt closed:** D-44
 
 ## Why
 
