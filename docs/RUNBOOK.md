@@ -122,6 +122,18 @@ when its trigger files change). Review `task infra-preview` first;
 `task infra-destroy` tears it down. CI never runs `pulumi up` — deploys
 are a machine action.
 
+**Status of this project's hosted half (as of 2026-08-21):** the schema is
+fully pushed (22 of 22 migrations, verified with `supabase migration list`)
+and all three Edge Functions are deployed and answering — unsigned calls get
+401, a signed embed call returned a real 384-dimension vector. What is NOT
+provisioned is the hosted data: migrations carry no tenants, no users and no
+corpus, because the seed is a local-stack step by design. After the app is up,
+run `scripts/provision-hosted.sh` with the hosted project's URL and
+service-role key (from the Supabase dashboard) to create the two tenants and
+the two sign-in users; it is idempotent. Invoices and the corpus then come
+from an ingestion pass against the deployed app.
+<!-- proof: scripts/provision-hosted.sh -->
+
 By hand, the same steps: `supabase link --project-ref <ref>` →
 `supabase db push` → `supabase functions deploy provider-webhook embed`.
 For transcription (py/modal): `supabase functions deploy transcribe-webhook`
