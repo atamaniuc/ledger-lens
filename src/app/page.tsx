@@ -89,7 +89,7 @@ export default async function Home() {
           </Button>
           <Button asChild variant="outline" size="lg">
             <a
-              href="https://github.com/datamaniuc"
+              href="https://github.com/atamaniuc/ledger-lens/blob/main/docs/ARCHITECTURE.md"
               target="_blank"
               rel="noreferrer noopener"
             >
