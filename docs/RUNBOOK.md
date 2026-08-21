@@ -81,6 +81,15 @@ recall@5 1.00 (28/28), abstention 1.00 (15/15).
 They are separate files because a single red badge meaning "no key configured"
 gets read as "broken build", and that is its own kind of false claim.
 
+**What a push costs.** Both workflows run a `changes` job first that diffs the
+actual commit (full history, not shallow — a shallow clone makes `HEAD~1`
+invisible and the heavy jobs then run or skip for the wrong reason). If only
+`docs/`, `README.md`, `DEBT.md`, `specs/` or `decisions/` moved, `e2e`, `python`
+and `evals` are skipped and the push pays for the fast check jobs only. Any
+code, test, migration, seed, Taskfile or workflow change runs the heavy jobs —
+and if the diff cannot be computed, they run anyway (failing open costs a job;
+failing closed costs the truth).
+
 Two ways to change that, and both are a human's call. Add
 `secrets.GROQ_API_KEY` and accept that one push spends a free tier's entire
 daily token budget (a full run is ≈185k of 200k), or leave it red and measure
