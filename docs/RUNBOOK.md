@@ -150,6 +150,36 @@ see `py/modal/README.md`.
   this tenant's real data with no model call, even when every provider is
   spent or unconfigured. Answers are marked "Demo answer". The thing to turn
   on before a presentation.
+
+### How the demo answers work (no model involved)
+
+The demo path is not a stub with canned text — it is a scripted answer over
+REAL data, through the SAME tools the agent would use:
+
+1. **Intent by pattern, not by LLM.** The route matches the question against
+   three shapes: totals/counts (`revenue|total|how much|average`), open
+   invoices (`overdue|open|unpaid`), and corpus questions
+   (`payment term|policy`). Anything else gets a polite answer listing the
+   shapes it understands.
+2. **A real tool runs.** `get_revenue_summary`, `list_invoices` or
+   `search_documents` — the exact functions the agent would call — execute
+   under the caller's JWT, so RLS decides which rows come back. No
+   cross-tenant data can leak, because the read path is identical to the
+   agent's.
+3. **The answer is assembled by template from real values**, with real
+   citation ids from the tool result: `Demo answer: total invoiced value is
+   USD 52,417 across 180 invoices. Largest: [inv-2] [inv-1]`.
+4. **Zero tokens, zero providers, zero limits.** The model is never called,
+   so a spent budget, a rate limit or a missing key cannot produce an error.
+   A presentation cannot fail on the copilot.
+5. **It is marked.** Every demo answer carries `demo: true` and the panel
+   shows a "Demo answer" badge, so it is never mistaken for a model answer.
+   The code lives in `src/features/agent/demo-answer.ts`; the e2e proof is
+   `tests/copilot-demo-mode.spec.ts` (no provider, spent budget → 200).
+
+Safety is unchanged: the tools still run under the user's JWT, RLS still
+scopes every row, and the registry still bounds what can happen. Demo mode
+only changes WHO composes the answer — a template instead of a model.
 - **Runtime providers** — OpenAI-compatible endpoints added at runtime; the
   API key is read from the named environment variable at call time and never
   stored. They join the failover chain after the environment-configured ones.
