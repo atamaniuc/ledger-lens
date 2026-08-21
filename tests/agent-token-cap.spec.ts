@@ -71,14 +71,31 @@ test.describe("the chat route daily token cap (D-52)", () => {
   });
 
   test("over the token cap the same RPC refuses (SQL, no model needed)", async () => {
-    await asUser(ALICE, async (tx) => {
-      const rows = await tx.unsafe(`
-        select public.check_agent_budget(
-          '${ORG_A}'::uuid, 100000, 1000000, 3600, 1000000000, ${CAP}
-        )::text as verdict`);
-      const verdict = String(rows[0].verdict);
-      expect(verdict).toContain('"allowed": false');
-      expect(verdict).toContain("token_cap");
-    });
+    // Seed as the owner: llm_calls has no grant to authenticated by design,
+    // and the mechanism under test is the SECURITY DEFINER function that reads
+    // those rows under auth.uid(). One row at the cap is enough.
+    const corr = "token-cap-sql-" + Date.now();
+    const inserted = await sql<{ id: number }[]>`
+      insert into llm_calls (
+        org_id, correlation_id, step_no, model, prompt_version,
+        input_tokens, output_tokens, cost_cents, latency_ms, outcome
+      ) values (
+        ${ORG_A}, ${corr}, 0, 'openai/gpt-oss-20b', 'v0',
+        ${CAP}, 0, 0, 1, 'ok'
+      ) returning id`;
+    const ids = inserted.map((row) => row.id);
+    try {
+      await asUser(ALICE, async (tx) => {
+        const rows = await tx.unsafe(`
+          select public.check_agent_budget(
+            '${ORG_A}'::uuid, 100000, 1000000, 3600, 1000000000, ${CAP}
+          )::text as verdict`);
+        const verdict = String(rows[0].verdict);
+        expect(verdict).toContain('"allowed": false');
+        expect(verdict).toContain("token_cap");
+      });
+    } finally {
+      await sql`delete from llm_calls where id = any(${ids})`;
+    }
   });
 });
