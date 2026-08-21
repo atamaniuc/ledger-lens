@@ -37,9 +37,14 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          CHANGED="$(git diff --name-only "$BASE" HEAD || true)"
-          RUN="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase)/|^Taskfile.yml|^\.github/workflows/evals.yml' || true)"
-          echo "run=$([ -n "$RUN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          RUN=true
+          if git diff --quiet "$BASE" HEAD 2>/dev/null; then
+            RUN=false
+          elif CHANGED="$(git diff --name-only "$BASE" HEAD 2>/dev/null || true)"; then
+            MATCH="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase)/|^Taskfile.yml|^\.github/workflows/evals.yml' || true)"
+            [ -z "$MATCH" ] && RUN=false
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
   evals:
     name: retrieval and agent-safety evals

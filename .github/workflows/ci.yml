@@ -56,11 +56,19 @@ jobs:
           else
             BASE="HEAD~1"
           fi
-          CHANGED="$(git diff --name-only "$BASE" HEAD || true)"
-          CODE="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase|scripts|.github)/|^Taskfile.yml|^playwright.config.ts' || true)"
-          PY="$(printf '%s\n' "$CHANGED" | grep -E '^py/|^supabase/migrations/|^supabase/seed.sql' || true)"
-          echo "code=$([ -n "$CODE" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "python=$([ -n "$PY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          CODE=true
+          PY=true
+          if git diff --quiet "$BASE" HEAD 2>/dev/null; then
+            CODE=false
+            PY=false
+          elif CHANGED="$(git diff --name-only "$BASE" HEAD 2>/dev/null || true)"; then
+            CODEM="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase|scripts|.github)/|^Taskfile.yml|^playwright.config.ts' || true)"
+            PYM="$(printf '%s\n' "$CHANGED" | grep -E '^py/|^supabase/migrations/|^supabase/seed.sql' || true)"
+            [ -z "$CODEM" ] && CODE=false
+            [ -z "$PYM" ] && PY=false
+          fi
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "python=$PY" >> "$GITHUB_OUTPUT"
           echo "changed files: $CHANGED" | head -c 400
   check:
     name: typecheck, lint, unit tests, deno check
