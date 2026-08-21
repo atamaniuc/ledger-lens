@@ -69,6 +69,19 @@ async function pollOutcome(correlationId: string): Promise<string> {
   }
 }
 
+
+/** See tests/agent-rate-limit.spec.ts: the route answers 503 before the budget
+ * gate and before any model call when nothing is configured, and CI holds no
+ * key — so a route-level assertion here is about a configured deployment. */
+function providerConfigured(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.NVIDIA_API_KEY ??
+      (process.env.LLM_API_KEY && process.env.LLM_BASE_URL ? "generic" : undefined),
+  );
+}
+
 test.describe("spec 0013 — cancellation (AC-02)", () => {
   test("an aborted request stops the loop within one step and is audited as cancelled", async () => {
     const { supabase, rpcs } = stubSupabase();
@@ -215,6 +228,10 @@ test.describe("spec 0013 — cancellation (AC-02)", () => {
     context,
     request,
   }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before it reaches this path, by design",
+    );
     test.setTimeout(300_000);
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
     await page.goto("/dashboard");

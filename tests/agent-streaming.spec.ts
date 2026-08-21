@@ -126,6 +126,19 @@ function bothTransportsModel() {
 
 // --- AC-01: one loop, two transports ----------------------------------------
 
+
+/** See tests/agent-rate-limit.spec.ts: the route answers 503 before the budget
+ * gate and before any model call when nothing is configured, and CI holds no
+ * key — so a route-level assertion here is about a configured deployment. */
+function providerConfigured(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.NVIDIA_API_KEY ??
+      (process.env.LLM_API_KEY && process.env.LLM_BASE_URL ? "generic" : undefined),
+  );
+}
+
 test.describe("spec 0013 — one loop, two transports", () => {
   test("the same question down both transports yields the same tools, citations and audit rows", async () => {
     // One correlation id for both runs: the audit rows carry it, and the
@@ -306,6 +319,10 @@ function parseSse(text: string): Record<string, unknown>[] {
 
 test.describe("spec 0013 — the chat route's two transports", () => {
   test("the JSON path still answers with a single JSON body, unchanged", async ({ context, request }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before it reaches this path, by design",
+    );
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
     const res = await context.request.post("/api/agent/chat", {
       data: { question: "what are our payment terms?" },
@@ -334,6 +351,10 @@ test.describe("spec 0013 — the chat route's two transports", () => {
   });
 
   test("Accept: text/event-stream streams step events and ends with done", async ({ context, request }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before it reaches this path, by design",
+    );
     test.setTimeout(120_000);
     await signInBrowser(context, request, apiUrl, "alice@acme.test");
     const res = await context.request.post("/api/agent/chat", {
@@ -374,6 +395,10 @@ test.describe("spec 0013 — the chat route's two transports", () => {
   });
 
   test("the copilot panel parses a streamed response and renders its answer", async ({ page, context, request }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before it reaches this path, by design",
+    );
     // The UI half of AC-01, over a real SSE response: the panel's transport
     // must negotiate the stream and turn the done event's result into the
     // answer. (Rendering the intermediate steps is the Streaming story's

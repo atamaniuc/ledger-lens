@@ -103,4 +103,36 @@ test.describe("the chat route request limits (D-18)", () => {
       expect(String(rows[0].verdict)).toContain('"allowed": true');
     });
   });
+
+  test("over the per-user limit the same RPC refuses (SQL, no model needed)", async () => {
+    // The negative path of the mechanism, asserted where no provider is
+    // required — so the guardrail is proven in CI too, not only on a machine
+    // that happens to hold a key.
+    //
+    // The counter is seeded as the owner, not as the user: `authenticated`
+    // holds no grant on agent_request_budget at all — the SECURITY DEFINER
+    // function is the only thing that may touch it, which is the guarantee
+    // being relied on here rather than an inconvenience.
+    await seedWindow("user", aliceId, USER_LIMIT);
+    try {
+      await asUser(ALICE, async (tx) => {
+        const rows = await tx.unsafe(
+          "select public.check_agent_budget('" +
+            ORG_A +
+            "'::uuid, " +
+            USER_LIMIT +
+            ", " +
+            ORG_LIMIT +
+            ", " +
+            WINDOW_SECONDS +
+            ", 1000000)::text as verdict",
+        );
+        const verdict = String(rows[0].verdict);
+        expect(verdict).toContain('"allowed": false');
+        expect(verdict).toContain("user");
+      });
+    } finally {
+      await clearWindow("user", aliceId);
+    }
+  });
 });

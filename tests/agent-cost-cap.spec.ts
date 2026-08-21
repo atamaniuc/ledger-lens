@@ -18,11 +18,28 @@ test.beforeAll(() => {
   ({ apiUrl } = localStack());
 });
 
+
+/** See tests/agent-rate-limit.spec.ts: the route answers 503 before the budget
+ * gate and before any model call when nothing is configured, and CI holds no
+ * key — so a route-level assertion here is about a configured deployment. */
+function providerConfigured(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.NVIDIA_API_KEY ??
+      (process.env.LLM_API_KEY && process.env.LLM_BASE_URL ? "generic" : undefined),
+  );
+}
+
 test.describe("the chat route daily cost cap (D-18)", () => {
   test("over the daily cap the route answers 402 with retry_after naming the reset", async ({
     context,
     request,
   }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before it reaches this path, by design",
+    );
     // One row at the cap is enough: the check is spend >= cap, and the cap
     // may already have been partly spent by real turns today.
     const inserted = await sql<{ id: number }[]>`
