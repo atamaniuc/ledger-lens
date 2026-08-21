@@ -22,10 +22,31 @@ env:
   DO_NOT_TRACK: "1"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="HEAD~1"
+          fi
+          CHANGED="$(git diff --name-only "$BASE" HEAD || true)"
+          RUN="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase)/|^Taskfile.yml|^\.github/workflows/evals.yml' || true)"
+          echo "run=$([ -n "$RUN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   evals:
     name: retrieval and agent-safety evals
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    needs: [changes]
+    if: needs.changes.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
