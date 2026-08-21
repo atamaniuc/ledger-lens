@@ -237,6 +237,30 @@ export type Database = {
           },
         ]
       }
+      copilot_settings: {
+        Row: {
+          demo_mode: boolean
+          guards_enabled: boolean
+          id: number
+          providers: Json
+          updated_at: string
+        }
+        Insert: {
+          demo_mode?: boolean
+          guards_enabled?: boolean
+          id?: number
+          providers?: Json
+          updated_at?: string
+        }
+        Update: {
+          demo_mode?: boolean
+          guards_enabled?: boolean
+          id?: number
+          providers?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       data_quality_results: {
         Row: {
           check_name: string
@@ -957,6 +981,7 @@ export type Database = {
           question: string
         }[]
       }
+      get_copilot_settings: { Args: { p_org_id: string }; Returns: Json }
       ingest_raw_event: {
         Args: {
           p_amount_cents: number
@@ -1105,6 +1130,15 @@ export type Database = {
           run_id: string
           started: boolean
         }[]
+      }
+      update_copilot_settings: {
+        Args: {
+          p_demo_mode: boolean
+          p_guards: boolean
+          p_org_id: string
+          p_providers: Json
+        }
+        Returns: Json
       }
     }
     Enums: {

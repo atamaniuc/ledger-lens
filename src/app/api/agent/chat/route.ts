@@ -4,6 +4,7 @@ import { checkAgentBudget } from "@/features/agent/budget";
 import {
   runAgentTurn,
   type AgentStepEvent,
+  type AgentTurnResult,
   type ConversationTurn,
 } from "@/features/agent/loop";
 import {
@@ -11,7 +12,10 @@ import {
   ModelError,
   createModelChain,
   providerSummary,
+  type ProviderSpec,
 } from "@/features/agent/providers";
+import { demoAnswer, demoFallbackAnswer } from "@/features/agent/demo-answer";
+import { getCopilotSettings, type CopilotSettings } from "@/features/admin/copilot-settings";
 import { endSpan, startSpan } from "@/platform/obs";
 import { createClient } from "@/platform/supabase/server-client";
 import type { Database } from "@/platform/supabase/database.types";
@@ -168,6 +172,8 @@ function streamResponse(opts: {
   question: string;
   history: ConversationTurn[];
   conversationId: string | undefined;
+  /** D-53: when true, a spent chain ends as a deterministic demo answer. */
+  demoMode: boolean;
 }): Response {
   const encoder = new TextEncoder();
   const abort = new AbortController();
@@ -233,6 +239,20 @@ function streamResponse(opts: {
               attempts: error.attempts,
             }),
           );
+          // D-53: demo mode delivers the deterministic answer as the stream's
+          // final event instead of an error — the reader never sees "try
+          // again later" on a stage.
+          if (opts.demoMode) {
+            const demo = await buildDemoAnswer(
+              opts.question,
+              opts.supabase,
+              opts.orgId,
+              opts.correlationId,
+            );
+            emit({ type: "done", result: { correlation_id: opts.correlationId, ...demo } });
+            controller.close();
+            return;
+          }
           emit({
             type: "error",
             error:
@@ -356,14 +376,42 @@ export async function POST(req: NextRequest) {
   }
   const membership = memberships[0];
 
+  // D-53: runtime copilot settings — guards flag, demo mode, providers added
+  // in the admin panel. Read through the user's own RPC (SECURITY DEFINER,
+  // membership-checked); a failure here must not take the copilot down, so
+  // the route falls back to the safe defaults: guards on, demo off.
+  let settings: CopilotSettings = { guardsEnabled: true, demoMode: false, providers: [] };
+  try {
+    settings = await getCopilotSettings(supabase, membership.org_id);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        correlation_id: correlationId,
+        event: "copilot_settings_unreadable",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+
   // ADR 0010: the deployment's failover chain — an ordered preference list
   // (LLM_CHAIN=groq,nvidia), or the single configured provider when no chain
-  // is set. The agent's safety properties do not come from the vendor (ADR
-  // 0009), so this is configuration rather than a decision. The chain shares
-  // one process-local cooldown map across requests.
+  // is set. Runtime providers from the admin panel (D-53) join after the
+  // environment-configured ones, so an operator can add an OpenAI-compatible
+  // provider without touching a deployment. The agent's safety properties do
+  // not come from the vendor (ADR 0009). The chain shares one process-local
+  // cooldown map across requests.
+  const runtimeSpecs: ProviderSpec[] = settings.providers
+    .filter((provider) => provider.enabled)
+    .map((provider) => ({
+      name: "runtime-" + provider.id,
+      keyVar: provider.keyName,
+      baseUrl: provider.baseUrl,
+      defaultModel: provider.model,
+      modelVar: "",
+    }));
   let chain;
   try {
-    chain = createModelChain();
+    chain = createModelChain(runtimeSpecs);
   } catch (error) {
     // A malformed or incompletely configured LLM_CHAIN fails loudly (ADR
     // 0010) rather than quietly shortening the chain — the operator gets a
@@ -382,6 +430,16 @@ export async function POST(req: NextRequest) {
     // unconfigured deployment is an operator problem, not a user's question.
     // Checked before the budget on purpose: a deployment that cannot answer
     // must not spend its users' quota on 503s.
+    //
+    // Demo mode (D-53) is the one exception to the 503: a presentation must
+    // not end on "not configured", so the copilot answers deterministically
+    // from this tenant's real data instead.
+    if (settings.demoMode) {
+      return demoResponse(
+        await buildDemoAnswer(question, supabase, membership.org_id, correlationId),
+        correlationId,
+      );
+    }
     return NextResponse.json(
       {
         error: "the copilot is not configured on this deployment",
@@ -398,24 +456,35 @@ export async function POST(req: NextRequest) {
   // the acceptance criteria name. It is never collapsed into the generic 500
   // below, and a database failure in the check itself is named as such
   // rather than silently letting the request through.
-  let budget;
-  try {
-    budget = await checkAgentBudget(supabase, membership.org_id);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      JSON.stringify({ correlation_id: correlationId, event: "agent_budget_check_failed", error: message }),
-    );
-    return NextResponse.json(
-      { error: "the copilot could not check its usage budget", correlation_id: correlationId },
-      { status: 500 },
-    );
-  }
+  //
+  // D-53: guards_enabled=false switches the gate off entirely — a
+  // presentation, a stress test, or a demo where the guard must not
+  // interrupt. The guard stays the default; turning it off is an operator
+  // decision recorded in copilot_settings.
+  const budget = settings.guardsEnabled
+    ? await checkAgentBudget(supabase, membership.org_id)
+    : { allowed: true as const };
 
   if (!budget.allowed) {
     // ADR 0010: this refusal is what the chain-exhausted 429 must be
     // distinguishable from — budget refusals carry retry_after/resets_at and
     // are logged under their own event, before any model call is made.
+    //
+    // D-53: demo mode never shows a budget error either. The guard still
+    // logs the refusal; the reader gets the deterministic answer instead.
+    if (settings.demoMode) {
+      console.warn(
+        JSON.stringify({
+          correlation_id: correlationId,
+          event: "agent_budget_refused_demo_fallback",
+          reason: budget.reason,
+        }),
+      );
+      return demoResponse(
+        await buildDemoAnswer(question, supabase, membership.org_id, correlationId),
+        correlationId,
+      );
+    }
     console.warn(
       JSON.stringify({
         correlation_id: correlationId,
@@ -481,6 +550,7 @@ export async function POST(req: NextRequest) {
       question: question.trim(),
       history,
       conversationId,
+      demoMode: settings.demoMode,
     });
   }
 
@@ -531,6 +601,15 @@ export async function POST(req: NextRequest) {
           attempts: error.attempts,
         }),
       );
+      // D-53: demo mode turns "every provider is spent" into a deterministic
+      // answer from this tenant's real data. The guard still logged the
+      // exhaustion; the reader just never sees "try again in 27 minutes".
+      if (settings.demoMode) {
+        return demoResponse(
+          await buildDemoAnswer(question, supabase, membership.org_id, correlationId),
+          correlationId,
+        );
+      }
       return NextResponse.json(
         {
           error:
@@ -579,4 +658,46 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// D-53: the demo-mode answer path. Runs the same tools the agent would use,
+// under the caller's JWT, and returns the answer marked `demo: true` so the
+// panel can say so. Used when demo mode is on and there is either no
+// configured chain or every provider in it is spent.
+async function buildDemoAnswer(
+  question: string,
+  supabase: SupabaseClient<Database>,
+  orgId: string,
+  correlationId: string,
+): Promise<AgentTurnResult & { demo: true }> {
+  const ctx = { supabase, orgId, correlationId };
+  const intent = await demoAnswer(question, ctx);
+  if (intent) {
+    return {
+      answer: intent.answer,
+      outcome: "ok",
+      terminationReason: null,
+      steps: 0,
+      toolsUsed: intent.toolsUsed,
+      retrievedChunkIds: intent.retrievedChunkIds,
+      citedInvoiceIds: intent.citedInvoiceIds,
+      citations: intent.citations,
+      verified: intent.citations.length > 0 && intent.citations.every((c) => c.verified),
+      uncited: intent.citations.length === 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      provider: null,
+      model: null,
+      fallback: false,
+      chainAttempts: [],
+      demo: true,
+    };
+  }
+  return demoFallbackAnswer();
+}
+
+function demoResponse(
+  result: AgentTurnResult & { demo: true },
+  correlationId: string,
+): NextResponse {
+  return NextResponse.json({ correlation_id: correlationId, ...result });
 }

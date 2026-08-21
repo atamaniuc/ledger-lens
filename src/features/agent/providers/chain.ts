@@ -20,7 +20,14 @@
 // service only.
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { configured, clientFor, resolveProvider, PROVIDERS, type ResolvedProvider } from "./index";
+import {
+  configured,
+  clientFor,
+  resolveProvider,
+  PROVIDERS,
+  type ProviderSpec,
+  type ResolvedProvider,
+} from "./index";
 import {
   ModelError,
   RequestAbortedError,
@@ -75,29 +82,40 @@ export function parseChain(raw: string | undefined): string[] {
  *
  * Returns null only when nothing at all is configured (the route's 503).
  */
-export function resolveChain(): ResolvedProvider[] | null {
+export function resolveChain(extra?: ProviderSpec[]): ResolvedProvider[] | null {
   const raw = process.env[CHAIN_ENV];
+  const chain: ResolvedProvider[] = [];
   if (raw === undefined || raw.trim() === "") {
     const single = resolveProvider();
-    return single ? [single] : null;
-  }
-  const names = parseChain(raw);
-  const chain: ResolvedProvider[] = [];
-  for (const name of names) {
-    const spec = PROVIDERS.find((provider) => provider.name === name);
-    // parseChain already rejected unknown names; this keeps the type honest.
-    if (!spec) throw new ModelError(`LLM_CHAIN names "${name}" but no such spec exists`);
-    const entry = configured(spec);
-    if (!entry) {
-      throw new ModelError(
-        `LLM_CHAIN names "${name}" but ${spec.keyVar}${
-          spec.baseUrl ? "" : " and LLM_BASE_URL"
-        } are not set`,
-      );
+    if (single) chain.push(single);
+  } else {
+    const names = parseChain(raw);
+    for (const name of names) {
+      const spec = PROVIDERS.find((provider) => provider.name === name);
+      // parseChain already rejected unknown names; this keeps the type honest.
+      if (!spec) throw new ModelError(`LLM_CHAIN names "${name}" but no such spec exists`);
+      const entry = configured(spec);
+      if (!entry) {
+        throw new ModelError(
+          `LLM_CHAIN names "${name}" but ${spec.keyVar}${
+            spec.baseUrl ? "" : " and LLM_BASE_URL"
+          } are not set`,
+        );
+      }
+      chain.push(entry);
     }
-    chain.push(entry);
   }
-  return chain;
+
+  // Runtime providers from copilot_settings (D-53) join the chain after the
+  // environment-configured ones: an operator-added provider is a fallback,
+  // never a replacement for the deployment's own preference order. A runtime
+  // provider whose key env is unset is skipped silently — it was added in the
+  // UI, so "the key is not set" is a settings problem, not a chain problem.
+  for (const spec of extra ?? []) {
+    const entry = configured(spec);
+    if (entry) chain.push(entry);
+  }
+  return chain.length > 0 ? chain : null;
 }
 
 export interface ChainLink {
@@ -449,8 +467,8 @@ export function createChain(links: ChainLink[], options: ChainOptions = {}): Mod
  * clients are stateless and cheap to rebuild, and the cooldown is the one
  * piece of state that has to survive across requests (ADR 0010).
  */
-export function createModelChain(): ModelChain | null {
-  const resolved = resolveChain();
+export function createModelChain(extra?: ProviderSpec[]): ModelChain | null {
+  const resolved = resolveChain(extra);
   if (resolved === null || resolved.length === 0) return null;
   return createChain(
     resolved.map((entry) => ({

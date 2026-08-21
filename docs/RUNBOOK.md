@@ -140,6 +140,25 @@ For transcription (py/modal): `supabase functions deploy transcribe-webhook`
 plus `modal deploy` from `py/modal` after creating the Modal secret —
 see `py/modal/README.md`.
 
+## Copilot runtime knobs (admin panel)
+
+`/admin` (sign in as an org admin) edits three things without a redeploy:
+
+- **Guards** — off means the copilot never returns 429/402; for presentations
+  and stress tests. Default on.
+- **Demo mode** — on means the copilot ALWAYS answers, deterministically from
+  this tenant's real data with no model call, even when every provider is
+  spent or unconfigured. Answers are marked "Demo answer". The thing to turn
+  on before a presentation.
+- **Runtime providers** — OpenAI-compatible endpoints added at runtime; the
+  API key is read from the named environment variable at call time and never
+  stored. They join the failover chain after the environment-configured ones.
+
+The settings live in `copilot_settings` (a singleton, RLS-protected, written
+only through SECURITY DEFINER functions that check the admin role).
+
+## Troubleshooting — failures actually hit in this project
+
 ## Troubleshooting — failures actually hit in this project
 
 - **`supabase status` dies on its own telemetry write (D-46).** The CLI can

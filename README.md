@@ -135,7 +135,7 @@ not a promise about the current tree — the commands are the claim.
 | Frontend | Next.js 16 App Router, React 19, Tailwind, shadcn/ui, TanStack Query, Storybook as a test suite |
 | Backend | Next.js route handlers, Deno Edge Functions (webhooks, embeddings), Postgres functions for anything transactional |
 | Database | Supabase Postgres — RLS on every table, `pgvector` HNSW + `tsvector` GIN, `pg_cron` |
-| AI | A failover chain over free tiers (Groq, NVIDIA NIM, any OpenAI-compatible), `gte-small` embeddings, hybrid retrieval with RRF, a four-tool agent under the user's own JWT |
+| AI | A failover chain over free tiers (Groq, NVIDIA NIM, any OpenAI-compatible), `gte-small` embeddings, hybrid retrieval with RRF, a four-tool agent under the user's own JWT, and an admin panel (\`/admin\`) with runtime providers, a guards flag, and a demo mode that answers deterministically when every provider is spent <!-- proof: src/app/admin/page.tsx --> <!-- proof: src/features/agent/demo-answer.ts --> |
 | Python | Bulk indexer, claim-level groundedness judge, Whisper transcription on Modal — `uv`, ruff, strict mypy |
 | Infrastructure | Pulumi (Vercel native, Supabase and Modal command-wrapped), GitHub Actions: eight jobs |
 | Observability | Hand-rolled OTel-shaped spans with `correlation_id` as the trace id, four metric views, alerts as rows <!-- proof: src/platform/obs/index.ts --> |

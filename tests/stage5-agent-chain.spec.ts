@@ -37,10 +37,10 @@ test.describe("Stage 5 — the failover chain route (ADR 0010)", () => {
     });
 
     if (configured) {
-      // 429 is a legitimate answer from a configured deployment, not a
-      // failure of this code: free tiers run out, and the chain surfaces
-      // that as a 429 naming the chain rather than collapsing into a 500.
-      expect([200, 429], await res.text()).toContain(res.status());
+      // A configured deployment legitimately answers 200, refuses with 429
+      // when the chain is spent, or refuses with 402 when the daily token
+      // budget is exhausted first (D-52) — the guard runs before the chain.
+      expect([200, 429, 402], await res.text()).toContain(res.status());
       const body = await res.json();
       expect(body.correlation_id).toBeTruthy();
 
@@ -54,9 +54,10 @@ test.describe("Stage 5 — the failover chain route (ADR 0010)", () => {
       } else {
         // Either shape of 429 is correct here, and both must carry
         // operator-facing detail: a provider's own rate-limit message, or the
-        // chain's "every provider failed" naming the chain it tried. What is
-        // not acceptable is a 429 with nothing to act on.
-        expect(body.detail, JSON.stringify(body)).toMatch(/rate limit|failover chain/i);
+        // chain's "every provider failed" naming the chain it tried. A 402
+        // budget refusal is the same class of answer. What is not acceptable
+        // is a refusal with nothing to act on.
+        expect(body.detail ?? body.error, JSON.stringify(body)).toMatch(/rate limit|failover chain|budget/i);
       }
     } else {
       expect(res.status()).toBe(503);

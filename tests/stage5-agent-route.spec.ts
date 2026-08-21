@@ -123,19 +123,18 @@ test.describe("Stage 5 — the chat route", () => {
     });
 
     if (configured) {
-      // 429 is a legitimate answer from a configured deployment, not a
-      // failure of this code: free tiers run out, and the point of the
-      // mapping under test is that the route says which of the two happened
-      // rather than collapsing both into a 500.
-      expect([200, 429], await res.text()).toContain(res.status());
+      // A configured deployment legitimately answers 200, refuses with 429
+      // when the chain is spent, or refuses with 402 when the daily token
+      // budget is exhausted first (D-52) — the guard runs before the chain.
+      expect([200, 429, 402], await res.text()).toContain(res.status());
       const body = await res.json();
       expect(body.correlation_id).toBeTruthy();
 
       if (res.status() === 200) expect(typeof body.answer).toBe("string");
       // A configured deployment answers, or refuses with detail an operator can
-      // act on: a provider rate limit, or the chain reporting that every
-      // provider it tried failed (ADR 0010).
-      else expect(body.detail, JSON.stringify(body)).toMatch(/rate limit|failover chain/i);
+      // act on: a provider rate limit, the chain reporting that every
+      // provider it tried failed (ADR 0010), or the budget naming itself.
+      else expect(body.detail ?? body.error, JSON.stringify(body)).toMatch(/rate limit|failover chain|budget/i);
     } else {
       expect(res.status()).toBe(503);
       const body = await res.json();

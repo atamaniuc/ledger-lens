@@ -36,7 +36,7 @@ import { useSelection } from "./selection-context";
 // question, and a 200 whose body is not an answer is a failure — neither is
 // something the transport can tell apart on its own.
 
-type AgentResponse = AgentTurnResult & { correlation_id: string };
+type AgentResponse = AgentTurnResult & { correlation_id: string; demo?: boolean };
 
 /**
  * One progressive event the server sends before the final answer (AC-01).
@@ -490,6 +490,16 @@ function Answer({
 
   return (
     <div data-testid="copilot-answer" className="flex flex-col gap-tight">
+      {result.demo === true && (
+        <p
+          data-testid="copilot-demo"
+          className="rounded-control bg-status-unknown-surface px-snug py-tight text-xs text-status-unknown"
+        >
+          Demo answer — deterministic, from this tenant&apos;s real data, with no model
+          call. Turn demo mode off in the admin panel for the live copilot.
+        </p>
+      )}
+
       {flagged && (
         <p
           role="alert"
