@@ -46,9 +46,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Two commits of history, so a push to main can diff against its
-          # parent instead of reporting the whole tree as changed.
-          fetch-depth: 2
+          # Full history, not two commits: a shallow clone makes HEAD~1 a
+          # mystery, and a change list that cannot be computed is skipped
+          # wrongly. The repository is small; a full fetch costs seconds and
+          # makes the diff the truth. The fail-open guard stays as a backstop.
+          fetch-depth: 0
       - id: diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
