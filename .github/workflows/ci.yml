@@ -34,6 +34,34 @@ env:
   DO_NOT_TRACK: "1"
 
 jobs:
+  # Which jobs are worth paying for, computed once. The expensive ones — the
+  # e2e suite and the python project — start a dev server or a Supabase stack,
+  # so a documentation-only change should not pay for them. The list is a diff
+  # of what actually moved, not a guess.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      python: ${{ steps.diff.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Two commits of history, so a push to main can diff against its
+          # parent instead of reporting the whole tree as changed.
+          fetch-depth: 2
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="HEAD~1"
+          fi
+          CHANGED="$(git diff --name-only "$BASE" HEAD || true)"
+          CODE="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase|scripts)/|^Taskfile.yml|^playwright.config.ts' || true)"
+          PY="$(printf '%s\n' "$CHANGED" | grep -E '^py/|^supabase/migrations/|^supabase/seed.sql' || true)"
+          echo "code=$([ -n "$CODE" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "python=$([ -n "$PY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "changed files: $CHANGED" | head -c 400
   check:
     name: typecheck, lint, unit tests, deno check
     runs-on: ubuntu-latest
@@ -68,7 +96,8 @@ jobs:
     # 175 tests on one worker. A documentation change does not deserve it, so
     # the job only starts when something it can fail on moved. Everything here
     # still runs for any code change, and on main it runs unconditionally.
-    if: "!startsWith(github.event_name, 'pull_request') || hashFiles('src/**', 'tests/**', 'supabase/**', 'evals/**', 'Taskfile.yml', 'playwright.config.ts', '.github/workflows/ci.yml') != ''"
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -142,7 +171,8 @@ jobs:
     # The tests need a database (they run inside rolled-back transactions
     # against the real schema), so this job pays for a Supabase stack. Only
     # pay for it when a Python file, a migration, or the seeds moved.
-    if: "!startsWith(github.event_name, 'pull_request') || hashFiles('py/**', 'supabase/migrations/**', 'supabase/seed.sql', '.github/workflows/ci.yml') != ''"
+    needs: [changes]
+    if: needs.changes.outputs.python == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
