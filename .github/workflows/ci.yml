@@ -57,7 +57,7 @@ jobs:
             BASE="HEAD~1"
           fi
           CHANGED="$(git diff --name-only "$BASE" HEAD || true)"
-          CODE="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase|scripts)/|^Taskfile.yml|^playwright.config.ts' || true)"
+          CODE="$(printf '%s\n' "$CHANGED" | grep -E '^(src|tests|evals|supabase|scripts|.github)/|^Taskfile.yml|^playwright.config.ts' || true)"
           PY="$(printf '%s\n' "$CHANGED" | grep -E '^py/|^supabase/migrations/|^supabase/seed.sql' || true)"
           echo "code=$([ -n "$CODE" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "python=$([ -n "$PY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
