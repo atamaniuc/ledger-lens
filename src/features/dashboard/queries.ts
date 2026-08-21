@@ -264,10 +264,18 @@ export function decodeCursor(raw: string | null | undefined): InvoiceCursor | nu
   return { issuedAt, id };
 }
 
+export interface InvoiceFilters {
+  /** Case-insensitive substring match on the customer name. */
+  customer?: string;
+  /** Exact match on the invoice status (draft|open|paid|void). */
+  status?: string;
+}
+
 export async function fetchInvoicePage(
   supabase: Client,
   after: InvoiceCursor | null = null,
   pageSize: number = INVOICE_PAGE_SIZE,
+  filters: InvoiceFilters = {},
 ): Promise<QueryResult<InvoicePage>> {
   let query = supabase
     .from("invoices")
@@ -280,6 +288,12 @@ export async function fetchInvoicePage(
     // next page, and asking that way costs one row rather than a count query
     // over the whole table.
     .limit(pageSize + 1);
+
+  // Filters, applied before the cursor so a filtered page starts from the top.
+  // A filter change resets pagination in the UI, so combining both is only
+  // reachable by hand-editing the URL — and it still behaves correctly.
+  if (filters.customer) query = query.ilike("customer", `%${filters.customer}%`);
+  if (filters.status) query = query.eq("status", filters.status);
 
   if (after) {
     query = query.or(

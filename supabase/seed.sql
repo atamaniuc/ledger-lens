@@ -55,6 +55,12 @@ insert into auth.users (
    'bob@globex.test', crypt('password123', gen_salt('bf')),
    now(), now(), now(),
    '{"provider":"email","providers":["email"]}', '{}',
+   '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000',
+   '00000000-0000-4000-9000-000000000003', 'authenticated', 'authenticated',
+   'carol@acme.test', crypt('password123', gen_salt('bf')),
+   now(), now(), now(),
+   '{"provider":"email","providers":["email"]}', '{}',
    '', '', '', '', '', '', '', '')
 on conflict (id) do nothing;
 
@@ -72,6 +78,10 @@ insert into auth.identities (
   (gen_random_uuid(), '00000000-0000-4000-9000-000000000002',
    '00000000-0000-4000-9000-000000000002', 'email',
    '{"sub":"00000000-0000-4000-9000-000000000002","email":"bob@globex.test","email_verified":true,"phone_verified":false}',
+   now(), now(), now()),
+  (gen_random_uuid(), '00000000-0000-4000-9000-000000000003',
+   '00000000-0000-4000-9000-000000000003', 'email',
+   '{"sub":"00000000-0000-4000-9000-000000000003","email":"carol@acme.test","email_verified":true,"phone_verified":false}',
    now(), now(), now())
 on conflict do nothing;
 
@@ -79,7 +89,9 @@ insert into public.memberships (user_id, org_id, role) values
   ('00000000-0000-4000-9000-000000000001',
    '00000000-0000-4000-8000-000000000001', 'admin'),
   ('00000000-0000-4000-9000-000000000002',
-   '00000000-0000-4000-8000-000000000002', 'admin')
+   '00000000-0000-4000-8000-000000000002', 'member'),
+  ('00000000-0000-4000-9000-000000000003',
+   '00000000-0000-4000-8000-000000000001', 'viewer')
 on conflict (user_id, org_id) do nothing;
 
 -- Stage 5 (RAG) corpus. Text that exists nowhere else in the database, so

@@ -37,6 +37,7 @@ export const ORG_A = "00000000-0000-4000-8000-000000000001"; // Acme Corp
 export const ORG_B = "00000000-0000-4000-8000-000000000002"; // Globex Inc
 export const ALICE = "00000000-0000-4000-9000-000000000001"; // member of Acme
 export const BOB = "00000000-0000-4000-9000-000000000002"; // member of Globex only
+export const CAROL = "00000000-0000-4000-9000-000000000003"; // viewer of Acme only
 
 class Rollback extends Error {}
 

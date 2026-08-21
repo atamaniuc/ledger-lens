@@ -109,8 +109,11 @@ task check-infra  # the Pulumi program, asserted with mocks — no cloud credent
 
 Running it, deploying it, and the failures worth knowing about:
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md). Architecture and diagrams:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Data model and invariants:
-[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/ARCHITECTURE-C4.md`](docs/ARCHITECTURE-C4.md). Data model and invariants:
+[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md). Accounts, routes, roles:
+[`docs/ACCOUNTS.md`](docs/ACCOUNTS.md). Patterns and paradigms:
+[`docs/PATTERNS.md`](docs/PATTERNS.md). Manual QA:
+[`docs/QA-MANUAL.md`](docs/QA-MANUAL.md).
 <!-- proof: docs/RUNBOOK.md --> <!-- proof: docs/ARCHITECTURE.md --> <!-- proof: docs/DATA_MODEL.md -->
 
 ---

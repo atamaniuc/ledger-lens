@@ -19,6 +19,7 @@ import { MetricTiles } from "@/components/dashboard/metric-tiles";
 import { PipelineStatusLive } from "@/components/dashboard/pipeline-status-live";
 import { SelectionProvider } from "@/components/dashboard/selection-context";
 import { EmptyState, Panel } from "@/components/ui/status-badge";
+import { AppHeader } from "@/components/app-header";
 
 // The dashboard. One Server Component that issues every read, and passes the
 // results down as props.
@@ -44,6 +45,17 @@ export default async function DashboardPage({
   const after = decodeCursor(
     Array.isArray(params.after) ? params.after[0] : params.after,
   );
+  const first = (key: string): string | undefined => {
+    const value = params[key];
+    const raw = Array.isArray(value) ? value[0] : value;
+    return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined;
+  };
+  // Filters come from the URL so a filtered view is addressable and survives
+  // a reload — the same reason the page cursor lives in the query string.
+  const filters = {
+    customer: first("q"),
+    status: first("status"),
+  };
 
   const supabase = await createClient();
   const {
@@ -55,7 +67,7 @@ export default async function DashboardPage({
       fetchFreshness(supabase),
       fetchMetrics(supabase),
       fetchDataHealth(supabase),
-      fetchInvoicePage(supabase, after),
+      fetchInvoicePage(supabase, after, undefined, filters),
       fetchRecentRuns(supabase),
     ]),
   );
@@ -100,17 +112,8 @@ export default async function DashboardPage({
     <LiveRefreshProvider correlationId={correlationId}>
       <SelectionProvider>
         <main className="mx-auto flex max-w-6xl flex-col gap-section p-page">
-          <header className="flex flex-wrap items-center justify-between gap-gutter">
-            <div>
-              <h1 className="text-xl font-semibold text-foreground">
-                Pipeline overview
-              </h1>
-              <p data-testid="signed-in-as" className="text-xs text-muted-foreground">
-                {user?.email}
-              </p>
-            </div>
-            <FreshnessBadge result={freshness} />
-          </header>
+          <AppHeader email={user?.email ?? "unknown"} />
+          <FreshnessBadge result={freshness} />
 
           {nothingToShow ? (
             <Panel title="Nothing here yet" testId="dashboard-empty">
@@ -131,7 +134,7 @@ export default async function DashboardPage({
               <div className="grid gap-section lg:grid-cols-3">
                 <div className="flex flex-col gap-section lg:col-span-2">
                   <DataHealthPanel result={health} />
-                  <InvoicesTable result={invoices} />
+                  <InvoicesTable result={invoices} filters={filters} />
                   <LineageDrillDown />
                 </div>
                 <aside

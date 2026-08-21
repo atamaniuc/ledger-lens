@@ -58,8 +58,13 @@ Status: `☐` open · `◐` partly closed, with the remainder named in the crite
 | ☑ | D-40 | S2 | no progress/debt register with id/priority/criterion | PROGRESS.md «Known limitations» | closed: `DEBT.md` (this file) plus `specs/` — thirteen specs with executable acceptance criteria, one DoD, a spec-ownership map, and status marks that only move on machine-verified evidence |
 | ☑ | D-42 | S2 | 0 lines of Python where the JD names Python as a second language | `find -name '*.py'` = 0 | closed: three Python services — bulk indexer, groundedness judge and the Modal Whisper transcription app — 168 pytest cases across two uv projects, both gated in CI. The transcript enters the same pipeline as every other source: signed callback, `raw_events`, quarantine rules, RLS, `run_id`, chunked and searchable |
 
+| ☐ | D-56 | S2 | no signed-in shell: no identity, no nav, no logout — a logged-in user cannot tell who they are or leave | src/app/dashboard/page.tsx (pre-0014), no app-header component | open: AppHeader (email + nav) and LogoutButton render on /dashboard and /admin; component tests + axe green in task check; e2e logout flow in tests/stage4-auth.spec.ts (spec 0014 T1) |
+| ☐ | D-57 | S2 | invoice list is pager-only — an operator cannot find a specific invoice without paging | queries.ts had only cursor params | open: fetchInvoicePage filters (customer ilike, status eq) + /dashboard searchParams wiring + GET form with Clear; vitest in queries.test.ts and dashboard page test (spec 0014 T2) |
+| ☐ | D-58 | S2 | roles exist (admin/member/viewer) but seeds covered only two and no doc names routes, roles or credentials | supabase/seed.sql pre-0014; no ACCOUNTS doc | open: seeds alice/bob/carol with password123 + docs/ACCOUNTS.md with proof markers resolving in task check (spec 0014 T3-T4) |
 | ☑ | D-48 | S2 | the Bun→Node migration silently broke `task evals`: Bun loaded `.env.local` by itself, Node does not, and no gate covered the eval runner | `EmbeddingError: SUPABASE_URL is not set` at `src/features/rag/embed.ts:73` from `evals/run.ts:329`, on a stack that was up | closed: both script entrypoints pass `--env-file-if-exists=.env.local`, and `task verify` now runs `task evals` so the gap cannot reopen unnoticed |
 
+| ☐ | D-59 | S3 | architecture and patterns are implicit in code — no C4 diagrams, no patterns doc | no ARCHITECTURE-C4.md / PATTERNS.md | open: docs/ARCHITECTURE-C4.md (mermaid Context/Container/Component, c4model.com link) and docs/PATTERNS.md (vertical slices, ports & adapters, tactical DDD; explicitly not Clean Architecture) with proof markers (spec 0014 T5-T6) |
+| ☐ | D-60 | S3 | manual QA is undocumented — a human cannot verify role scenarios or flag combinations | no QA-MANUAL.md | open: docs/QA-MANUAL.md (S1-S10 per-role scenarios, acceptance criteria, flag matrix) + docs/HANDOFF.md resume point (spec 0014 T7-T8) |
 | ☑ | D-51 | S3 | one browser-mode test flaked once under load: `task check` reported `1 failed | 389 passed` and the identical re-run was green, twice | observed on the squashed tree; the failing file was not captured because the reporter's tail had scrolled past it | closed: the two browser projects and CI's Playwright run retry once and the reporter prints it, because a real Chromium page on a loaded machine flakes and a gate must not go red for a reason the diff did not cause — two consecutive failures are still a failure, and locally retries stay off so a flake is felt. The one flaky unit test found along the way (a 10ms abort timeout racing its own listener) was made deterministic rather than retried |
 
 ## S3 — Hygiene.
@@ -96,5 +101,6 @@ Every open item belongs to exactly one spec. Items that had no owning spec were 
 | 0011 observability | D-45 |
 | 0012 human and agent docs | D-02, D-04, D-05, D-06, D-39 |
 | 0013 agent streaming and memory | D-44 |
+| 0014 dashboard ux and role model | D-56, D-57, D-58, D-59, D-60 |
 | closed in W0 hygiene | D-32, D-33, D-34, D-35, D-40 |
 

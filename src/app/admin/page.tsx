@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/platform/supabase/server-client";
 import { CopilotSettingsForm } from "./copilot-settings-form";
+import { AppHeader } from "@/components/app-header";
 
 // The admin page (D-53): guards flag, demo mode, and runtime OpenAI-compatible
 // providers — the knobs that let a presentation never show "try again later".
@@ -26,7 +27,8 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-page py-page">
-      <h1 className="text-xl font-semibold">Copilot settings</h1>
+      <AppHeader email={user?.email ?? "unknown"} />
+      <h1 className="mt-gutter text-xl font-semibold">Copilot settings</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Runtime knobs for presentations and demos. The guard stays on by
         default; turning it off or enabling demo mode is an operator decision.
