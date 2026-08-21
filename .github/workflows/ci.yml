@@ -72,6 +72,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Start the stack and apply migrations and seed
         run: |
+          # Before `supabase start`, not after: config.toml's
+          # [edge_runtime.secrets] resolve env(...) references when the
+          # containers come up, and supabase/.env is gitignored. Without this
+          # the Edge Functions boot with empty secrets and refuse every call
+          # with 401 — which is exactly how the first real CI run failed, at
+          # "Build the RAG index".
+          cp supabase/.env.example supabase/.env
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh
@@ -101,6 +108,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Start the stack and apply migrations and seed
         run: |
+          # Before `supabase start`, not after: config.toml's
+          # [edge_runtime.secrets] resolve env(...) references when the
+          # containers come up, and supabase/.env is gitignored. Without this
+          # the Edge Functions boot with empty secrets and refuse every call
+          # with 401 — which is exactly how the first real CI run failed, at
+          # "Build the RAG index".
+          cp supabase/.env.example supabase/.env
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh
@@ -162,6 +176,13 @@ jobs:
       # evals job uses, seeded the same way.
       - name: Start the stack and apply migrations and seed
         run: |
+          # Before `supabase start`, not after: config.toml's
+          # [edge_runtime.secrets] resolve env(...) references when the
+          # containers come up, and supabase/.env is gitignored. Without this
+          # the Edge Functions boot with empty secrets and refuse every call
+          # with 401 — which is exactly how the first real CI run failed, at
+          # "Build the RAG index".
+          cp supabase/.env.example supabase/.env
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh
