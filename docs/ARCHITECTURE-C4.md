@@ -8,7 +8,7 @@ LedgerLens modelled with the [C4 model](https://c4model.com/) (Context → Conta
 flowchart LR
   U[Operator / Presenter<br/>browser] -->|HTTPS, session cookie| A[LedgerLens App]
   V[Upstream provider API<br/>mock, chaos flags] -->|webhooks + signed embeds| A
-  A -->|LLM calls (OpenAI-compatible)| L[LLM providers<br/>Groq / others, runtime-config]
+  A -->|"LLM calls (OpenAI-compatible)"| L[LLM providers<br/>Groq / others, runtime-config]
   A -->|PostgREST, JWT-scoped| S[(Supabase<br/>Postgres + pgvector)]
   A -.->|optional| M[Modal<br/>transcription, on-demand]
   C[CI: GitHub Actions] -->|migrations, e2e, evals| A

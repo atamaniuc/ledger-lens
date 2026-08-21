@@ -97,7 +97,7 @@ sequenceDiagram
     L->>A: log step and model call, on_behalf_of = user
     Note over L,T: draft_customer_email gated by assert_can_draft_tool<br/>(viewer refused) — draft only, no send exists
     L-->>R: answer, citations verified
-    R-->>P: JSON or SSE; disconnect cancels the turn
+    R-->>P: JSON or SSE — disconnect cancels the turn
 ```
 _Safety._ The agent holds no service-role credential: tools query through the
 caller's JWT, so RLS bounds reads exactly as it bounds the dashboard. The
