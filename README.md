@@ -28,8 +28,6 @@ misuse.
 You can see this today: sign in, ask the copilot a question about the tenant\'s
 own data, click any number and follow it down to the original record.
 
-Next.js 16 · Postgres/Supabase · pgvector · Python · Deno · Pulumi · Modal
-
 <img width="1023" height="955" alt="Dashboard with metric tiles, data health and the copilot panel" src="https://github.com/user-attachments/assets/fa7bca31-3c73-4e67-944f-281fec050808" />
 <img width="1117" height="925" alt="Lineage drill-down from a dashboard number to the raw payload" src="https://github.com/user-attachments/assets/a68dd952-f4ff-4551-8dc8-b65d074006d3" />
 
@@ -197,6 +195,10 @@ not a promise about the current tree — the commands are the claim.
 Spec-driven, with a mechanism that keeps every document honest: each claim in
 this file carries a `<!-- proof: ... -->` marker naming a file, a symbol, a
 test, a task or a migration, and `task check` fails when one stops resolving.
-It exists because this README once promised a Pulumi program that did not
-exist and an LLM-as-judge gate that was denied three screens lower.
+It exists because a codebase that changes every day has to earn trust per
+claim, not per reputation: each marker is a machine-checked receipt naming the
+exact file, symbol, test or migration behind the sentence, and the gate that
+runs in CI re-checks every receipt on every change. Docs that cannot be
+verified are how a project drifts from its own promises; this mechanism is
+what keeps this README true at the speed of a commit.
 <!-- proof: src/platform/docs-proof.ts:MUST_CARRY_PROOF --> <!-- proof: task docs-check -->
