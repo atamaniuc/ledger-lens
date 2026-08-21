@@ -93,6 +93,47 @@ export function findMarkers(text: string): { line: number; target: string }[] {
   return found;
 }
 
+
+// ---- Handoff (HDD) audit: specs/TRACKS.md must stay truthful ----
+//
+// Adopted from handoff-driven-development (github.com/yetanothervan/
+// handoff-driven-development): an index of live work tracks, each line
+// pointing at its handoff. A line that links a file that no longer exists,
+// or a track without a status, is a handoff that would lie to the next
+// session — the same defect class as a dead proof marker.
+
+const TRACK_STATUS = /(active|paused|blocked)/;
+
+export function checkTracks(text: string, resolver: Resolver): Problem[] {
+  const problems: Problem[] = [];
+  let inFence = false;
+  text.split("\n").forEach((lineText, index) => {
+    if (lineText.trimStart().startsWith("```")) { inFence = !inFence; return; }
+    if (inFence || !lineText.startsWith("- ")) return; // headers, fences, prose
+    const line = index + 1;
+    if (!TRACK_STATUS.test(lineText)) {
+      problems.push({
+        file: "specs/TRACKS.md",
+        line,
+        target: "(status)",
+        reason: "track line carries no status (active / paused / blocked)",
+      });
+    }
+    for (const m of lineText.matchAll(/\]\(([^)\s]+)\)/g)) {
+      const target = m[1];
+      if (!resolver.fileExists(target)) {
+        problems.push({
+          file: "specs/TRACKS.md",
+          line,
+          target,
+          reason: `file "${target}" does not exist`,
+        });
+      }
+    }
+  });
+  return problems;
+}
+
 export function verify(
   files: { path: string; text: string }[],
   resolver: Resolver,
@@ -115,6 +156,9 @@ export function verify(
       if (reason) {
         problems.push({ file: file.path, line: marker.line, target: marker.target, reason });
       }
+    }
+    if (file.path === "specs/TRACKS.md") {
+      problems.push(...checkTracks(file.text, resolver));
     }
   }
   return problems;

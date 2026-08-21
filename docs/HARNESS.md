@@ -18,6 +18,7 @@ second project needs it — see
 | `specs/DoD.md` | the single Definition of Done, referenced never copied | agents |
 | `specs/NNNN-<slug>/spec.md` | one deliverable: status, stories, Given/When/Then criteria, invariants, out of scope | agents + humans |
 | `specs/NNNN-<slug>/tasks.md` | the checklist with priorities, sub-tasks and `D-XX` links | agents |
+| `specs/TRACKS.md` + `specs/NNNN-<slug>/handoff.md` | the live-track index and per-lane handoffs carrying unfinished work across sessions | agents |
 | `DEBT.md` | the debt register: id, severity, evidence, closure criterion | humans |
 | `decisions/NNNN-*.md` | one page per irreversible decision | humans |
 | `docs/`, `README.md` | the product for people | humans |
@@ -48,6 +49,19 @@ build**. `task check` runs `verify-docs.ts`, which resolves every
 with no evidence, or evidence that went stale, fails the gate. This is the
 harness's answer to "the docs lied" — it is the bug this project's refactor
 existed to remove.
+
+## Work tracks and handoffs
+
+Borrowed from handoff-driven development
+(https://github.com/yetanothervan/handoff-driven-development): specs stay
+true, and **handoffs carry unfinished work across sessions**. `specs/TRACKS.md`
+indexes the live tracks (one line: essence, handoff link, status, next). A lane
+whose work is unfinished keeps `handoff.md` next to its `spec.md` — context,
+what to load (and what NOT to load), state, decisions, first step. A session on
+a track ends by updating the handoff and its index line; closing a track
+distills the outcome into `specs/TRACKS-LOG.md` and deletes the handoff.
+`task check` verifies the index stays truthful (no dead links, no missing
+status) — the same machine check that guards the proof markers.
 
 ## How to start a task (any agent, any model)
 

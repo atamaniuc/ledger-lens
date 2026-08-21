@@ -36,6 +36,19 @@ a lane.
   lane and verified by `<!-- proof: ... -->` markers in `task check`.
 - Machine feedback is the first reviewer: typecheck, tests, the page rendering.
 
+## Work tracks and handoffs (HDD)
+- Live tracks are indexed in `specs/TRACKS.md` (essence, handoff link, status, next).
+  **Starting work on a track — load its handoff first.**
+- A lane whose work is unfinished at session end carries `handoff.md` next to its
+  `spec.md`: context, what to load (and what NOT to load), state, decisions,
+  first step. Ending a session on the lane means updating that handoff and its
+  `TRACKS.md` line (date, next).
+- Closing a track = distillation: outcome in 1–2 sentences into
+  `specs/TRACKS-LOG.md` (newest first), lasting decisions into specs/DEBT.md,
+  then delete the handoff and its `TRACKS.md` line. Git carries the history.
+- `task check` fails when a `TRACKS.md` line links a file that does not exist
+  or a track carries no status — a handoff that would lie is a dead marker.
+
 ## Definition of Done
 See `specs/DoD.md` — it is the single DoD for every lane.
 

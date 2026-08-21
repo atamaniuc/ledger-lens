@@ -40,12 +40,29 @@ export function InvoicesTable({
   const { rows, nextCursor } = result.data;
 
   if (rows.length === 0) {
+    const filtered = Boolean(filters.customer || filters.status);
     return (
       <Panel title="Invoices" testId="invoices">
-        <EmptyState>
-          No invoices yet. Trigger an ingestion run and the invoices it writes
-          will appear here, newest first.
-        </EmptyState>
+        {filtered ? (
+          <>
+            <EmptyState>
+              No invoices match your filters. Widen the search or clear them to
+              see the full list.
+            </EmptyState>
+            <Link
+              href="/dashboard"
+              data-testid="invoices-clear-empty"
+              className="rounded-control text-xs text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Clear filters
+            </Link>
+          </>
+        ) : (
+          <EmptyState>
+            No invoices yet. Trigger an ingestion run and the invoices it writes
+            will appear here, newest first.
+          </EmptyState>
+        )}
       </Panel>
     );
   }

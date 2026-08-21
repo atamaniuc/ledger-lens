@@ -62,6 +62,17 @@ export default async function DashboardPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Whether the shell may show the Admin link: the same membership check the
+  // admin page performs, resolved once here so the header never re-queries.
+  const { data: memberships } = await supabase
+    .from("memberships")
+    .select("org_id, role")
+    .limit(2);
+  const canAdmin =
+    memberships !== null &&
+    memberships.length === 1 &&
+    memberships[0].role === "admin";
+
   const { result: panels, durationMs } = await timed(() =>
     Promise.all([
       fetchFreshness(supabase),
@@ -112,7 +123,7 @@ export default async function DashboardPage({
     <LiveRefreshProvider correlationId={correlationId}>
       <SelectionProvider>
         <main className="mx-auto flex max-w-6xl flex-col gap-section p-page">
-          <AppHeader email={user?.email ?? "unknown"} />
+          <AppHeader email={user?.email ?? "unknown"} canAdmin={canAdmin} />
           <FreshnessBadge result={freshness} />
 
           {nothingToShow ? (

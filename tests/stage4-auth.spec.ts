@@ -98,6 +98,22 @@ test.describe("Stage 4 — access foundation", () => {
     expect(after.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
+  test("a viewer sees the dashboard, no Admin link, and is bounced from /admin (spec 0014 T11)", async ({
+    page,
+    context,
+    request,
+  }) => {
+    await signInAs(context, request, "carol@acme.test");
+
+    await page.goto("/dashboard");
+    await expect(page.locator(SIGNED_IN_AS)).toHaveText("carol@acme.test");
+    // The shell hides the Admin link for non-admins; the page is still usable.
+    await expect(page.locator('[data-testid="nav-admin"]')).toHaveCount(0);
+
+    // A direct visit is bounced by the page's own role check.
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
   test("the magic-link round trip completes through Mailpit", async ({
     page,
     request,

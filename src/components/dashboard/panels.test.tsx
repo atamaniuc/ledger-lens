@@ -116,6 +116,27 @@ describe("InvoicesTable", () => {
     await expectNoViolations(container);
   });
 
+  it("distinguishes an empty filter result and offers Clear, and passes axe", async () => {
+    const { container } = renderPanel(
+      <InvoicesTable
+        result={okResult(INVOICES_EMPTY)}
+        filters={{ customer: "no-such-customer", status: "open" }}
+      />,
+    );
+    expect(screen.getByText(/No invoices match your filters/)).toBeTruthy();
+    expect(screen.getByTestId("invoices-clear-empty")).toBeTruthy();
+    await expectNoViolations(container);
+  });
+
+  it("gives every filter control a visible focus state (spec 0014 T10)", () => {
+    renderPanel(
+      <InvoicesTable result={okResult(INVOICES_DEFAULT)} filters={{ customer: "acme" }} />,
+    );
+    for (const id of ["invoices-search", "invoices-status", "invoices-apply", "invoices-clear"]) {
+      expect(screen.getByTestId(id).className).toMatch(/focus-visible/);
+    }
+  });
+
   it("offers a retry on error, and passes axe", async () => {
     const { container } = renderPanel(
       <InvoicesTable result={errorResult("relation invoices does not exist")} />,

@@ -64,10 +64,11 @@ Status: `☐` open · `◐` partly closed, with the remainder named in the crite
 | ☑ | D-48 | S2 | the Bun→Node migration silently broke `task evals`: Bun loaded `.env.local` by itself, Node does not, and no gate covered the eval runner | `EmbeddingError: SUPABASE_URL is not set` at `src/features/rag/embed.ts:73` from `evals/run.ts:329`, on a stack that was up | closed: both script entrypoints pass `--env-file-if-exists=.env.local`, and `task verify` now runs `task evals` so the gap cannot reopen unnoticed |
 
 | ☐ | D-59 | S3 | architecture and patterns are implicit in code — no C4 diagrams, no patterns doc | no ARCHITECTURE-C4.md / PATTERNS.md | open: docs/ARCHITECTURE-C4.md (mermaid Context/Container/Component, c4model.com link) and docs/PATTERNS.md (vertical slices, ports & adapters, tactical DDD; explicitly not Clean Architecture) with proof markers (spec 0014 T5-T6) |
-| ☐ | D-60 | S3 | manual QA is undocumented — a human cannot verify role scenarios or flag combinations | no QA-MANUAL.md | open: docs/QA-MANUAL.md (S1-S10 per-role scenarios, acceptance criteria, flag matrix) + docs/HANDOFF.md resume point (spec 0014 T7-T8) |
+| ☐ | D-60 | S3 | manual QA is undocumented — a human cannot verify role scenarios or flag combinations | no QA-MANUAL.md | open: docs/QA-MANUAL.md (S1-S10 per-role scenarios, acceptance criteria, flag matrix) + lane handoff specs/0014-dashboard-ux-and-role-model/handoff.md (spec 0014 T7-T8) |
 | ☑ | D-51 | S3 | one browser-mode test flaked once under load: `task check` reported `1 failed | 389 passed` and the identical re-run was green, twice | observed on the squashed tree; the failing file was not captured because the reporter's tail had scrolled past it | closed: the two browser projects and CI's Playwright run retry once and the reporter prints it, because a real Chromium page on a loaded machine flakes and a gate must not go red for a reason the diff did not cause — two consecutive failures are still a failure, and locally retries stay off so a flake is felt. The one flaky unit test found along the way (a 10ms abort timeout racing its own listener) was made deterministic rather than retried |
 
 ## S3 — Hygiene.
+| ☐ | D-61 | S3 | handoffs exist as one ad-hoc file with no protocol: no index of live tracks, no lifecycle (create/update/close), no rule telling an agent to load one, nothing machine-checking it | docs/HANDOFF.md (single file, pre-0015) | open: specs/TRACKS.md indexes live tracks (every link resolves, every line carries a status), lanes keep handoff.md in the HDD template, AGENTS.md instructs loading/updating/closing, and `checkTracks` in src/platform/docs-proof.ts fails `task check` on a dead link or missing status (spec 0015 T1-T7) |
 | ☑ | D-53 | S1 | the copilot could embarrass a presentation with "try again later": the free tier is spent, and neither the guards nor the chain had a non-error answer | reproduced live: chain-exhausted 429 (and the daily token cap 402) end every question once Groq's daily budget is gone | closed: `copilot_settings` (singleton, RLS, SECURITY DEFINER) carries three runtime knobs — `guardsEnabled` (off = no 429/402), `demoMode` (on = the copilot ALWAYS answers deterministically from the tenant's real data, marked "Demo answer", even with zero providers), and runtime OpenAI-compatible providers (key referenced by env var name, never stored). Admin panel at `/admin` (admin role). e2e `tests/copilot-demo-mode.spec.ts` proves the answer arrives with no provider and a spent budget |
 
 | Status | id | severity | what | evidence | closure criterion |
@@ -102,5 +103,6 @@ Every open item belongs to exactly one spec. Items that had no owning spec were 
 | 0012 human and agent docs | D-02, D-04, D-05, D-06, D-39 |
 | 0013 agent streaming and memory | D-44 |
 | 0014 dashboard ux and role model | D-56, D-57, D-58, D-59, D-60 |
+| 0015 handoff driven development | D-61 |
 | closed in W0 hygiene | D-32, D-33, D-34, D-35, D-40 |
 

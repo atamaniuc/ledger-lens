@@ -8,6 +8,8 @@ The first thing to tell any agent (Claude Code / Codex / Cursor / anything):
 
 ## Start a task
 
+0. Is the work already a live track? Check `specs/TRACKS.md` and load that
+   lane's `handoff.md` — the previous session left its state there.
 1. `specs/NNNN-<slug>/spec.md` exists? No → create it (status `proposed`,
    Given/When/Then criteria, each naming a test / eval case / SQL).
 2. Write `tasks.md`: **P0** blocks shipping · **P1** required · **P2** nice.
@@ -16,6 +18,9 @@ The first thing to tell any agent (Claude Code / Codex / Cursor / anything):
 4. Before hand-off: `task check` green · acceptance checks green ·
    `tasks.md` ticked · debt ids ticked only on machine-verifiable evidence.
 5. A human reviews the diff against the spec's criteria.
+6. Session ends with the lane unfinished? Update its `handoff.md` and the
+   `specs/TRACKS.md` line (date, next). Finished? Close the track: outcome →
+   `specs/TRACKS-LOG.md`, delete the handoff.
 
 ## The five commands that matter
 

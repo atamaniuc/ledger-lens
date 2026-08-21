@@ -6,8 +6,10 @@ import { LogoutButton } from "./logout-button";
 //
 // The role comes from the membership the page already resolved, so this
 // component never re-queries — the page owns the data, the header renders it.
+// Non-admins do not see the Admin link at all (spec 0014 T11); a direct
+// visit to /admin is still bounced by the page's own role check.
 
-export function AppHeader({ email }: { email: string }) {
+export function AppHeader({ email, canAdmin = true }: { email: string; canAdmin?: boolean }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-gutter border-b border-border-subtle pb-gutter">
       <div className="flex items-center gap-gutter">
@@ -19,12 +21,15 @@ export function AppHeader({ email }: { email: string }) {
           >
             Dashboard
           </Link>
-          <Link
-            href="/admin"
-            className="rounded-control px-snug py-tight text-muted-foreground outline-none hover:bg-surface-sunken hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            Admin
-          </Link>
+          {canAdmin && (
+            <Link
+              href="/admin"
+              data-testid="nav-admin"
+              className="rounded-control px-snug py-tight text-muted-foreground outline-none hover:bg-surface-sunken hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Admin
+            </Link>
+          )}
         </nav>
       </div>
       <div className="flex items-center gap-gutter">
