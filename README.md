@@ -1,18 +1,20 @@
 # LedgerLens
 
-**An AI copilot over financial data you can actually trust.** The pipeline that
-proves the numbers is the product; the copilot is a thin, capability-bounded
-layer on top.
+**An AI copilot over financial data you can actually trust.**
+
+Most "AI on your data" demos put a chat box over whatever is in the database.
+This one does the hard part first: an upstream that actively tries to corrupt
+the numbers, a pipeline that survives it, and a copilot that **cannot answer
+anything it cannot prove** — every figure is traced to the raw bytes that
+produced it, every citation is verified, and the agent has no capability that a
+poisoned document could misuse.
 
 [![CI](https://github.com/atamaniuc/ledger-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/atamaniuc/ledger-lens/actions/workflows/ci.yml)
 [![Evals](https://github.com/atamaniuc/ledger-lens/actions/workflows/evals.yml/badge.svg)](https://github.com/atamaniuc/ledger-lens/actions/workflows/evals.yml)
 
-Two badges, because they answer different questions. **CI** is "is the code
-correct" — six jobs, all green. **Evals** is "what do the metrics read", and it
-is red until a model key exists in the repository: without one, three metrics
-report *not measured* and the run exits non-zero, because a measurement that did
-not happen is not a measurement that passed. Adding the key costs a free tier's
-whole daily budget per push, so it is a decision rather than a default.
+**CI** = the code is green. **Evals** = the measurement, and it is red on
+purpose until a model key exists — a run that measured nothing is not a pass.
+Full reading in [What the gates say today](#what-the-gates-say-today).
 
 Next.js 16 · Postgres/Supabase · pgvector · Python · Deno · Pulumi · Modal
 
@@ -95,8 +97,8 @@ not a promise about the current tree — the commands are the claim.
 
 | Gate | Reading |
 |---|---|
-| `task check` | 403 tests in 45 files — unit, component and every Storybook story run as a test in Chromium, plus axe on each dashboard panel state <!-- proof: .storybook/main.ts --> |
-| `task e2e` | 175 Playwright tests against the real stack — 174 pass, 1 skips itself when the local mail limit is hit: RLS through two different doors, both ingestion paths, the four tools, replay refusal, both agent transports, and a corpus that survives the suite |
+| `task check` | 407 tests in 45 files — unit, component and every Storybook story run as a test in Chromium, plus axe on each dashboard panel state <!-- proof: .storybook/main.ts --> |
+| `task e2e` | 178 Playwright tests against the real stack — RLS through two different doors, both ingestion paths, the four tools, replay refusal, both agent transports, and a corpus that survives the suite |
 | `task check-py` | 168 pytest cases: the bulk indexer (chunker ported **byte-identical** to the TypeScript one, proven against golden fixtures), the groundedness judge, the Modal app <!-- proof: py/ledgerlens_indexer --> <!-- proof: py/ledgerlens_judge --> <!-- proof: py/modal --> |
 | `task check-infra` | 29 tests through `pulumi.runtime.setMocks`, and `task infra-plan` has the real engine plan all 23 resources against a throwaway local backend — the deploy program is verified end to end without owning anything <!-- proof: infra/index.ts --> <!-- proof: task infra-plan --> |
 | recall@5 | **1.00** over 80 eval cases, every target at rank 1 <!-- proof: evals/dataset.jsonl --> |
@@ -105,7 +107,7 @@ not a promise about the current tree — the commands are the claim.
 | injection safety | **0.86 (6/7) against a 1.00 bar — red, and the mechanism is why it moved at all.** Containment was never the question: no tool can act. The question the new rule asks is whether the *reader* is told, and the first measured answer was no — 0.00, every case summarised without mentioning the instruction. Disclosure is a mechanism now, not a request: retrieval detects text addressed to the assistant and the turn states it, in the rule's own words. That took it to 0.80; the last case is a detector gap, and two more could not be scored under a per-minute rate limit <!-- proof: src/features/agent/injection.ts:DISCLOSURE_PATTERNS --> <!-- proof: evals/README.md --> |
 | tool choice | **0.90 against a 1.00 bar — red.** Three questions about a total were answered by listing invoices and adding them up, which is a different number once the list truncates. Both tool descriptions now say where the boundary is <!-- proof: src/features/agent/tools/get-revenue-summary.ts --> |
 | a run with no API key | **Exits non-zero** and names every metric that went unmeasured. `--allow-skip` exists for local exploration and CI never passes it <!-- proof: task evals --> |
-| CI | **all six jobs green** — typecheck/lint/unit/stories, the RLS end-to-end suite, both Python projects, the Pulumi program, secret scan and the dead-code gate <!-- proof: .github/workflows/ci.yml --> |
+| CI | **six jobs, all green** — typecheck/lint/unit/stories, the RLS end-to-end suite, both Python projects, the Pulumi program, secret scan and the dead-code gate <!-- proof: .github/workflows/ci.yml --> |
 | Evals workflow | **red, and correctly so**: the deterministic half passes there (recall@5 1.00, abstention 1.00), the three model-dependent metrics report *not measured* without a key, and the run exits non-zero <!-- proof: .github/workflows/evals.yml --> |
 
 ---
