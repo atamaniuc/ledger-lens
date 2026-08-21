@@ -37,6 +37,10 @@ a lane.
 - Machine feedback is the first reviewer: typecheck, tests, the page rendering.
 
 ## Work tracks and handoffs (HDD)
+The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` +
+  executable acceptance criteria, §Spec and delegation rules); **HDD** —
+  unfinished work crosses sessions via handoffs. This section is the HDD half;
+  the why of both is `docs/HARNESS.md` §Where the ideas came from.
 - Live tracks are indexed in `specs/TRACKS.md` (essence, handoff link, status, next).
   **Starting work on a track — load its handoff first.**
 - A lane whose work is unfinished at session end carries `handoff.md` next to its

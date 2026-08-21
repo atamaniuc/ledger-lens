@@ -32,9 +32,10 @@ marker in the human docs points at code that no longer exists.
 
 ## Where the ideas came from
 
-The shape is OpenSpec, the rigor is spec-kit, the separation is Agent OS, and
-the roles are a light touch of BMAD — all reduced to Markdown, because the
-harness is the files, not a tool.
+The shape is OpenSpec, the rigor is spec-kit, the separation is Agent OS, the
+roles are a light touch of BMAD, and the two halves of the lane lifecycle are
+SDD and HDD — all reduced to Markdown, because the harness is the files, not a
+tool.
 
 | source | what we kept | what we deliberately dropped |
 |---|---|---|
@@ -42,6 +43,20 @@ harness is the files, not a tool.
 | Agent OS | standards (`AGENTS.md`, `DoD.md`) live apart from specs and are never copied into them | the layered .md hierarchy, the role scaffolding |
 | spec-kit | the discipline: constitution → specify → plan → tasks → implement; **acceptance criteria must be executable** (test name / eval case / SQL) | the 300-line templates, slash-command bindings |
 | BMAD | work has roles (analyst/PM/architect/dev/QA) and story files | the role agents themselves |
+| SDD (spec-driven development) | the lane contract: `specs/NNNN-<slug>/spec.md` is the deliverable, its acceptance criteria are the test names that must pass; code and its spec ship in the same session | the heavyweight ceremony (proposal/solution docs, a change-management CLI) |
+| HDD (handoff-driven development) | work tracks + handoffs: `specs/TRACKS.md` indexes live tracks, a lane's `handoff.md` carries unfinished work across sessions, closing distills the outcome into `specs/TRACKS-LOG.md` | HDD's as-built spec genres and its `specs-audit.py` (our audit is `checkTracks` inside the existing proof gate) |
+
+**How to use the two halves.** SDD answers *what to build next*: pick the lane,
+read its spec, make its acceptance criteria pass. HDD answers *how not to lose
+the thread*: at session start load the lane's handoff (`specs/TRACKS.md` →
+`handoff.md`), at session end update it; when the lane ships, close the track
+(outcome → `specs/TRACKS-LOG.md`, delete the handoff). The mechanics are
+§Work tracks and handoffs and §How to start a task; the rules an agent obeys
+are in `AGENTS.md`.
+<!-- proof: specs/TRACKS.md -->
+<!-- proof: specs/0015-handoff-driven-development/spec.md -->
+<!-- proof: src/platform/docs-proof.ts:checkTracks -->
+<!-- proof: AGENTS.md -->
 
 And the thing that is ours, not borrowed: **documentation is verified by the
 build**. `task check` runs `verify-docs.ts`, which resolves every
