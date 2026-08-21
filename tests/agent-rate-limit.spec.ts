@@ -47,11 +47,34 @@ async function clearWindow(scope: "user" | "org", scopeId: string) {
        and window_start = to_timestamp(${currentWindowStart()})`;
 }
 
+/**
+ * Whether this environment has a model at all.
+ *
+ * The route answers 503 before it reaches the budget gate when nothing is
+ * configured, and that order is deliberate — a deployment that cannot answer
+ * must not spend its users' quota on 503s. So a route-level assertion about
+ * 429 is an assertion about a *configured* deployment, and CI holds no key.
+ * The mechanism itself is asserted without one, directly against the SQL
+ * function, at the bottom of this file.
+ */
+function providerConfigured(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.NVIDIA_API_KEY ??
+      (process.env.LLM_API_KEY && process.env.LLM_BASE_URL ? "generic" : undefined),
+  );
+}
+
 test.describe("the chat route request limits (D-18)", () => {
   test("over the per-user limit the route answers 429 with retry_after", async ({
     context,
     request,
   }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before the budget gate, by design",
+    );
     await seedWindow("user", aliceId, USER_LIMIT);
     try {
       await signInBrowser(context, request, apiUrl, "alice@acme.test");
@@ -74,6 +97,10 @@ test.describe("the chat route request limits (D-18)", () => {
     context,
     request,
   }) => {
+    test.skip(
+      !providerConfigured(),
+      "no provider configured: the route answers 503 before the budget gate, by design",
+    );
     await seedWindow("org", ORG_A, ORG_LIMIT);
     try {
       await signInBrowser(context, request, apiUrl, "alice@acme.test");
