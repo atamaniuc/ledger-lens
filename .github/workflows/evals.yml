@@ -78,6 +78,11 @@ jobs:
           # supabase/.env is gitignored. Without this the Edge Functions boot
           # with empty secrets and refuse every call with 401.
           cp supabase/.env.example supabase/.env
+          # Deterministic start: an unclean Docker daemon surfaces as "address
+          # already in use" on the database port (the stack's own retry cannot
+          # fix it), so stop and remove leftovers first.
+          supabase stop 2>/dev/null || true
+          docker rm -f $(docker ps -aq --filter name=supabase_) 2>/dev/null || true
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh

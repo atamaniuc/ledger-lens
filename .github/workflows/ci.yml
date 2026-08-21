@@ -136,6 +136,13 @@ jobs:
           # with 401 — which is exactly how the first real CI run failed, at
           # "Build the RAG index".
           cp supabase/.env.example supabase/.env
+          # A fresh runner should be clean, and it usually is — but this is a
+          # container stack on a Docker daemon that has hosted a previous run,
+          # and an unclean daemon surfaced as "address already in use" on the
+          # database port (the stack's own retry could not fix it). Make the
+          # start deterministic: stop and remove anything left over first.
+          supabase stop 2>/dev/null || true
+          docker rm -f $(docker ps -aq --filter name=supabase_) 2>/dev/null || true
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh
@@ -204,6 +211,13 @@ jobs:
           # with 401 — which is exactly how the first real CI run failed, at
           # "Build the RAG index".
           cp supabase/.env.example supabase/.env
+          # A fresh runner should be clean, and it usually is — but this is a
+          # container stack on a Docker daemon that has hosted a previous run,
+          # and an unclean daemon surfaced as "address already in use" on the
+          # database port (the stack's own retry could not fix it). Make the
+          # start deterministic: stop and remove anything left over first.
+          supabase stop 2>/dev/null || true
+          docker rm -f $(docker ps -aq --filter name=supabase_) 2>/dev/null || true
           supabase start
           supabase db reset --local
           ./scripts/write-env-local.sh
