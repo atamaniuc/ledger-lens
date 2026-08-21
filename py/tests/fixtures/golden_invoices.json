@@ -1,0 +1,86 @@
+[
+  {
+    "id": "open-usd",
+    "invoice": {
+      "external_id": "INV-2043",
+      "customer": "Northwind Traders",
+      "amount_cents": 120000,
+      "currency": "usd",
+      "status": "open",
+      "issued_at": "2026-03-01",
+      "paid_at": null
+    },
+    "rendered": "Invoice INV-2043 for customer Northwind Traders. Amount 1,200.00 USD. Status open. Issued on 2026-03-01.",
+    "hash": "885626bc0bc665ad2b8096281b133f122c1061a584f5fef2bd0adc110a497238"
+  },
+  {
+    "id": "paid-with-date",
+    "invoice": {
+      "external_id": "INV-00007",
+      "customer": "Globex Inc",
+      "amount_cents": 350050,
+      "currency": "EUR",
+      "status": "paid",
+      "issued_at": "2026-02-14",
+      "paid_at": "2026-03-20"
+    },
+    "rendered": "Invoice INV-00007 for customer Globex Inc. Amount 3,500.50 EUR. Status paid. Issued on 2026-02-14. It was paid on 2026-03-20.",
+    "hash": "7f13b19a4c8e017434db0c0775df5a5696fe8c0b3d080e7bd8b78109871273cc"
+  },
+  {
+    "id": "paid-no-date",
+    "invoice": {
+      "external_id": "INV-99",
+      "customer": "Acme Corp",
+      "amount_cents": 5,
+      "currency": "usd",
+      "status": "paid",
+      "issued_at": "2026-03-01",
+      "paid_at": null
+    },
+    "rendered": "Invoice INV-99 for customer Acme Corp. Amount 0.05 USD. Status paid. Issued on 2026-03-01. It is marked paid with no payment date recorded.",
+    "hash": "f097a3eba9193744631fdcc3326b92b8378b9df1f2f1e45b84461a9699c05357"
+  },
+  {
+    "id": "draft-small",
+    "invoice": {
+      "external_id": "INV-1",
+      "customer": "Acme Corp",
+      "amount_cents": 99,
+      "currency": "usd",
+      "status": "draft",
+      "issued_at": "2026-04-01",
+      "paid_at": null
+    },
+    "rendered": "Invoice INV-1 for customer Acme Corp. Amount 0.99 USD. Status draft. Issued on 2026-04-01.",
+    "hash": "fe2b8f7209cdeebd5df42085805054dee0665f8ec18e4a30f38b0ced5a87c825"
+  },
+  {
+    "id": "large-void",
+    "invoice": {
+      "external_id": "INV-888888",
+      "customer": "Northwind Traders",
+      "amount_cents": 123456789,
+      "currency": "Usd",
+      "status": "void",
+      "issued_at": "2026-05-05",
+      "paid_at": null
+    },
+    "rendered": "Invoice INV-888888 for customer Northwind Traders. Amount 1,234,567.89 USD. Status void. Issued on 2026-05-05.",
+    "hash": "d42529fdbec8d1f88ea7cdb7d1b33da373ec7e8e0a24c88d89a207fe66ad3744"
+  },
+  {
+    "id": "quote",
+    "invoice": {
+      "external_id": "INV-1.2",
+      "customer": "Bob's Diner",
+      "amount_cents": 100005,
+      "currency": "gbp",
+      "status": "open",
+      "issued_at": "2026-06-01",
+      "paid_at": null
+    },
+    "rendered": "Invoice INV-1.2 for customer Bob's Diner. Amount 1,000.05 GBP. Status open. Issued on 2026-06-01.",
+    "hash": "c7b98510ea3122dbcfafedd542196e487bb60f4f73dd6f321ad1c14bbc3140b2"
+  }
+]

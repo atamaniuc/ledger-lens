@@ -15,7 +15,7 @@
 // /invoices), so it is a genuinely independent source of truth — not our
 // own derived data compared against itself.
 //
-// Usage: bun run scripts/capture-reconciliation-baseline.ts [baseUrl]
+// Usage: pnpm exec tsx scripts/capture-reconciliation-baseline.ts [baseUrl]
 
 export {}; // top-level await needs this file to be a module
 

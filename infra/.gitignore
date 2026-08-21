@@ -1,0 +1,3 @@
+# infra/ is self-contained (like py/); the root .gitignore's
+# bare node_modules/ pattern already covers this, kept here for parity.
+node_modules/

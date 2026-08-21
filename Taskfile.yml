@@ -1,435 +1,186 @@
 # LedgerLens — one entry point for everything local.
-#
-#   task                list every task, grouped
-#   task dev-up         the local Supabase stack, migrations and seed applied
-#   task dev            the Next.js dev server, on this machine
-#   task check          typecheck, lint, unit tests, deno check — nothing needs to be running
-#   task verify         the full gate: pure logic, then the running system
-#
+#   task          list every task
+#   task up       clean-clone start: install, stack, seed, env, URL
+#   task check    typecheck, lint, unit tests, deno check — nothing running
+#   task verify   the full gate: check, then the live stack
 # Docker is required for one thing: the Supabase stack, which `supabase start`
-# owns. The app itself is developed, checked and tested on this machine. See
-# ADR 0006.
-#
-# Shell completion: `task completion` prints what to add to your shell rc.
-# Task is the only runner here on purpose — one definition, in one file,
-# with descriptions the tool itself prints, preconditions that say what to
-# do next, prompts on the destructive tasks, and file-watching. A second
-# runner wrapping the same commands would be a copy that drifts.
-
+# owns; the app runs on this machine — ADR 0006. Debugger/typegen notes are in docs/RUNBOOK-NOTES.md.
 version: "3"
-
 silent: true
 
+# D-46: supabase CLI telemetry writes can fail against a healthy stack; off keeps it reliable.
+env:
+  DO_NOT_TRACK: "1"
+
 vars:
-  # The local stack's fixed development credentials. Not secrets: this
-  # database listens on loopback only and the password is published in
-  # Supabase's own documentation.
   DB_URL: '{{.DB_URL | default "postgresql://postgres:postgres@127.0.0.1:54322/postgres"}}'
-  # Container names are suffixed with the Supabase project id, which lives
-  # in config.toml rather than being the directory name.
   PROJECT_ID:
     sh: awk -F'"' '/^project_id/ { print $2 }' supabase/config.toml
-
 tasks:
   default:
     desc: List every task, grouped
-    cmds: [task: help]
-
-  help:
-    desc: List every task, grouped
+    cmds: [task --list]
+  up:
+    desc: "One command from a clean clone: install, stack, reset+seed, env, URL"
+    deps: [docker-running, deno-present]
     cmds:
-      - |
-        if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-          b=$'\033[1m'; d=$'\033[2m'; c=$'\033[36m'; y=$'\033[33m'; r=$'\033[0m'
-        else b=; d=; c=; y=; r=; fi
-        printf '%s\n' "${b}LedgerLens${r} ${d}— task <name>${r}"
-        printf '\n%s\n' "${y}Setup${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          install    "Install JavaScript dependencies" \
-          env        "Write .env.local from the running stack" \
-          completion "Print shell-completion setup"
-        printf '\n%s\n' "${y}Local stack (Supabase in Docker)${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          dev-up     "Start from scratch — DROPS all local data, then re-seeds" \
-          dev-start  "Start the stack, keeping whatever is in the database" \
-          dev-reset  "Rebuild the database — DROPS all local data, then re-seeds" \
-          dev-down   "Stop the stack, keeping the data volume" \
-          dev-nuke   "Stop the stack and discard all local data" \
-          dev-status "Print local URLs and keys" \
-          dev-logs   "Tail a container's logs (SERVICE=db|auth|rest|edge_runtime|kong)" \
-          psql       "Open a psql shell on the local database" \
-          studio     "Open Supabase Studio in the browser"
-        printf '\n%s\n' "${y}App — runs on this machine${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          dev       "Next.js dev server on Node, IDE debugger on 9231 (needs the stack)" \
-          dev:bun   "Same, on Bun — faster to start, no IntelliJ attach" \
-          build     "Production build on Node 22+ (needs nothing running)" \
-          start     "Serve the production build (task build first; needs the stack)"
-        printf '\n%s\n' "${y}Container smoke check — optional, not the dev loop${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          docker-build "Build the production app image" \
-          docker-up    "Run that image on the stack's network" \
-          docker-down  "Stop and remove it" \
-          docker-logs  "Tail its logs" \
-          docker-ps    "Show its state" \
-          docker-sh    "Open a shell inside it"
-        printf '\n%s\n' "${y}Checks — all on this machine, no Docker${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          check       "Pure-logic gate: typecheck, lint, unit tests, deno check" \
-          check:watch "Re-run that gate on every save" \
-          typecheck   "TypeScript, app and tests" \
-          lint        "ESLint" \
-          test        "Unit tests" \
-          deno-check  "Type-check the Edge Functions (Deno, supabase/functions only)" \
-          types       "Regenerate lib/supabase/database.types.ts from the local schema" \
-          types-check "Fail if database.types.ts is stale (needs the stack — part of verify)" \
-          e2e         "Playwright against the running app (task e2e -- tests/rls.spec.ts)" \
-          e2e:ui      "Playwright's interactive runner" \
-          e2e:report  "Open the last Playwright HTML report" \
-          evals       "Score retrieval and agent safety (the CI gate)" \
-          verify      "The full gate: check, types-check, then the end-to-end suite"
-        printf '\n%s\n' "${y}Documents and process${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          adr             'New ADR (TITLE="cursor-based ingestion resume")' \
-          prd             'New PRD section (FEATURE="Ingestion cursor resume")' \
-          worktree        "New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])" \
-          worktree-done   "Merge back and clean up a worktree (BRANCH=…)" \
-          codex-architect "Second-model architecture pass (PROMPT_FILE=…)" \
-          codex-critic    "Second-model critique pass (PROMPT_FILE=…)" \
-          codex-review    "Second-model review of the diff ([REF=main])"
-        printf '\n%s\n' "${y}Housekeeping${r}"
-        printf "  ${c}%-16s${r} %s\n" \
-          clean "Remove build output and test artifacts"
-        printf '\n%s%s%s\n\n' "$d" "task --list also works, and lists these alphabetically." "$r"
-
-  completion:
-    desc: Print shell-completion setup
-    cmds:
-      - |
-        printf 'zsh  — add to ~/.zshrc:\n'
-        printf '  eval "$(task --completion zsh)"\n\n'
-        printf 'bash — add to ~/.bashrc:\n'
-        printf '  eval "$(task --completion bash)"\n\n'
-        printf 'fish — run once:\n'
-        printf '  task --completion fish > ~/.config/fish/completions/task.fish\n'
-
-  # --- setup ---------------------------------------------------------------
-
-  install:
-    desc: Install JavaScript dependencies
-    cmds: [bun install]
-    sources: ["package.json", "bun.lock"]
-    generates: ["node_modules/.bin/next"]
-
-  env:
-    desc: Write .env.local from the running stack (refuses to overwrite)
-    cmds: [./scripts/write-env-local.sh]
-
-  # --- local stack ---------------------------------------------------------
-
-  dev-up:
-    desc: Start the stack from scratch — DROPS all local data, then re-seeds
-    deps: [docker-running]
-    prompt: This drops every row in the local database and re-seeds. Continue?
-    cmds:
+      - pnpm install
       - supabase start
-      - task: dev-reset
-
-  dev-start:
-    desc: Start the stack, keeping whatever is in the database
-    deps: [docker-running]
-    cmds: [supabase start]
-
-  dev-reset:
+      - supabase db reset
+      - rm -f .env.local
+      - ./scripts/write-env-local.sh
+      - 'echo "app:    http://localhost:3000" && echo "studio: http://127.0.0.1:54323"'
+  reset:
     desc: Rebuild the database — DROPS all local data, then re-seeds
     prompt: This drops every row in the local database and re-seeds. Continue?
     cmds: [supabase db reset]
-
-  dev-down:
-    desc: Stop the stack, keeping the data volume
-    cmds: [supabase stop]
-
-  dev-nuke:
-    desc: Stop the stack and discard all local data
-    prompt: This discards the local database entirely. Continue?
-    cmds: [supabase stop --no-backup]
-
-  dev-status:
-    desc: Print local URLs and keys
-    cmds: [supabase status]
-
-  dev-logs:
-    desc: Tail a container's logs (SERVICE=db|auth|rest|edge_runtime|kong)
-    interactive: true
-    cmds: ['docker logs -f supabase_{{.SERVICE | default "db"}}_{{.PROJECT_ID}}']
-
   psql:
     desc: Open a psql shell on the local database
     interactive: true
     cmds: ['psql "{{.DB_URL}}"']
-
-  studio:
-    desc: Open Supabase Studio in the browser
-    cmds: ['open http://127.0.0.1:54323 2>/dev/null || echo "http://127.0.0.1:54323"']
-
-  # --- app -----------------------------------------------------------------
-  #
-  # The app runs on this machine. Docker's job here is the Supabase stack and
-  # nothing else — see ADR 0006. The container image below is a smoke check
-  # you run when you want one, not the way anything is developed.
-
-  # Node, not Bun, and the reason is the debugger. Bun's inspector answers
-  # /json/version but returns an empty /json/list, which is the endpoint
-  # IntelliJ IDEA's "Attach to Node.js/Chrome" enumerates targets from — so
-  # it finds nothing to attach to. Node's V8 inspector is what that
-  # configuration actually speaks. `next dev` loads .env.local itself.
-  # `dev:bun` is below for when start-up speed matters more than a debugger.
-  #
-  # Two inspectors end up listening, and the difference matters. The flag
-  # below binds the `next` CLI process on DEBUG_PORT; Next then forks the
-  # server that actually handles requests and gives it the next free port,
-  # printing it as "Debugger port:" on startup — 9231 by default. Breakpoints
-  # in route handlers and Server Components live in that child, so that is
-  # the port to attach to. DEBUG_PORT itself gets you the launcher, which
-  # serves no request.
+  logs:
+    desc: "Tail a stack container's logs (SERVICE=db|auth|rest|edge_runtime|kong)"
+    interactive: true
+    cmds: ['docker logs -f supabase_{{.SERVICE | default "db"}}_{{.PROJECT_ID}}']
   dev:
-    desc: "Next.js dev server on Node, IDE debugger on 9231 (Ctrl+C stops it)"
-    deps: [stack-running]
+    desc: "Next.js dev server on Node (Ctrl+C stops it). Debugger: docs/RUNBOOK-NOTES.md"
+    deps: [stack-running, node-22]
     interactive: true
     cmds:
       - node --inspect=127.0.0.1:${DEBUG_PORT:-9230} node_modules/next/dist/bin/next dev
-
-  dev:bun:
-    desc: "Next.js dev server on Bun — faster to start, no IntelliJ attach"
-    deps: [stack-running]
-    interactive: true
-    cmds: [bun run dev]
-
-  # Node, not Bun: `next build` under Bun segfaults on Alpine, found when the
-  # production image was first built, and Node is what Vercel and the runtime
-  # image run anyway. Needs no stack — a build touches no database.
-  build:
-    desc: Production build (Node 22+)
-    deps: [node-22]
-    cmds: [node node_modules/next/dist/bin/next build]
-
-  start:
-    desc: Serve the production build (run `task build` first)
-    deps: [node-22, stack-running]
-    interactive: true
-    cmds: [node node_modules/next/dist/bin/next start]
-
-  # --- container smoke check -------------------------------------------------
-  #
-  # Optional. The image is a Linux/Node sanity check on the production build —
-  # it catches container-shaped mistakes such as `127.0.0.1` meaning the
-  # container rather than the host. It is not what Vercel runs, so it proves
-  # the build works in *a* container, not that it works in production.
-
-  docker-build:
-    desc: Build the production app image
-    deps: [docker-running]
-    cmds: [docker compose build app]
-
-  docker-up:
-    desc: Run that image on the stack's network
-    deps: [stack-running]
-    cmds:
-      - docker compose up -d --build app
-      - 'echo "http://localhost:${APP_PORT:-3000}"'
-
-  docker-down:
-    desc: Stop and remove the app container
-    cmds: [docker compose down]
-
-  docker-logs:
-    desc: Tail the app container's logs
-    interactive: true
-    cmds: [docker compose logs -f app]
-
-  docker-ps:
-    desc: Show the app container's state
-    cmds: [docker compose ps]
-
-  docker-sh:
-    desc: Open a shell inside the running app container
-    interactive: true
-    cmds: [docker compose exec app sh]
-
-  # --- checks --------------------------------------------------------------
-
-  # Fast, and needs nothing running: no Docker, no Supabase stack. That is the
-  # point of it — a gate you avoid because it takes 40 seconds is a gate that
-  # runs before the commit instead of during the edit.
   check:
-    desc: "Pure-logic gate: typecheck, lint, unit tests, deno check"
-    cmds:
-      - task: typecheck
-      - task: lint
-      - task: test
-      - task: deno-check
-
-  check:watch:
-    desc: Re-run the pure-logic gate on every save
-    watch: true
-    sources:
-      - "app/**/*.ts"
-      - "app/**/*.tsx"
-      - "lib/**/*.ts"
-      - "supabase/functions/**/*.ts"
-    cmds: [{ task: check }]
-
-  # `tsc` needs `.next/types/**` to exist first — Next.js generates the
-  # route/layout ambient types (`LayoutProps`, etc.) there as a side effect of
-  # `next dev`/`next build` having run at least once. A fresh clone has
-  # neither, so `next typegen` (fast, no full build) runs first rather than
-  # assuming something else already populated it.
+    desc: "Pure-logic gate: typecheck, lint, unit tests, deno check, doc proofs"
+    cmds: ['task typecheck && task lint && task test && task deno-check && task docs-check']
+  # Every claim in the human documentation names its evidence; this fails when
+  # the evidence is gone. Pass --strict once README carries markers (spec 0012)
+  # to also require that a claim-bearing document has evidence at all.
+  docs-check:
+    desc: "Check that every proof marker resolves, and that README carries evidence"
+    cmds: ['pnpm exec tsx scripts/verify-docs.ts --strict {{.CLI_ARGS}}']
   typecheck:
     desc: TypeScript, app and tests
     cmds:
       - node_modules/next/dist/bin/next typegen
-      - bun run typecheck
-
+      - pnpm run typecheck
   lint:
     desc: ESLint
-    cmds: [bun run lint]
-
+    cmds: [pnpm run lint]
   test:
-    desc: Unit tests
-    cmds: [bun run test]
-
-  # supabase/functions/ is excluded from tsconfig.json and ESLint (Deno
-  # runtime: npm: specifiers, Deno globals, .ts import extensions), so
-  # `task typecheck` does not cover it. This is the compensating gate —
-  # without it those files would be checked by nothing at all.
-  #
-  # Skipping is loud but survivable on a developer's machine. It must not be
-  # survivable in CI, where a skipped gate is indistinguishable from a
-  # passed one in the log everyone reads.
+    desc: Unit tests (Vitest)
+    cmds: [pnpm run test]
+  # supabase/functions/ is excluded from tsconfig and ESLint (Deno runtime) — this is its only gate (D-29).
   deno-check:
     desc: Type-check the Edge Functions (excluded from tsconfig)
+    deps: [deno-present]
     cmds:
-      - |
-        if command -v deno >/dev/null 2>&1; then
-          deno check --allow-import supabase/functions/provider-webhook/index.ts supabase/functions/embed/index.ts
-        elif [ -n "${CI:-}" ]; then
-          echo "deno not installed, and CI is set — refusing to report a pass over an unchecked Edge Function." >&2
-          exit 1
-        else
-          echo "deno not installed — supabase/functions/ went unchecked. Install Deno to close this gap: https://deno.land"
-        fi
-
-  index:
-    desc: Rebuild the RAG index from documents and invoices (idempotent)
-    deps: [stack-running]
-    cmds: ['bun run scripts/index-corpus.ts {{.CLI_ARGS}}']
-
-  evals:
-    desc: "Score retrieval and agent safety against evals/dataset.jsonl (the CI gate)"
-    deps: [stack-running]
-    cmds: ['bun run evals/run.ts {{.CLI_ARGS}}']
-
-  types:
-    desc: Regenerate lib/supabase/database.types.ts from the local schema
-    deps: [stack-running]
-    cmds: [./scripts/gen-types.sh]
-
-  types-check:
-    desc: Fail if database.types.ts is stale against the schema
-    deps: [stack-running]
-    cmds: [./scripts/gen-types.sh --check]
-
+      - deno check --allow-import supabase/functions/provider-webhook/index.ts supabase/functions/embed/index.ts supabase/functions/transcribe-webhook/index.ts
   e2e:
     desc: "Playwright against the running app and database (task e2e -- tests/rls.spec.ts)"
     deps: [stack-running]
-    cmds: ["bunx playwright test {{.CLI_ARGS}}"]
-
-  e2e:ui:
-    desc: Playwright's interactive runner
+    cmds: ['pnpm exec playwright test {{.CLI_ARGS}}']
+  # D-48: Bun used to load .env.local by itself; Node does not, so every script
+  # entrypoint says so explicitly. --env-file-if-exists, because CI passes the
+  # same variables as real environment variables and has no .env.local.
+  evals:
+    desc: "Score retrieval and agent safety against evals/dataset.jsonl (the CI gate)"
     deps: [stack-running]
-    interactive: true
-    cmds: [bunx playwright test --ui]
-
-  e2e:report:
-    desc: Open the last Playwright HTML report
-    cmds: [bunx playwright show-report]
-
-  verify:
-    desc: "The full gate: check, types-check, then the end-to-end suite"
+    cmds: ['pnpm exec tsx --env-file-if-exists=.env.local evals/run.ts {{.CLI_ARGS}}']
+  index:
+    desc: Rebuild the RAG index from documents and invoices (idempotent)
     deps: [stack-running]
+    cmds: ['pnpm exec tsx --env-file-if-exists=.env.local scripts/index-corpus.ts {{.CLI_ARGS}}']
+  # The Python path over the same corpus: batched embeddings and COPY instead of
+  # eight texts per Edge Function call (spec 0005). --dry-run prints the plan.
+  index-py:
+    desc: "Rebuild the RAG index through the Python indexer (task index-py -- --dry-run)"
+    deps: [stack-running]
+    dir: py
+    cmds: ['uv run ledgerlens-index {{.CLI_ARGS}}']
+  # UV_CACHE_DIR is set because a sandboxed shell cannot always write to
+  # ~/.cache/uv, and a gate that fails on the cache location tells you nothing
+  # about the code.
+  # Both Python projects: py/ (indexer + judge) and py/modal (the Modal app,
+  # its own uv project because a Modal app carries its own runtime).
+  check-py:
+    desc: "Python gate: ruff, mypy, pytest — both uv projects"
+    env: { UV_CACHE_DIR: ".uv-cache" }
     cmds:
-      - task: check
-      - task: types-check
-      - bunx playwright test
-
-  # --- documents and process ----------------------------------------------
-
-  adr:
-    desc: 'New ADR (TITLE="cursor-based ingestion resume")'
-    requires: { vars: [TITLE] }
-    cmds: ['./scripts/harness/new-adr.sh "{{.TITLE}}"']
-
-  prd:
-    desc: 'New PRD section (FEATURE="Ingestion cursor resume")'
-    requires: { vars: [FEATURE] }
-    cmds: ['./scripts/harness/new-prd-section.sh "{{.FEATURE}}"']
-
-  worktree:
-    desc: New parallel worktree (BRANCH=stage-4-dashboard [BASE=main])
-    requires: { vars: [BRANCH] }
-    cmds: ['./scripts/harness/new-worktree.sh "{{.BRANCH}}" "{{.BASE}}"']
-
-  worktree-done:
-    desc: Merge back and clean up a worktree (BRANCH=stage-4-dashboard)
-    requires: { vars: [BRANCH] }
-    cmds: ['./scripts/harness/finish-worktree.sh "{{.BRANCH}}"']
-
-  codex-architect:
-    desc: Second-model architecture pass (PROMPT_FILE=.claude/adr/NNNN-....md)
-    requires: { vars: [PROMPT_FILE] }
-    cmds: ['./scripts/harness/ask-codex.sh architect "{{.PROMPT_FILE}}"']
-
-  codex-critic:
-    desc: Second-model critique pass (PROMPT_FILE=.claude/adr/NNNN-....md)
-    requires: { vars: [PROMPT_FILE] }
-    cmds: ['./scripts/harness/ask-codex.sh critic "{{.PROMPT_FILE}}"']
-
-  codex-review:
-    desc: Second-model review of the diff ([REF=main])
-    cmds: ['./scripts/harness/codex-review.sh {{.REF}}']
-
-  # --- housekeeping --------------------------------------------------------
-
+      - 'cd py && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest'
+      - 'cd py/modal && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest'
+  # Infrastructure (spec 0010). The gate needs no cloud credentials — the program
+  # is asserted through pulumi.runtime.setMocks; preview and up need a real login.
+  check-infra:
+    desc: "Infra gate: typecheck and the mocked Pulumi tests (no credentials needed)"
+    dir: infra
+    cmds: ['pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm test']
+  # Credential-free: the real engine plans every resource against a throwaway
+  # local backend, which is the half the mocked tests cannot cover.
+  infra-plan:
+    desc: "Plan the deploy program with no credentials (local backend, placeholder config)"
+    cmds: ['./infra/scripts/plan.sh']
+  infra-preview:
+    desc: "Show what pulumi would change against the real stack (needs `pulumi login`)"
+    dir: infra
+    cmds: ['pulumi preview -s prod']
+  infra-up:
+    desc: "Stand up or update the deployable surface (needs `pulumi login`)"
+    dir: infra
+    prompt: This creates or changes real infrastructure. Continue?
+    cmds: ['pulumi up -s prod']
+  infra-destroy:
+    desc: Tear the deployable surface down
+    dir: infra
+    prompt: This destroys the deployed stack. Continue?
+    cmds: ['pulumi destroy -s prod']
+  types:
+    desc: Regenerate src/platform/supabase/database.types.ts from the local schema
+    cmds: [./scripts/gen-types.sh]
+  types-check:
+    desc: Fail if database.types.ts is stale against the schema
+    cmds: [./scripts/gen-types.sh --check]
+  # evals belong here, not in check: they need the stack. Leaving them out is how
+  # a runtime change broke them for a whole wave without a gate noticing (D-48).
+  verify:
+    desc: "The full gate: check, types-check, the end-to-end suite, then the evals"
+    deps: [stack-running]
+    cmds: ['task check && task types-check && task e2e && task evals']
+  # The production image is a smoke check, not the deployed environment: Vercel
+  # builds from source (decision 0006). It catches container-shaped mistakes —
+  # a 127.0.0.1 that means the container, a file the build forgot to copy — and
+  # it is the only thing that proves the production build works outside this
+  # machine's toolchain. Deliberately not in CI: it costs minutes to prove
+  # something Vercel does not use.
+  docker-build:
+    desc: "Build the production image (a smoke check on the production build)"
+    deps: [docker-running]
+    cmds: ['docker build -t ledgerlens:local .']
   clean:
     desc: Remove build output and test artifacts
     cmds: [rm -rf .next test-results playwright-report blob-report tsconfig.tsbuildinfo]
-
-  # --- guards --------------------------------------------------------------
-  # Preconditions with a sentence that says what to do, rather than a command
-  # failing several layers down with a connection error.
-
-  # Node runs the production build and the debuggable dev server. 22 is the
-  # floor Next.js 16 supports; the message names the version found so a
-  # mismatch is one line to read rather than a stack trace to interpret.
   node-22:
     internal: true
     preconditions:
       - sh: command -v node >/dev/null 2>&1
-        msg: "Node is not installed — Next.js needs Node 22 or newer to build. https://nodejs.org"
+        msg: "Node is not installed — Next.js needs Node 22 or newer. https://nodejs.org"
       - sh: '[ "$(node -p "process.versions.node.split(\".\")[0]")" -ge 22 ]'
-        msg: "Node 22 or newer is required for the production build (found $(node --version 2>/dev/null))."
-
+        msg: "Node 22 or newer is required (found $(node --version 2>/dev/null))."
   docker-running:
     internal: true
     preconditions:
       - sh: docker info >/dev/null 2>&1
         msg: "Docker is not running — start Docker Desktop and try again."
-
   stack-running:
     internal: true
     deps: [docker-running]
     preconditions:
-      - sh: supabase status >/dev/null 2>&1
-        msg: "The local Supabase stack is not running — `task dev-start` (or `task dev-up` for a clean one)."
+      - sh: docker ps | grep -q 'supabase_db_'
+        msg: "The local Supabase stack is not running — `task up` starts it."
+      - sh: 'curl -sS -o /dev/null "$(sed -n "s/^SUPABASE_URL=//p" .env.local 2>/dev/null || printf "http://127.0.0.1:54321")/rest/v1/"'
+        msg: "The local Supabase stack is not reachable — `task up` starts it."
       - sh: test -f .env.local
-        msg: "No .env.local — `task env` writes one from the running stack."
+        msg: "No .env.local — `task up` writes one from the running stack."
+  deno-present:
+    internal: true
+    preconditions:
+      - sh: command -v deno >/dev/null 2>&1
+        msg: "deno is not installed — supabase/functions/ would go unchecked. Install Deno: https://deno.land"

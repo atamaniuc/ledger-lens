@@ -18,7 +18,21 @@ test.describe("Stage 2 — Ingestion & Transform", () => {
     // reads nothing at all, which would fail them for a reason that has
     // nothing to do with the code. The seeded orgs and users stay, so this
     // never depends on a full `supabase db reset`.
-    await sql`truncate table quarantine, invoices, raw_events, pipeline_runs restart identity cascade`;
+    //
+    // Ordered DELETEs, not `truncate ... cascade` — and the reason is a
+    // finding, not a preference (D-50). The transcription migration gave
+    // `documents` a `raw_event_id` foreign key, which silently widened the
+    // blast radius of the old truncate: cascading from `raw_events` took the
+    // whole seeded corpus with it, and five retrieval assertions then failed
+    // in a spec that never mentions ingestion. The seeded documents have no
+    // `raw_event_id`, so deleting rows in dependency order leaves them alone
+    // while still emptying the pipeline.
+    await sql`delete from data_quality_results`;
+    await sql`delete from quarantine`;
+    await sql`delete from chunks where invoice_id is not null`;
+    await sql`delete from invoices`;
+    await sql`delete from raw_events`;
+    await sql`delete from pipeline_runs`;
   });
 
   test("an unauthenticated trigger is rejected", async ({ request }) => {

@@ -1,0 +1,184 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens. The only file in this project that may name a colour or a
+   spacing value. Components reference these through Tailwind utilities
+   (`bg-surface`, `text-muted-foreground`, `p-gutter`) — a hardcoded hex or px in a
+   component is a lint-visible mistake, and `task check`'s token grep looks
+   for exactly that.
+
+   Semantic names, not literal ones: `--color-status-fail`, never
+   `--color-red-600`. The dashboard's job is signalling state, so the token a
+   component reaches for should be the state it means. Changing what "fail"
+   looks like then happens here, once.
+--------------------------------------------------------------------------- */
+
+:root {
+  /* Surfaces, back to front. */
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --surface-sunken: #f0f0f2;
+  --border: #e2e2e6;
+  --border-strong: #c9c9d1;
+
+  /* Text, by prominence rather than by shade. */
+  --foreground: #16161a;
+  --muted: #5c5c68;
+  /* Faint must stay visible (WCAG AA, 4.5:1) on the lightest surface it sits
+     on: --surface-sunken. It is a quieter text colour, not an invisible
+     one — a timestamp nobody can read is a label nobody trusts. */
+  --faint: #686874;
+
+  /* Status. The four data-quality verdicts plus the two the UI adds:
+     `unknown` (the query failed) and `missing` (the check never ran). Both
+     are deliberately distinct from `fail` — see ADR 0007's amendment. */
+  --status-pass: #197a4b;
+  --status-pass-surface: #e8f5ee;
+  --status-warn: #8a5a00;
+  --status-warn-surface: #fdf3e0;
+  --status-fail: #b3261e;
+  --status-fail-surface: #fdecea;
+  --status-unknown: #5c5c68;
+  --status-unknown-surface: #eeeef1;
+  /* Same AA rule as --faint: a "Not run" badge is still information. */
+  --status-missing: #686874;
+  --status-missing-surface: #f4f4f6;
+
+  /* Accent, used for interactive affordances only. */
+  --accent: #2b4ac7;
+  --accent-surface: #eaeefb;
+
+  /* Spacing scale. Only these; a component that needs something between two
+     of them is a sign the scale is wrong, not the component. */
+  --space-tight: 0.5rem;
+  --space-snug: 0.75rem;
+  --space-gutter: 1rem;
+  --space-section: 1.5rem;
+  --space-page: 2rem;
+
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+
+  /* shadcn/ui's token names, defined in terms of the semantic ones above
+     rather than as a second palette. `shadcn init` ships its own greyscale
+     set; keeping it would have meant two sources of truth for the same
+     colour, and the one that drifts is always the copy. Its components read
+     this project's tokens instead, so changing what "accent" looks like is
+     still one edit in one file.
+
+     Two names mean different things in the two systems, and this project
+     moved rather than shadcn: `muted` is a surface there and was text here
+     (now `muted-foreground`, which is shadcn's name for exactly that), and
+     the interactive blue is `primary` there and was `accent` here. */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--surface);
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--foreground);
+  --muted-surface: var(--surface-sunken);
+  --muted-foreground: var(--muted);
+  --accent-hover: var(--accent-surface);
+  --accent-foreground: var(--accent);
+  --destructive: var(--status-fail);
+  --input: var(--border);
+  --ring: var(--accent);
+  --radius: var(--radius-control);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d0d10;
+    --surface: #16161a;
+    --surface-sunken: #1e1e24;
+    --border: #2a2a32;
+    --border-strong: #3d3d47;
+
+    --foreground: #ededf0;
+    --muted: #a3a3ae;
+    --faint: #90909e;
+
+    --status-pass: #5cc98e;
+    --status-pass-surface: #12291d;
+    --status-warn: #e0a33c;
+    --status-warn-surface: #2b2113;
+    --status-fail: #f2837a;
+    --status-fail-surface: #2e1614;
+    --status-unknown: #a3a3ae;
+    --status-unknown-surface: #212127;
+    --status-missing: #90909e;
+    --status-missing-surface: #1c1c21;
+
+    --accent: #8aa2f2;
+    --accent-surface: #171d33;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border-subtle: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-foreground: var(--foreground);
+  --color-faint: var(--faint);
+
+  --color-status-pass: var(--status-pass);
+  --color-status-pass-surface: var(--status-pass-surface);
+  --color-status-warn: var(--status-warn);
+  --color-status-warn-surface: var(--status-warn-surface);
+  --color-status-fail: var(--status-fail);
+  --color-status-fail-surface: var(--status-fail-surface);
+  --color-status-unknown: var(--status-unknown);
+  --color-status-unknown-surface: var(--status-unknown-surface);
+  --color-status-missing: var(--status-missing);
+  --color-status-missing-surface: var(--status-missing-surface);
+
+  --color-accent: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-surface: var(--accent-surface);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-border: var(--border);
+
+  --spacing-tight: var(--space-tight);
+  --spacing-snug: var(--space-snug);
+  --spacing-gutter: var(--space-gutter);
+  --spacing-section: var(--space-section);
+  --spacing-page: var(--space-page);
+
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-panel);
+  --radius-xl: var(--radius-panel);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}

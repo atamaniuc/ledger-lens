@@ -2,27 +2,27 @@
 #
 # This image is an optional smoke check, not the development environment and
 # not what production runs. Vercel builds and serves the deployed app from
-# Next.js's own output; `task docker-up` runs this image beside the local
+# Next.js's own output; compose.yaml runs this image beside the local
 # Supabase stack so the production build gets exercised in Linux once, where
 # container-shaped mistakes surface. See ADR 0006.
 #
-# Bun installs, Node builds and serves. The local Supabase stack is not built
-# here — `supabase start` already runs Postgres, Auth, PostgREST and the Edge
-# Runtime in Docker, and a second definition of those would be a copy that
-# drifts. compose.yaml joins this image to the network that stack created.
+# Node 22 installs (via pnpm) and builds and serves. The local Supabase stack
+# is not built here — `supabase start` already runs Postgres, Auth, PostgREST
+# and the Edge Runtime in Docker, and a second definition of those would be a
+# copy that drifts. compose.yaml joins this image to the network that stack
+# created.
 
 # --- deps --------------------------------------------------------------------
-FROM oven/bun:1.3.14-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+RUN npm install --global pnpm@10
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # --- build -------------------------------------------------------------------
-# Bun installs; Node builds. The Next.js compiler runs under Node here for the
-# same reason the Playwright CLI does on the host: it is the runtime that
-# toolchain targets, and delegating to it removes a class of failures that
-# have nothing to do with this code.
-FROM node:22-alpine AS build
+# pnpm (in deps) installs; the Next.js compiler runs under Node, the runtime
+# the toolchain targets and that the runtime image serves with.
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -33,7 +33,7 @@ RUN node node_modules/next/dist/bin/next build
 # next.config.ts sets output: "standalone", which traces the server's actual
 # imports into one directory — the runtime image carries neither the package
 # manager nor the full dependency tree.
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

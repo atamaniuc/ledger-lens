@@ -6,8 +6,8 @@ import {
   fetchInvoicePage,
   fetchLineage,
   fetchMetrics,
-} from "../lib/dashboard/queries";
-import type { Database } from "../lib/supabase/database.types";
+} from "@/features/dashboard/queries";
+import type { Database } from "@/platform/supabase/database.types";
 import { ingest } from "./helpers/api";
 import { ORG_A, ORG_B, sql } from "./helpers/db";
 import { localStack } from "./helpers/stack";

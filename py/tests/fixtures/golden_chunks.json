@@ -1,0 +1,171 @@
+[
+  {
+    "id": "short",
+    "text": "Net 30 from the invoice date.",
+    "opts": null,
+    "chunks": [
+      "Net 30 from the invoice date."
+    ],
+    "hashes": [
+      "369add6c4bc69f9dba090e5f12a9d6ec2fb5df932a479f175a3344fa349f10d0"
+    ]
+  },
+  {
+    "id": "paragraph-40",
+    "text": "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms. Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms. Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms. Sentence number 15 says something about invoices and terms. Sentence number 16 says something about invoices and terms. Sentence number 17 says something about invoices and terms. Sentence number 18 says something about invoices and terms. Sentence number 19 says something about invoices and terms. Sentence number 20 says something about invoices and terms. Sentence number 21 says something about invoices and terms. Sentence number 22 says something about invoices and terms. Sentence number 23 says something about invoices and terms. Sentence number 24 says something about invoices and terms. Sentence number 25 says something about invoices and terms. Sentence number 26 says something about invoices and terms. Sentence number 27 says something about invoices and terms. Sentence number 28 says something about invoices and terms. Sentence number 29 says something about invoices and terms. Sentence number 30 says something about invoices and terms. Sentence number 31 says something about invoices and terms. Sentence number 32 says something about invoices and terms. Sentence number 33 says something about invoices and terms. Sentence number 34 says something about invoices and terms. Sentence number 35 says something about invoices and terms. Sentence number 36 says something about invoices and terms. Sentence number 37 says something about invoices and terms. Sentence number 38 says something about invoices and terms. Sentence number 39 says something about invoices and terms.",
+    "opts": null,
+    "chunks": [
+      "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms. Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms. Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms.",
+      "Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms. Sentence number 15 says something about invoices and terms. Sentence number 16 says something about invoices and terms. Sentence number 17 says something about invoices and terms. Sentence number 18 says something about invoices and terms. Sentence number 19 says something about invoices and terms. Sentence number 20 says something about invoices and terms. Sentence number 21 says something about invoices and terms. Sentence number 22 says something about invoices and terms. Sentence number 23 says something about invoices and terms. Sentence number 24 says something about invoices and terms. Sentence number 25 says something about invoices and terms. Sentence number 26 says something about invoices and terms.",
+      "Sentence number 24 says something about invoices and terms. Sentence number 25 says something about invoices and terms. Sentence number 26 says something about invoices and terms. Sentence number 27 says something about invoices and terms. Sentence number 28 says something about invoices and terms. Sentence number 29 says something about invoices and terms. Sentence number 30 says something about invoices and terms. Sentence number 31 says something about invoices and terms. Sentence number 32 says something about invoices and terms. Sentence number 33 says something about invoices and terms. Sentence number 34 says something about invoices and terms. Sentence number 35 says something about invoices and terms. Sentence number 36 says something about invoices and terms. Sentence number 37 says something about invoices and terms. Sentence number 38 says something about invoices and terms.",
+      "Sentence number 36 says something about invoices and terms. Sentence number 37 says something about invoices and terms. Sentence number 38 says something about invoices and terms. Sentence number 39 says something about invoices and terms."
+    ],
+    "hashes": [
+      "10cfba1410e37a3f062a8364469cb7f8134b71c374882ce217801d9ade34295d",
+      "8ad404ca5ae11cff671bc79fb428800a1902582579497798d93df00e31775444",
+      "26e96591093a71e48ee032ad6630cf0dbf71b1962e644280f463169e6a2dd1fa",
+      "feb381843f59423f767a8b6a395940fdf04245f24bc63800153dc3d16fb9b7dc"
+    ]
+  },
+  {
+    "id": "tricky-punct",
+    "text": "Invoices are issued on Net 30 terms. Unpaid invoices accrue interest at 1.5 percent per month. Escalate to collections after 60 days. Contact a.brown@example.com or ext. 4021 for exceptions!? Reference numbers look like INV-1.2 and must not be split.",
+    "opts": null,
+    "chunks": [
+      "Invoices are issued on Net 30 terms. Unpaid invoices accrue interest at 1.5 percent per month. Escalate to collections after 60 days. Contact a.brown@example.com or ext. 4021 for exceptions!? Reference numbers look like INV-1.2 and must not be split."
+    ],
+    "hashes": [
+      "eee81de342ef173d79169d9240de61f8b9a8d21995149650aa9f9ffe10cce458"
+    ]
+  },
+  {
+    "id": "whitespace-noise",
+    "text": "Sentence  number  0  says  something  about  invoices  and  terms.\n  Sentence  number  1  says  something  about  invoices  and  terms.\n  Sentence  number  2  says  something  about  invoices  and  terms.\n  Sentence  number  3  says  something  about  invoices  and  terms.\n  Sentence  number  4  says  something  about  invoices  and  terms.\n  Sentence  number  5  says  something  about  invoices  and  terms.\n  Sentence  number  6  says  something  about  invoices  and  terms.\n  Sentence  number  7  says  something  about  invoices  and  terms.\n  Sentence  number  8  says  something  about  invoices  and  terms.\n  Sentence  number  9  says  something  about  invoices  and  terms.\n",
+    "opts": null,
+    "chunks": [
+      "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms."
+    ],
+    "hashes": [
+      "1973cce7bea65e112e97ca77c9afd86bb73a1715983a29aa8fb425865402f28c"
+    ]
+  },
+  {
+    "id": "long-sentence-hardcut",
+    "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "opts": {
+      "maxChars": 900,
+      "overlapChars": 100
+    },
+    "chunks": [
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ],
+    "hashes": [
+      "2309ecdd32c45f3b6a744cf99c76d203823a5a80836616b34c828d40bf623655",
+      "2309ecdd32c45f3b6a744cf99c76d203823a5a80836616b34c828d40bf623655",
+      "12f6b82c283303ae5e6a08094c81feeecb75a2ddce8e30582151da9efb97d3c9"
+    ]
+  },
+  {
+    "id": "overlap-fills-chunk",
+    "text": "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms. Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms. Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms. Sentence number 15 says something about invoices and terms. Sentence number 16 says something about invoices and terms. Sentence number 17 says something about invoices and terms. Sentence number 18 says something about invoices and terms. Sentence number 19 says something about invoices and terms.",
+    "opts": {
+      "maxChars": 120,
+      "overlapChars": 110
+    },
+    "chunks": [
+      "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms.",
+      "Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms.",
+      "Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms.",
+      "Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms.",
+      "Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms.",
+      "Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms.",
+      "Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms.",
+      "Sentence number 14 says something about invoices and terms. Sentence number 15 says something about invoices and terms.",
+      "Sentence number 16 says something about invoices and terms. Sentence number 17 says something about invoices and terms.",
+      "Sentence number 18 says something about invoices and terms. Sentence number 19 says something about invoices and terms."
+    ],
+    "hashes": [
+      "3390c7b35db9331cf6c9ecc8d99794c470da9317d0b144fcb68a65b741566afc",
+      "e870722e5967a98b167fd3119e79ade6e0d8f057bd62ad3c52ec972b971719a4",
+      "abde2c816452460cb4024422cbf4eaa0931bb4bbcb4048a999e43cdde7be8bbb",
+      "1de852e800b0f1fb597cdd6420e7396fa3f1ab81da987c16dff15a014cf58705",
+      "626ab782044cadc61f6e7cce44b0e07ef2bcd4f9cf978db79d8353583e154b58",
+      "6ecb25a893bdc9cb12bc07973db7b3d926c14699c14ad00d10eeea1b6c44b174",
+      "a92675c931792e0845ce4aa7685f33817f436c1103b1721707ec1b0a7425f2aa",
+      "d5e6a902bdbf7f1e7d6b4e5605ed2e44363639ab5552421e959969a8a5abdba8",
+      "89cb0e9154bd30a9a84999178ea5fdd456dccfb148a74a48608b25bf706a2c8d",
+      "e6819d998e88fcdac3f33e89fb78b00a3cfa5f9592b509dffeae201875430cc8"
+    ]
+  },
+  {
+    "id": "unicode-emoji",
+    "text": "Invoice for ☕ and 🚀 launch on 2026-03-01. Amount 99.99 USD. Café résumé naïveté — great!? 🎉 Done. Follow-up at ext. 4021.",
+    "opts": null,
+    "chunks": [
+      "Invoice for ☕ and 🚀 launch on 2026-03-01. Amount 99.99 USD. Café résumé naïveté — great!? 🎉 Done. Follow-up at ext. 4021."
+    ],
+    "hashes": [
+      "4e05fc80291798471e18e7604284b965642c18351ae9134198df3375fe728f3c"
+    ]
+  },
+  {
+    "id": "single-huge-sentence",
+    "text": "The late payment policy is simple: every invoice that remains unpaid more than ninety days from its issue date is automatically escalated to the collections team, which contacts the customer in writing, by phone, and by electronic mail before any further action is taken, and this entire escalation sequence is documented in the internal ledger for audit purposes by the accounts receivable department.",
+    "opts": null,
+    "chunks": [
+      "The late payment policy is simple: every invoice that remains unpaid more than ninety days from its issue date is automatically escalated to the collections team, which contacts the customer in writing, by phone, and by electronic mail before any further action is taken, and this entire escalation sequence is documented in the internal ledger for audit purposes by the accounts receivable department."
+    ],
+    "hashes": [
+      "044db12896842b20420fda80bedbc57cef37254c152ce6f2007ff889d22b72be"
+    ]
+  },
+  {
+    "id": "invoice-memo",
+    "text": "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms. Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms. Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms.",
+    "opts": null,
+    "chunks": [
+      "Sentence number 0 says something about invoices and terms. Sentence number 1 says something about invoices and terms. Sentence number 2 says something about invoices and terms. Sentence number 3 says something about invoices and terms. Sentence number 4 says something about invoices and terms. Sentence number 5 says something about invoices and terms. Sentence number 6 says something about invoices and terms. Sentence number 7 says something about invoices and terms. Sentence number 8 says something about invoices and terms. Sentence number 9 says something about invoices and terms. Sentence number 10 says something about invoices and terms. Sentence number 11 says something about invoices and terms. Sentence number 12 says something about invoices and terms. Sentence number 13 says something about invoices and terms. Sentence number 14 says something about invoices and terms."
+    ],
+    "hashes": [
+      "10cfba1410e37a3f062a8364469cb7f8134b71c374882ce217801d9ade34295d"
+    ]
+  },
+  {
+    "id": "empty",
+    "text": "",
+    "opts": null,
+    "chunks": [],
+    "hashes": []
+  },
+  {
+    "id": "whitespace-only",
+    "text": "  \n\t ",
+    "opts": null,
+    "chunks": [],
+    "hashes": []
+  },
+  {
+    "id": "terminators-run",
+    "text": "What!? Really?! Yes. No way!! Maybe...",
+    "opts": null,
+    "chunks": [
+      "What!? Really?! Yes. No way!! Maybe..."
+    ],
+    "hashes": [
+      "2109cde74df129a491b7fed1aaad4f12f29578ada3c4bf91eed64b0a8c58f016"
+    ]
+  },
+  {
+    "id": "decimal-heavy",
+    "text": "Interest is 1.5 percent monthly. Total 1,234.56 USD. Rate 3.75% APR. Score 0.999 was reported. Version 2.0.1 shipped.",
+    "opts": null,
+    "chunks": [
+      "Interest is 1.5 percent monthly. Total 1,234.56 USD. Rate 3.75% APR. Score 0.999 was reported. Version 2.0.1 shipped."
+    ],
+    "hashes": [
+      "5cac21494d6f7e1f2a95f942528abbf2bcb1d21591a300733ea38eb0add90c0c"
+    ]
+  }
+]

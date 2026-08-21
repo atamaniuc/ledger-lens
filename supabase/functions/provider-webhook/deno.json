@@ -1,5 +1,5 @@
 {
-  "//": "Import map for the Edge Function. lib/ingestion/transform.ts uses a bare 'zod' specifier because it is also imported by the Next.js app; the Supabase Edge Runtime needs that mapped to an npm: specifier. Without this, the shared-transform reuse that PRD US-05 requires would fail at deploy time rather than at type-check time.",
+  "//": "Import map for the Edge Function. src/features/ingestion/transform.ts uses a bare 'zod' specifier because it is also imported by the Next.js app; the Supabase Edge Runtime needs that mapped to an npm: specifier. Without this, the shared-transform reuse that PRD US-05 requires would fail at deploy time rather than at type-check time.",
   "imports": {
     "zod": "npm:zod@^4"
   },

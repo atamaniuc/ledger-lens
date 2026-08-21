@@ -1,7 +1,7 @@
 # An optional container smoke check for the Next.js app.
 #
-#   task dev-up        # the Supabase stack (creates the network below)
-#   task docker-up     # this app's production image, joined to it
+#   task up                       # the Supabase stack (creates the network below)
+#   docker compose up -d --build app  # this image, joined to it
 #
 # This is not the development loop. `task dev` runs the app on your machine,
 # and so do every check and the Playwright suite — see ADR 0006. What this

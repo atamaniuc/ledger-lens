@@ -132,7 +132,10 @@ test.describe("Stage 5 — the chat route", () => {
       expect(body.correlation_id).toBeTruthy();
 
       if (res.status() === 200) expect(typeof body.answer).toBe("string");
-      else expect(body.detail).toContain("Rate limit");
+      // A configured deployment answers, or refuses with detail an operator can
+      // act on: a provider rate limit, or the chain reporting that every
+      // provider it tried failed (ADR 0010).
+      else expect(body.detail, JSON.stringify(body)).toMatch(/rate limit|failover chain/i);
     } else {
       expect(res.status()).toBe(503);
       const body = await res.json();

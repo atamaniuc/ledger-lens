@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Regenerates lib/supabase/database.types.ts from the local stack's schema.
+# Regenerates src/platform/supabase/database.types.ts from the local stack's schema.
 #
 # Local rather than the hosted project on purpose: the two carry the same
 # migrations, and generating from local keeps this reproducible offline and
@@ -11,7 +11,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-OUT="lib/supabase/database.types.ts"
+OUT="src/platform/supabase/database.types.ts"
 HEADER="// Generated from the local Supabase schema — do not edit by hand.
 // Regenerate with \`task types\` after any migration; \`task types-check\`
 // (part of \`task verify\`) fails when this file and the schema disagree.

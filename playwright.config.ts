@@ -10,10 +10,10 @@ import { defineConfig } from "@playwright/test";
 
 // Loaded here rather than by each spec so a missing .env.local fails once,
 // at startup, with a sentence that says what to do. Read synchronously with
-// node:fs rather than Bun.file: Playwright loads this config through Node,
-// where neither the Bun global nor top-level await exists.
+// node:fs rather than a Bun global: Playwright loads this config through
+// Node, where neither the Bun global nor top-level await exists.
 if (!existsSync(".env.local")) {
-  throw new Error(".env.local not found — run `task dev-up`, then see docs/LOCAL_DEV.md");
+  throw new Error(".env.local not found — run `task up` first");
 }
 for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
@@ -28,14 +28,18 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // One retry in CI only (D-51). A flaky run there blocks a merge for a reason
+  // the diff did not cause, and Playwright reports a retried test as "flaky"
+  // rather than passing it silently — which is the property that makes a retry
+  // acceptable at all. Locally retries stay off, so a flake is felt.
+  retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3000",
     extraHTTPHeaders: { "content-type": "application/json" },
   },
   webServer: {
-    command: "bun run dev",
+    command: "pnpm dev",
     url: "http://localhost:3000/api/mock-provider/summary",
     reuseExistingServer: true,
     timeout: 120_000,

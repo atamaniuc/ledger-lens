@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
 import { ORG_A, sql } from "./helpers/db";
 import { localStack, webhookSecret } from "./helpers/stack";
+import { signRequest } from "@/platform/signing";
 
 // The provider-webhook Edge Function — the push half of Stage 2 ingestion
 // (PRD US-05). Stage 1's mock provider only exposes a pull API, so the push
 // path has no upstream to trigger it; this spec is that upstream.
 //
 // What it is really guarding is code reuse. The function imports
-// lib/ingestion/transform.ts and calls the same ingest_raw_event routine the
+// src/features/ingestion/transform.ts and calls the same ingest_raw_event routine the
 // polling route calls, so idempotency and validation are proven once instead
 // of reimplemented. Reuse that is only structural — the same import, subtly
 // different behaviour — would still pass a reading of the code, so the same
@@ -17,7 +18,7 @@ import { localStack, webhookSecret } from "./helpers/stack";
 //
 // Requires the local stack (`task dev-up`), which serves Edge Functions from
 // its own container, with WEBHOOK_SHARED_SECRET reaching it through
-// config.toml's [edge_runtime.secrets] — see docs/LOCAL_DEV.md.
+// config.toml's [edge_runtime.secrets] — see docs/RUNBOOK.md.
 
 test.describe.configure({ mode: "serial" });
 
@@ -83,9 +84,15 @@ function event(externalId: string, overrides: Record<string, unknown> = {}) {
  * Posts to the function through the API gateway.
  *
  * Two credentials, doing two different jobs: the gateway checks the anon key
- * before routing at all, and the function checks x-webhook-secret before it
- * writes anything. `secret` is a parameter precisely so the second one can be
- * tested independently of the first.
+ * before routing at all, and the function verifies an HMAC signature over the
+ * exact body bytes before it writes anything (D-19 — it used to accept a
+ * static header secret, which a captured request could replay forever).
+ * `secret` is a parameter precisely so the second one can be tested
+ * independently of the first.
+ *
+ * The body is serialized here rather than handed to Playwright as an object,
+ * because the signature covers bytes: re-serializing would sign one string and
+ * send another.
  */
 async function post(
   request: APIRequestContext,
@@ -93,13 +100,16 @@ async function post(
   opts: { secret?: string; correlationId?: string } = {},
 ): Promise<APIResponse> {
   const { functionsUrl, anonKey } = localStack();
+  const rawBody = JSON.stringify(body);
+  const signed = await signRequest(opts.secret ?? webhookSecret(), rawBody);
   return request.post(`${functionsUrl}/provider-webhook`, {
     headers: {
       authorization: `Bearer ${anonKey}`,
-      "x-webhook-secret": opts.secret ?? webhookSecret(),
+      "content-type": "application/json",
+      ...signed,
       ...(opts.correlationId ? { "x-correlation-id": opts.correlationId } : {}),
     },
-    data: body,
+    data: rawBody,
     // Playwright would otherwise throw on a 4xx before the test can assert it.
     failOnStatusCode: false,
   });
