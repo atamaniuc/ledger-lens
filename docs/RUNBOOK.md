@@ -176,3 +176,4 @@ cut with `docs/LOCAL_DEV.md` (D-39). The typed env schema is
 <!-- proof: supabase/config.toml:enable_signup --> <!-- proof: tests/helpers/stack.ts --> <!-- proof: src/features/rag/embed.ts:WORKER_LIMIT_STATUS --> <!-- proof: src/features/rag/embed.ts:EMBED_BATCH_LIMIT --> <!-- proof: src/features/rag/embed.ts:MAX_ATTEMPTS -->
 <!-- proof: src/platform/config.ts:envSchema --> <!-- proof: .env.example --> <!-- proof: evals/thresholds.json -->
 # test
+# diff-gate probe 2
