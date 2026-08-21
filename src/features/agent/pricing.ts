@@ -33,9 +33,14 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   // registry of everything a provider offers. Pointing `GROQ_MODEL` at
   // something else is fine and costs a null in the column, which is the
   // honest answer to "what did that turn cost".
+  //
+  // `moonshotai/kimi-k2-instruct` was listed here and has been removed: probed
+  // against this account it answers 404, "does not exist or you do not have
+  // access to it". A price for a model nobody here can reach is the same class
+  // of claim this project spent a refactor deleting.
   "openai/gpt-oss-20b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "openai/gpt-oss-120b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
-  "moonshotai/kimi-k2-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
+  "openai/gpt-oss-safeguard-20b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "qwen/qwen3.6-27b": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "meta/llama-3.3-70b-instruct": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },
   "nvidia/llama-3.3-nemotron-super-49b-v1.5": { inputPerMTokUsd: 0, outputPerMTokUsd: 0 },

@@ -1,0 +1,67 @@
+name: Evals
+
+# The measurement gate, in its own workflow on purpose.
+#
+# CI's other seven jobs answer "is the code correct". This one answers "what do
+# the metrics read", and without a model key in the repository the answer is
+# "nothing was measured" — which exits non-zero, because a measurement that did
+# not happen is not a measurement that passed (D-24). Keeping it here means the
+# main badge reports the code and this badge reports the measurement: a red
+# badge that means "no key configured" must not be mistaken for a broken build.
+#
+# The deterministic half needs no key and runs every time: recall@5 and
+# abstention are measured here on every push.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DO_NOT_TRACK: "1"
+
+jobs:
+  evals:
+    name: retrieval and agent-safety evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: pnpm install --frozen-lockfile
+      - name: Start the stack and apply migrations and seed
+        run: |
+          # Before `supabase start`: config.toml's [edge_runtime.secrets]
+          # resolve env(...) references when the containers come up, and
+          # supabase/.env is gitignored. Without this the Edge Functions boot
+          # with empty secrets and refuse every call with 401.
+          cp supabase/.env.example supabase/.env
+          supabase start
+          supabase db reset --local
+          ./scripts/write-env-local.sh
+      - name: Build the RAG index
+        run: task index
+      # Exits non-zero on a threshold breach AND when a model-dependent metric
+      # could not be measured. Any one of these secrets turns the model tier on;
+      # GROQ_API_KEY and NVIDIA_API_KEY are free tiers — but a full run spends
+      # most of a free tier's daily token budget, which is why adding the secret
+      # is a deliberate choice rather than the default (docs/RUNBOOK.md).
+      - name: Evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+        run: task evals
