@@ -8,3 +8,4 @@
 - 0008 — Retrieval embeds via Supabase-hosted gte-small; hybrid search is one SECURITY INVOKER function — Accepted
 - 0009 — The agent executes under the user's JWT with four read-only tools and no send capability — Accepted
 - 0010 — Free-tier provider failover chain — Accepted
+- 0011 — The development harness is a document, not a dependency — Accepted
