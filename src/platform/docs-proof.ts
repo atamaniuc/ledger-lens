@@ -134,6 +134,44 @@ export function checkTracks(text: string, resolver: Resolver): Problem[] {
   return problems;
 }
 
+// ---- Handoff-reference audit: no doc may point at a handoff that closed ----
+//
+// A handoff is deleted the moment its track closes (see checkTracks above).
+// A reference to a specific handoff can outlive it in a spec, DEBT.md, or a
+// task list — a dead reference the proof gate would not otherwise see, because
+// it lives outside specs/TRACKS.md and is not a proof marker. Directory-
+// qualified paths (specs/NNNN-.../handoff.md, docs/HANDOFF.md) must resolve;
+// the bare word "handoff.md" and template paths (specs/NNNN-<slug>/handoff.md)
+// are protocol talk, not claims, and stay legal.
+
+const HANDOFF_REF = /[\w./-]+\/handoff\.md/gi;
+
+export function checkHandoffRefs(
+  text: string,
+  resolver: Resolver,
+  filePath: string,
+): Problem[] {
+  const problems: Problem[] = [];
+  let inFence = false;
+  text.split("\n").forEach((lineText, index) => {
+    if (lineText.trimStart().startsWith("```")) { inFence = !inFence; return; }
+    if (inFence) return;
+    for (const match of lineText.matchAll(HANDOFF_REF)) {
+      const target = match[0];
+      if (/[<>]|\.\.\./.test(target)) continue; // template or syntax example
+      if (!resolver.fileExists(target)) {
+        problems.push({
+          file: filePath,
+          line: index + 1,
+          target,
+          reason: `file "${target}" does not exist (a handoff is deleted when its track closes — point at specs/TRACKS-LOG.md instead)`,
+        });
+      }
+    }
+  });
+  return problems;
+}
+
 export function verify(
   files: { path: string; text: string }[],
   resolver: Resolver,
@@ -157,6 +195,7 @@ export function verify(
         problems.push({ file: file.path, line: marker.line, target: marker.target, reason });
       }
     }
+    problems.push(...checkHandoffRefs(file.text, resolver, file.path));
     if (file.path === "specs/TRACKS.md") {
       problems.push(...checkTracks(file.text, resolver));
     }

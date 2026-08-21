@@ -50,8 +50,9 @@ The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` 
 - Closing a track = distillation: outcome in 1–2 sentences into
   `specs/TRACKS-LOG.md` (newest first), lasting decisions into specs/DEBT.md,
   then delete the handoff and its `TRACKS.md` line. Git carries the history.
-- `task check` fails when a `TRACKS.md` line links a file that does not exist
-  or a track carries no status — a handoff that would lie is a dead marker.
+- `task check` fails when a `TRACKS.md` line links a file that does not exist,
+  a track carries no status, or any doc points at a handoff file that no longer
+  exists (`checkHandoffRefs`) — a handoff that would lie is a dead marker.
 
 ## Definition of Done
 See `specs/DoD.md` — it is the single DoD for every lane.

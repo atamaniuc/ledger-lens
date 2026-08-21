@@ -26,7 +26,7 @@
 **AC-05** — GIVEN docs/ARCHITECTURE-C4.md WHEN read THEN it contains Context, Container and Component diagrams (mermaid) with <=100-word captions and links c4model.com; README links to it (verify-docs pattern, D-59)
 **AC-06** — GIVEN docs/PATTERNS.md WHEN read THEN it names the patterns actually used (vertical feature slice, ports & adapters at real boundaries, tactical DDD value objects, invariants in Postgres) and states what is deliberately NOT used (D-59)
 **AC-07** — GIVEN docs/QA-MANUAL.md WHEN followed THEN an operator can run every role scenario (login, dashboard, filters, admin settings, copilot demo mode) with acceptance criteria and feature-flag combinations (D-60)
-**AC-08** — GIVEN the lane's handoff (specs/0014-dashboard-ux-and-role-model/handoff.md, indexed in specs/TRACKS.md) WHEN another agent starts THEN it can resume this lane from the exact uncommitted state (D-60, spec 0015)
+**AC-08** — GIVEN the lane's closed track record in specs/TRACKS-LOG.md WHEN another agent starts THEN it can see the lane outcome; the handoff that carried the uncommitted state while the lane was active was distilled there on close (D-60, spec 0015)
 
 ## Invariants
 

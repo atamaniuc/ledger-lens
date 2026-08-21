@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTarget, checkTracks, findMarkers, verify, type Resolver } from "./docs-proof";
+import { checkHandoffRefs, checkTarget, checkTracks, findMarkers, verify, type Resolver } from "./docs-proof";
 
 // The gate that keeps the documentation honest needs its own gate: a checker
 // that cannot fail is a checker nobody should believe (the same argument that
@@ -126,6 +126,52 @@ describe("checkTracks", () => {
     const files = [{ path: "specs/TRACKS.md", text: "- **Lane** — [handoff](missing.md) — active" }];
     const problems = verify(files, tracksResolver, false);
     expect(problems.some((p) => p.target === "missing.md")).toBe(true);
+  });
+});
+
+describe("checkHandoffRefs", () => {
+  const handoffResolver: Resolver = {
+    ...resolver,
+    fileExists: (path) => ["specs/0001-x/handoff.md"].includes(path),
+  };
+
+  it("passes protocol talk — the bare word and the template path", () => {
+    const text = [
+      "load the lane's `handoff.md` first.",
+      "a lane keeps `specs/NNNN-<slug>/handoff.md` next to its spec.md",
+    ].join("\n");
+    expect(checkHandoffRefs(text, handoffResolver, "AGENTS.md")).toEqual([]);
+  });
+
+  it("accepts a directory-qualified handoff that still exists", () => {
+    const text = "resume from specs/0001-x/handoff.md";
+    expect(checkHandoffRefs(text, handoffResolver, "specs/0001-x/spec.md")).toEqual([]);
+  });
+
+  it("flags a directory-qualified handoff that was deleted on close", () => {
+    const text = "resume from specs/0002-y/handoff.md";
+    const problems = checkHandoffRefs(text, handoffResolver, "DEBT.md");
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ file: "DEBT.md", line: 1, target: "specs/0002-y/handoff.md" });
+    expect(problems[0].reason).toMatch(/TRACKS-LOG/);
+  });
+
+  it("flags docs/HANDOFF.md case-insensitively", () => {
+    const text = "the old docs/HANDOFF.md was migrated";
+    const problems = checkHandoffRefs(text, handoffResolver, "specs/0015-x/spec.md");
+    expect(problems).toHaveLength(1);
+    expect(problems[0].target).toBe("docs/HANDOFF.md");
+  });
+
+  it("ignores a handoff reference inside a code fence", () => {
+    const text = "```\nspecs/0002-y/handoff.md\n```";
+    expect(checkHandoffRefs(text, handoffResolver, "x.md")).toEqual([]);
+  });
+
+  it("runs as part of verify for any document, not just specs/TRACKS.md", () => {
+    const files = [{ path: "DEBT.md", text: "open: lane handoff specs/0002-y/handoff.md" }];
+    const problems = verify(files, handoffResolver, false);
+    expect(problems.some((p) => p.target === "specs/0002-y/handoff.md")).toBe(true);
   });
 });
 

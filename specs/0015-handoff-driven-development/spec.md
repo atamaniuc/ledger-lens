@@ -5,7 +5,7 @@
 ## Why
 
 - Studied https://github.com/yetanothervan/handoff-driven-development (HDD): specs stay true; **handoffs carry unfinished-work context across sessions** — one file per track, edited in place; an index (TRACKS.md) of live tracks; a protocol to close a track by distillation (outcome → TRACKS-LOG.md, decisions → permanent specs, handoff deleted).
-- Our harness had exactly one ad-hoc handoff (docs/HANDOFF.md) with no protocol: no index, no lifecycle (create/update/close), no rule telling an agent to load it, nothing machine-checking it (D-61). The user's resume-in-Claude-Code/Codex mechanism must be formal, not a one-off file.
+- Our harness had exactly one ad-hoc handoff file with no protocol: no index, no lifecycle (create/update/close), no rule telling an agent to load it, nothing machine-checking it (D-61). The user's resume-in-Claude-Code/Codex mechanism must be formal, not a one-off file.
 
 ## User stories
 
@@ -20,7 +20,7 @@
 **AC-02** — GIVEN a lane whose tasks are partly done WHEN its session ends THEN the lane dir contains handoff.md (HDD template: context, load-list + anti-list, task, state, decisions, first step) and its TRACKS.md line says active with next:; AGENTS.md instructs to load it (docs-proof audit + AGENTS.md text, D-61)
 **AC-03** — GIVEN a closed track WHEN it closes THEN its outcome (1-2 sentences) is in specs/TRACKS-LOG.md (newest first) and its handoff is deleted (checkTracks: no line may link a missing handoff unless marked none; TRACKS-LOG entries exist, D-61)
 **AC-04** — GIVEN docs/HARNESS.md and docs/HARNESS-QUICKSTART.md WHEN read THEN they describe the handoff protocol and point to TRACKS.md; markers resolve in task check (proof markers on both, D-61)
-**AC-05** — GIVEN docs/HANDOFF.md WHEN the lane lands THEN its content is migrated into specs/0014-dashboard-ux-and-role-model/handoff.md and no reference to docs/HANDOFF.md remains (grep = 0, D-61)
+**AC-05** — GIVEN the pre-0015 handoff file WHEN the lane lands THEN its content is migrated into lane 0014's handoff and the file is deleted; thereafter a dead reference to any deleted handoff fails task check (checkHandoffRefs, D-61)
 
 ## Invariants
 
