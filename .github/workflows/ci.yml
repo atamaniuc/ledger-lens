@@ -8,7 +8,15 @@ name: CI
 #   evals    retrieval and agent-safety gate against the seeded corpus
 #   gitleaks secret scan (D-22)
 #   knip     dead-code gate, failing only on NEW findings (D-41 baseline)
-#   python   dormant until py/ exists (D-42), guarded by hashFiles
+#   python   both uv projects: the indexer/judge and the Modal app
+#
+# The first real run of this file failed in zero seconds — no jobs, no logs,
+# "this run likely failed because of a workflow file issue" — while the YAML
+# parsed cleanly and every job name was present. Two jobs carried
+# `if: hashFiles('py/**') != ''` as a job-level condition, from when those
+# directories did not exist yet; GitHub rejects the whole file for it, because
+# nothing is checked out when a job-level condition is evaluated. Both
+# directories exist now, so the guards were pointless as well as fatal.
 
 on:
   push:
@@ -140,7 +148,6 @@ jobs:
   python:
     name: python services
     runs-on: ubuntu-latest
-    if: hashFiles('py/**') != ''
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -187,7 +194,6 @@ jobs:
   infra:
     name: infrastructure program
     runs-on: ubuntu-latest
-    if: hashFiles('infra/**') != ''
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
