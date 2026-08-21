@@ -20,15 +20,15 @@ const eslintConfig = defineConfig([
     // and pass any test that only checks the numbers are right (ADR 0007).
     // The file-level comments are advice; this is enforcement.
     //
-    // `app/api/**` is exempt because those routes act as the pipeline rather
+    // `src/app/api/**` is exempt because those routes act as the pipeline rather
     // than as a user. `supabase/functions/**` is exempt by being outside
     // this config entirely — it is checked by `deno check`.
     files: ["**/*.ts", "**/*.tsx"],
-    // `scripts/**` is exempt for a different reason than app/api/**: those
+    // `scripts/**` is exempt for a different reason than src/app/api/**: those
     // files are a developer CLI run against a local stack. They are outside
     // the Next.js build entirely, so nothing there can end up in a browser
     // bundle — which is the risk this rule exists to stop.
-    ignores: ["app/api/**", "lib/supabase/service-client.ts", "scripts/**"],
+    ignores: ["src/app/api/**", "src/platform/supabase/service-client.ts", "scripts/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -36,13 +36,13 @@ const eslintConfig = defineConfig([
           patterns: [
             {
               group: [
-                "@/lib/supabase/service-client",
-                "**/lib/supabase/service-client",
+                "@/platform/supabase/service-client",
+                "**/platform/supabase/service-client",
                 "./service-client",
                 "../service-client",
               ],
               message:
-                "The service-role client bypasses RLS. Outside app/api/** and supabase/functions/**, read through lib/supabase/server-client.ts or browser-client.ts so Postgres decides what comes back (ADR 0007).",
+                "The service-role client bypasses RLS. Outside src/app/api/** and supabase/functions/**, read through src/platform/supabase/server-client.ts or browser-client.ts so Postgres decides what comes back (ADR 0007).",
             },
           ],
         },
@@ -75,6 +75,15 @@ const eslintConfig = defineConfig([
     // Playwright run artifacts — traces, screenshots, HTML reports.
     "test-results/**",
     "playwright-report/**",
+    // The Python services (spec 0005). Nothing there is part of the Next.js
+    // app, and its virtualenvs and uv cache carry vendored JavaScript —
+    // torch and scikit-learn each ship a browser bundle — which turned this
+    // gate red with 150 problems from code nobody here wrote. Python is
+    // linted by ruff, in its own CI job.
+    "py/**",
+    // The Pulumi program (spec 0010). Self-contained like py/: its own
+    // package.json, tsconfig and tests; deployed by pulumi, not built by Next.
+    "infra/**",
   ]),
 ]);
 

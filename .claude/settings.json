@@ -6,6 +6,7 @@
     "codex@openai-codex": true,
     "pulumi-neo@pulumi-skills": true,
     "understand-anything@understand-anything": true,
-    "agent-skills@addy-agent-skills": true
+    "agent-skills@addy-agent-skills": true,
+    "ponytail@ponytail": true
   }
 }

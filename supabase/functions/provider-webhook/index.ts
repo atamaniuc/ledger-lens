@@ -1,18 +1,31 @@
 // Deno Edge Function — provider push path for Stage 2 ingestion.
-// Reuses lib/ingestion/transform.ts and lib/ingestion/hash.ts verbatim
+// Reuses src/features/ingestion/transform.ts and src/platform/hash.ts verbatim
 // (relative-path import, Deno resolves local .ts natively — ADR 0002)
 // so idempotency and validation are proven once, not reimplemented for
 // the push path. See ADR 0003/0004 and the "Ingestion & Transform"
 // entry in .claude/PRD.md (US-05).
+//
+// Auth (D-19): HMAC-SHA256 over `v1:<timestamp>:<nonce>:<rawBody>`,
+// compared in constant time, with a freshness window and a single-use
+// nonce held in Postgres (public.consume_request_nonce). The previous
+// static x-webhook-secret header let anyone who captured one request
+// replay it forever; a replayed signature, an expired timestamp, or a
+// reused nonce is now rejected before anything is read or written.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { validateInvoice } from "../../../lib/ingestion/transform.ts";
-import { hashPayload } from "../../../lib/ingestion/hash.ts";
+import { validateInvoice } from "../../../src/features/ingestion/transform.ts";
+import { hashPayload } from "../../../src/platform/hash.ts";
 import {
   EVENT_VERSION,
   PIPELINE_VERSION,
   type IngestOutcome,
-} from "../../../lib/ingestion/constants.ts";
+} from "../../../src/features/ingestion/constants.ts";
+import {
+  MAX_BODY_BYTES,
+  NONCE_TTL_MS,
+  checkRequestSignature,
+  extractSignatureHeaders,
+} from "../_shared/signature.ts";
 
 const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SHARED_SECRET");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -48,16 +61,53 @@ Deno.serve(async (req: Request) => {
     console.log(JSON.stringify({ correlation_id: correlationId, event, ...fields }));
 
   // Auth first — a rejected call writes nothing, not even a pipeline_runs
-  // row: nothing happened, so there is nothing to record.
-  const providedSecret = req.headers.get("x-webhook-secret");
-  if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
-    log("webhook_unauthorized");
+  // row: nothing happened, so there is nothing to record. The signature is
+  // over the raw body bytes, so the body is read before anything else and
+  // parsed only after auth.
+  if (!WEBHOOK_SECRET) {
+    log("webhook_unauthorized", { reason: "secret_unset" });
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const rawBody = await req.text();
+  if (rawBody.length > MAX_BODY_BYTES) {
+    log("webhook_body_too_large", { bytes: rawBody.length });
+    return json({ error: "body_too_large" }, 413);
+  }
+
+  const signatureCheck = await checkRequestSignature(
+    extractSignatureHeaders(req),
+    rawBody,
+    WEBHOOK_SECRET,
+  );
+  if (!signatureCheck.ok) {
+    log("webhook_unauthorized", { reason: signatureCheck.reason });
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // The replay half of D-19: the nonce is single-use. Only reached after
+  // the signature verified, so an unauthenticated caller cannot populate
+  // the store. False (or an error) means this exact signed request was
+  // accepted before — fail closed.
+  const { data: consumed, error: nonceError } = await supabase.rpc(
+    "consume_request_nonce",
+    {
+      p_nonce: signatureCheck.nonce,
+      p_expires_at: new Date(Date.now() + NONCE_TTL_MS).toISOString(),
+    },
+  );
+  if (nonceError || consumed !== true) {
+    log("webhook_nonce_rejected", {
+      reason: nonceError?.message ?? "reused_nonce",
+    });
     return json({ error: "unauthorized" }, 401);
   }
 
   let body: WebhookBody;
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody) as WebhookBody;
   } catch {
     return json({ error: "malformed_json" }, 400);
   }
@@ -80,7 +130,19 @@ Deno.serve(async (req: Request) => {
   const externalId = event.external_id;
 
   const source = body.source ?? "mock-provider";
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // D-13 (other half): webhook-created runs must be reaped like polling
+  // runs, so an invocation killed mid-run cannot leave a row stuck at
+  // 'running' forever. The polling path reaps inside
+  // try_start_polling_run; the published contract from lane W2-B
+  // (migration 20260821110000_scheduler_locks_and_cron.sql) has this path
+  // call the same function directly, before opening its run.
+  const { data: reaped, error: reapError } = await supabase.rpc("reap_abandoned_runs", {
+    p_org_id: body.org_id,
+    p_source: source,
+  });
+  if (reapError) log("reap_failed", { error: reapError.message });
+  else if (typeof reaped === "number" && reaped > 0) log("runs_reaped", { count: reaped });
 
   // kind='webhook', not 'incremental': the polling path resumes from the
   // newest succeeded incremental run's cursor_to, and a cursorless webhook

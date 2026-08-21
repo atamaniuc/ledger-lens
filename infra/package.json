@@ -1,0 +1,29 @@
+{
+  "name": "ledgerlens-infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LedgerLens deployable surface — Vercel native + Supabase command-wrapped (spec 0010, D-01). Not part of the app's pnpm project.",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "pulumi preview -s prod",
+    "up": "pulumi up -s prod",
+    "destroy": "pulumi destroy -s prod"
+  },
+  "dependencies": {
+    "@pulumi/command": "^1.2.1",
+    "@pulumi/pulumi": "^3.258.0",
+    "@pulumiverse/vercel": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

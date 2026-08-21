@@ -20,6 +20,25 @@ export function adminHeaders(): Record<string, string> {
   return { apikey: key, authorization: `Bearer ${key}` };
 }
 
+/**
+ * Creates a user the way an operator does, now that registration is closed
+ * (D-20). The admin API is the only door left, which is the point — but it
+ * means a spec that used to rely on self-service sign-up has to ask for the
+ * account first.
+ */
+export async function createUserAsOperator(
+  request: APIRequestContext,
+  apiUrl: string,
+  email: string,
+): Promise<void> {
+  const res = await request.post(`${apiUrl}/auth/v1/admin/users`, {
+    headers: { ...adminHeaders(), "content-type": "application/json" },
+    data: { email, email_confirm: true },
+    failOnStatusCode: false,
+  });
+  expect(res.status(), await res.text()).toBeLessThan(300);
+}
+
 export async function signInBrowser(
   context: BrowserContext,
   request: APIRequestContext,

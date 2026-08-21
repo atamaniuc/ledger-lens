@@ -1,0 +1,37 @@
+# Stack: prod — LedgerLens production deploy surface (spec 0010, D-01).
+#
+# COMMITTED PUBLIC CONFIG ONLY. This file must never contain a secret.
+# Every secret is set locally with `pulumi config set --secret` (encrypted
+# at rest in the stack backend, never in git). Required secrets, from the
+# infra/ README:
+#
+#   pulumi config set --secret vercelApiToken <token>
+#   pulumi config set --secret supabaseAccessToken <token>
+#   pulumi config set --secret dbPassword <password>
+#   pulumi config set --secret supabaseServiceRoleKey <key>
+#   pulumi config set --secret ingestionTriggerSecret <secret>
+#   pulumi config set --secret webhookSharedSecret <secret>
+#   pulumi config set --secret embedSharedSecret <secret>
+#
+# Required plaintext (public by design — RLS is the boundary, not this key):
+#   pulumi config set supabaseAnonKey <anon-key>
+#
+# Optional secrets: anthropicApiKey, groqApiKey, nvidiaApiKey, llmApiKey.
+#
+# A missing required value fails `pulumi up` with the exact command to fix it.
+
+config:
+  ledgerlens-infra:appName: ledgerlens
+  ledgerlens-infra:framework: nextjs
+  ledgerlens-infra:region: iad1
+  ledgerlens-infra:supabaseProjectRef: nhvtzdufsjtlwidnfkzo
+  # supabaseAnonKey: set locally (see header). Public anon key, not committed
+  # here only because it is a live project credential; same exposure class as
+  # NEXT_PUBLIC_SUPABASE_ANON_KEY, which Vercel serves to every browser.
+  ledgerlens-infra:mockProviderSeed: "42"
+  # Custom domain, e.g. "ledgerlens.app". Empty string = Vercel's default
+  # <appName>.vercel.app URL; a non-empty value creates a
+  # vercel.ProjectDomain for it.
+  ledgerlens-infra:domain: ""
+  # vercelTeamId: set if the project belongs to a Vercel team:
+  #   pulumi config set vercelTeamId <team-id>

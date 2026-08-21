@@ -1,12 +1,32 @@
 // Deno Edge Function — the only place in this system that turns text into a
-// vector. ADR 0008: `gte-small` runs inside the Edge Runtime, so there is no
-// embeddings API key anywhere and no second AI vendor. The app cannot do this
-// in-process, which is why both the indexer (Batch D) and every chat turn
-// (Batch H) come through here.
+// vector. Decision 0008: the model is `gte-small` reached through
+// `Supabase.ai.Session` below, which is Supabase's own hosted inference, not a
+// model executing inside this isolate. That distinction is the whole point of
+// the correction recorded as D-05: the effect is the same (no embeddings API
+// key of ours, no second AI vendor, one place a vector can come from) but the
+// CPU budget and the 546 below are the runtime's, and the model's latency is
+// someone else's service.
+//
+// Both the indexer and every chat turn come through here.
 //
 // Verified against supabase-edge-runtime-1.74.3: 384 dimensions.
+//
+// Auth (D-19): the same HMAC + timestamp + nonce scheme as provider-webhook
+// (see ../_shared/signature.ts), keyed with EMBED_SHARED_SECRET. The
+// previous static x-embed-secret header could be replayed by anyone who
+// captured one request.
+
+import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  MAX_BODY_BYTES,
+  NONCE_TTL_MS,
+  checkRequestSignature,
+  extractSignatureHeaders,
+} from "../_shared/signature.ts";
 
 const EMBED_SECRET = Deno.env.get("EMBED_SHARED_SECRET");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 export const MODEL = "gte-small";
 export const DIMENSIONS = 384;
@@ -38,15 +58,49 @@ Deno.serve(async (req: Request) => {
     console.log(JSON.stringify({ correlation_id: correlationId, event, ...fields }));
 
   // Auth first, like provider-webhook: a rejected call does no work at all.
-  const provided = req.headers.get("x-embed-secret");
-  if (!EMBED_SECRET || provided !== EMBED_SECRET) {
-    log("embed_unauthorized");
+  // The signature is over the raw body bytes, read here and parsed only
+  // after auth.
+  if (!EMBED_SECRET) {
+    log("embed_unauthorized", { reason: "secret_unset" });
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const rawBody = await req.text();
+  if (rawBody.length > MAX_BODY_BYTES) {
+    log("embed_body_too_large", { bytes: rawBody.length });
+    return json({ error: "body_too_large" }, 413);
+  }
+
+  const signatureCheck = await checkRequestSignature(
+    extractSignatureHeaders(req),
+    rawBody,
+    EMBED_SECRET,
+  );
+  if (!signatureCheck.ok) {
+    log("embed_unauthorized", { reason: signatureCheck.reason });
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  // Replay guard, same table and RPC as the webhook: the nonce is
+  // single-use. Fail closed on any doubt.
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const { data: consumed, error: nonceError } = await supabase.rpc(
+    "consume_request_nonce",
+    {
+      p_nonce: signatureCheck.nonce,
+      p_expires_at: new Date(Date.now() + NONCE_TTL_MS).toISOString(),
+    },
+  );
+  if (nonceError || consumed !== true) {
+    log("embed_nonce_rejected", {
+      reason: nonceError?.message ?? "reused_nonce",
+    });
     return json({ error: "unauthorized" }, 401);
   }
 
   let body: EmbedBody;
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody) as EmbedBody;
   } catch {
     return json({ error: "malformed_json" }, 400);
   }
@@ -94,3 +148,10 @@ Deno.serve(async (req: Request) => {
   log("embed_ok", { count: embeddings.length, latency_ms: Date.now() - startedAt });
   return json({ embeddings, model: MODEL, dimensions: DIMENSIONS }, 200);
 });
+
+// NOTE TO THE PARENT (outside this lane's ownership): the app-side caller,
+// src/features/rag/embed.ts, still sends the old `x-embed-secret` header and
+// will 401 against this function. It must sign requests with the same scheme
+// (checkRequestSignature's canonical string `v1:<timestamp>:<nonce>:<body>`,
+// HMAC-SHA256 with EMBED_SHARED_SECRET, headers x-webhook-timestamp /
+// x-webhook-nonce / x-webhook-signature). Exact snippet is in the lane report.

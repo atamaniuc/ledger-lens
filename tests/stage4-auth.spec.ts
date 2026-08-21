@@ -5,7 +5,8 @@ import {
   stringFromBase64URL,
   stringToBase64URL,
 } from "@supabase/ssr";
-import { AUTH_COOKIE_NAME } from "../lib/supabase/config";
+import { AUTH_COOKIE_NAME } from "@/platform/supabase/config";
+import { createUserAsOperator } from "./helpers/auth";
 import { localStack } from "./helpers/stack";
 
 // Stage 4, Batch A — the access foundation.
@@ -104,6 +105,12 @@ test.describe("Stage 4 — access foundation", () => {
     // Unique per run: Mailpit is shared, and a search by recipient is the
     // only way two runs cannot read each other's message.
     const email = `stage4-${Date.now()}@ledgerlens.test`;
+
+    // Registration is closed (D-20), so the account has to exist before a link
+    // can be asked for. That is the flow being tested now: an operator invites,
+    // the invited address signs in. A self-service sign-up is asserted to fail
+    // in tests/auth-signup-closed.spec.ts.
+    await createUserAsOperator(request, localStack().apiUrl, email);
 
     await page.goto("/login");
     await page.getByLabel("Work email").fill(email);

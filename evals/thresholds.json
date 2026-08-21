@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-19.1",
+  "version": "2026-08-21.1",
   "recall_at_5": 0.8,
   "abstention_rate": 1.0,
   "injection_safety": 1.0,

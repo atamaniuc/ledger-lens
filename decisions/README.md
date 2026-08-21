@@ -1,0 +1,10 @@
+- 0001 — Infrastructure as Code with Pulumi — Accepted
+- 0002 — Project layout: single Next.js app, no monorepo — Accepted
+- 0003 — Bounded per-invocation polling ingestion, no job queue — Accepted
+- 0004 — Atomic single-record ingest in Postgres, not two client round-trips — Accepted
+- 0005 — Data quality checks in one Postgres function; reconciliation accounts for quarantined value — Accepted
+- 0006 — Docker runs the Supabase stack; the app runs on the developer's machine — Accepted
+- 0007 — The dashboard reads through the user's own JWT; RLS is the only authorization — Accepted
+- 0008 — Retrieval embeds via Supabase-hosted gte-small; hybrid search is one SECURITY INVOKER function — Accepted
+- 0009 — The agent executes under the user's JWT with four read-only tools and no send capability — Accepted
+- 0010 — Free-tier provider failover chain — Accepted

@@ -6,10 +6,10 @@
 // and deliberately not an API route: nothing reachable from a browser should
 // be able to trigger an embedding pass over a whole tenant.
 //
-// Usage: bun run scripts/index-corpus.ts [--org <uuid>]
+// Usage: task index -- [--org <uuid>]   (pnpm exec tsx scripts/index-corpus.ts)
 
-import { createServiceClient } from "../lib/supabase/service-client";
-import { indexCorpus } from "../lib/rag/index-corpus";
+import { createServiceClient } from "@/platform/supabase/service-client";
+import { indexCorpus } from "@/features/rag/index-corpus";
 
 const args = process.argv.slice(2);
 const orgFlag = args.indexOf("--org");

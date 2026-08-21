@@ -1,0 +1,8 @@
+name: ledgerlens-infra
+description: >
+  LedgerLens deployable surface (spec 0010, D-01): the Vercel project is a
+  native resource; Supabase db push + functions deploy are command-wrapped
+  steps. One `pulumi up` stands up the whole surface — the claim README.md
+  and docs/DEPLOYMENT.md already make.
+runtime: nodejs
+main: index.ts

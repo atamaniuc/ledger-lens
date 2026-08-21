@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Citation } from "../lib/agent/citations";
+import type { Citation } from "@/features/agent/citations";
 import { ingest } from "./helpers/api";
 import { signInBrowser } from "./helpers/auth";
 import { ORG_A, sql } from "./helpers/db";

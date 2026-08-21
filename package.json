@@ -2,19 +2,29 @@
   "name": "ledgerlens",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "bun --inspect=127.0.0.1:6499 node_modules/next/dist/bin/next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "bun test lib",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "bunx playwright test",
-    "test:e2e:ui": "bunx playwright test --ui"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "storybook": "storybook dev -p 6006",
+    "storybook:build": "storybook build",
+    "test:components": "vitest run --project components",
+    "evals": "tsx evals/run.ts",
+    "index": "tsx scripts/index-corpus.ts",
+    "capture-baseline": "tsx scripts/capture-reconciliation-baseline.ts",
+    "knip": "knip --max-issues 48"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
-    "@radix-ui/react-slot": "^1.3.3",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-query": "^5.101.4",
@@ -32,24 +42,37 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@storybook/addon-vitest": "^10.5.10",
+    "@storybook/react": "^10.5.10",
+    "@storybook/react-vite": "10.5.10",
     "@tailwindcss/postcss": "^4",
-    "@types/bun": "^1.3.14",
-    "@types/node": "^20",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.5",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/browser": "^4.1.11",
+    "@vitest/browser-playwright": "^4.1.11",
+    "axe-core": "^4.13.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "knip": "^6.32.2",
+    "playwright": "1.62.1",
     "postgres": "^3.4.9",
+    "storybook": "^10.5.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   },
-  "packageManager": "bun@1.3.14",
-  "ignoreScripts": [
-    "sharp",
-    "unrs-resolver"
-  ],
-  "trustedDependencies": [
-    "sharp",
-    "unrs-resolver"
-  ]
+  "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
 }

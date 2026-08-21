@@ -7,7 +7,24 @@
 .omc/state/
 .omc/artifacts/
 
+# Local tool state
+.omc/
+.ua/
+.task/
+.codegraph
+supabase/.claude/
+
 node_modules/
+.pnpm-store/
+
+# Python tooling caches (py/ lane)
+py/.uv-cache/
+py/.venv*/
+py/.pytest_cache/
+py/.ruff_cache/
+py/.mypy_cache/
+__pycache__/
+*.pyc
 dist/
 build/
 out/
@@ -23,8 +40,18 @@ tsconfig.tsbuildinfo
 # Personal interview-prep material — not part of the project deliverable.
 interview-preps/
 
+# Deno's cache, written by `deno check` when it runs from the repo root
+/.deno-cache/
+
+# Storybook and Vitest browser-mode artifacts
+storybook-static/
+.vitest-attachments/
+
 # Playwright
 test-results/
 playwright-report/
 blob-report/
 .playwright/
+# Pulumi plugin cache for the credential-free plan (task infra-plan)
+/.pulumi-home/
+infra/Pulumi.plan.yaml

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // The Playwright plugin tries to import playwright.config.ts, which throws
+  // without .env.local (by design — the suite refuses to run against a
+  // machine with no environment). The config and the specs are declared as
+  // entries here instead, so the e2e harness is never reported unused.
+  "playwright": false,
+  "entry": ["tests/**/*.ts", "playwright.config.ts"],
+  // Deno Edge Functions: checked by `task deno-check`, invisible to the
+  // Node module graph (npm: specifiers, .ts import extensions).
+  "ignore": ["supabase/functions/**"],
+  // evals/run.ts shells out to the supabase CLI.
+  "ignoreBinaries": ["supabase"]
+}

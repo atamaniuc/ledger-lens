@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
-import { runAgentTurn } from "../lib/agent/loop";
-import type { ModelClient } from "../lib/agent/providers";
-import type { Database } from "../lib/supabase/database.types";
+import { runAgentTurn } from "@/features/agent/loop";
+import type { ModelClient } from "@/features/agent/providers";
+import type { Database } from "@/platform/supabase/database.types";
 import { ingest } from "./helpers/api";
 import { ORG_A, sql } from "./helpers/db";
 import { localStack } from "./helpers/stack";
@@ -76,7 +76,7 @@ test.beforeAll(async ({ request }) => {
   // stderr is captured, not discarded: this rebuild has flaked once, and
   // `stdio: "ignore"` turned the reason into "Command failed".
   try {
-    execFileSync("bun", ["run", "scripts/index-corpus.ts"], { stdio: "pipe" });
+    execFileSync("pnpm", ["exec", "tsx", "scripts/index-corpus.ts"], { stdio: "pipe" });
   } catch (error) {
     const detail = error as { stderr?: Buffer; stdout?: Buffer };
     throw new Error(

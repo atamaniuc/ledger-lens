@@ -1,0 +1,16 @@
+# uv
+.venv/
+.venv-parity/
+.uv-cache/
+.hf-cache/
+
+
+# pytest / ruff / mypy caches
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyc
+
+# Generated golden fixtures are committed; regenerate with:
+#   pnpm exec tsx py/tests/fixtures/generate_golden.ts   (from the repo root)

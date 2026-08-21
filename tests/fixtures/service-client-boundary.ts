@@ -9,6 +9,6 @@
 // Never imported by anything. It is a lint fixture, not a module.
 
 // eslint-disable-next-line no-restricted-imports -- the fixture is the point; see above
-import { createServiceClient } from "@/lib/supabase/service-client";
+import { createServiceClient } from "@/platform/supabase/service-client";
 
 export const boundaryFixture = typeof createServiceClient;
