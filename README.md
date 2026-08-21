@@ -4,6 +4,8 @@
 proves the numbers is the product; the copilot is a thin, capability-bounded
 layer on top.
 
+[![CI](https://github.com/atamaniuc/ledger-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/atamaniuc/ledger-lens/actions/workflows/ci.yml)
+
 Next.js 16 · Postgres/Supabase · pgvector · Python · Deno · Pulumi · Modal
 
 <img width="1023" height="955" alt="Dashboard with metric tiles, data health and the copilot panel" src="https://github.com/user-attachments/assets/fa7bca31-3c73-4e67-944f-281fec050808" />
@@ -95,6 +97,7 @@ not a promise about the current tree — the commands are the claim.
 | injection safety | **0.80 (4/5 scored) against a 1.00 bar — red.** Containment was never the question: no tool can act. The question the new rule asks is whether the *reader* is told, and the first measured answer was no — 0.00, every case summarised without mentioning the instruction. Disclosure is a mechanism now, not a request: retrieval detects text addressed to the assistant and the turn states it, in the rule's own words. That took it to 0.80; the last case is a detector gap, and two more could not be scored under a per-minute rate limit <!-- proof: src/features/agent/injection.ts:DISCLOSURE_PATTERNS --> <!-- proof: evals/README.md --> |
 | tool choice | **0.90 against a 1.00 bar — red.** Three questions about a total were answered by listing invoices and adding them up, which is a different number once the list truncates. Both tool descriptions now say where the boundary is <!-- proof: src/features/agent/tools/get-revenue-summary.ts --> |
 | a run with no API key | **Exits non-zero** and names every metric that went unmeasured. `--allow-skip` exists for local exploration and CI never passes it <!-- proof: task evals --> |
+| CI, first real run | **6 of 7 jobs green** — typecheck/lint/unit/stories, the RLS end-to-end suite, both Python projects, the Pulumi program, secret scan and the dead-code gate. The seventh is `evals`, and it is red on purpose: no model key is configured in the repository, so the three model-dependent metrics report *not measured* and the run exits non-zero. Adding the secret costs a free tier's entire daily token budget per push, which is a trade-off for a human to make, not a default <!-- proof: .github/workflows/ci.yml --> |
 
 ---
 

@@ -65,6 +65,31 @@ standalone destructive database rebuild — it prompts before dropping data.
 4. Docs: every changed claim carries a proof marker; `task docs-check`
    (inside `task check`) fails when a target disappears.
 
+### What CI runs, and the one job that is red on purpose
+
+Seven jobs, all running the same commands as above: `check`, `e2e`, `evals`,
+`python`, `infra`, `gitleaks`, `knip`. Six are green.
+<!-- proof: .github/workflows/ci.yml -->
+
+`evals` is red, and the reason is the design: with no model key in the
+repository the three model-dependent metrics report *not measured* and the run
+exits non-zero (D-24 — a measurement that did not happen is not a measurement
+that passed). The deterministic half still runs and passes there: recall@5
+1.00 (28/28), abstention 1.00 (15/15).
+
+Two ways to change that, and both are a human's call. Add
+`secrets.GROQ_API_KEY` and accept that one push spends a free tier's entire
+daily token budget (a full run is ≈185k of 200k), or leave it red and measure
+deliberately with `task evals` on a machine that holds a key. What is not on
+the table is passing `--allow-skip` in CI, which would turn the gate back into
+decoration.
+
+Route-level assertions that need a model — the 429/402 refusals, streaming,
+cancellation — skip in CI with that sentence and say so in the output. The
+mechanisms behind them are asserted without a model: the budget verdicts
+directly against `check_agent_budget`, the loop against a stubbed client.
+<!-- proof: tests/agent-rate-limit.spec.ts#over the per-user limit the same RPC refuses (SQL, no model needed) -->
+
 ## Deploying (human steps)
 
 Before owning anything: `task infra-plan` runs the real Pulumi engine against a
