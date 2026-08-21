@@ -21,7 +21,7 @@
 //
 // Usage: task evals -- [--verbose | --allow-skip]   (pnpm exec tsx evals/run.ts)
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -74,6 +74,7 @@ interface Thresholds {
   abstention_rate: number;
   injection_safety: number;
   citation_validity: number;
+  groundedness: number;
 }
 
 export interface Score {
@@ -454,7 +455,19 @@ async function runTurn(
   return result;
 }
 
-async function scoreAgent(runStartedAt: string): Promise<Score[]> {
+interface JudgeRecord {
+  id: string;
+  answer: string;
+  retrieved: { chunk_id: number | string; title: string | null; text: string }[];
+  answerer: { provider: string; model: string };
+}
+
+interface JudgeRun {
+  records: JudgeRecord[];
+  model: ModelClient | null;
+}
+
+async function scoreAgent(runStartedAt: string): Promise<{ scores: Score[]; judge: JudgeRun }> {
   const metricCases = cases.filter((c) => c.type === "metric" || c.type === "lookup");
   const injectionCases = cases.filter((c) => c.type === "injection");
   // Injection first: on a token-capped tier a run may run out of budget, and
@@ -483,11 +496,14 @@ async function scoreAgent(runStartedAt: string): Promise<Score[]> {
 
   if (!model) {
     const skipped = "no model provider configured" + modelNote;
-    return [
-      { name: "tool choice", passed: 0, total: metricCases.length, threshold: 1, skipped },
-      { name: "citation validity", passed: 0, total: 0, threshold: thresholds.citation_validity, skipped },
-      { name: "injection", passed: 0, total: injectionCases.length, threshold: thresholds.injection_safety, skipped },
-    ];
+    return {
+      judge: { records: [], model: null },
+      scores: [
+        { name: "tool choice", passed: 0, total: metricCases.length, threshold: 1, skipped },
+        { name: "citation validity", passed: 0, total: 0, threshold: thresholds.citation_validity, skipped },
+        { name: "injection", passed: 0, total: injectionCases.length, threshold: thresholds.injection_safety, skipped },
+      ],
+    };
   }
   console.log("  model: " + model.provider + "/" + model.model + modelNote + "\n");
 
@@ -498,6 +514,7 @@ async function scoreAgent(runStartedAt: string): Promise<Score[]> {
   let injectionSafe = 0;
   let injectionAnswered = 0;
   let unscored = 0;
+  const judgeRecords: JudgeRecord[] = [];
 
   for (const testCase of subset) {
     const supabase = await clientFor(testCase.user);
@@ -575,26 +592,134 @@ async function scoreAgent(runStartedAt: string): Promise<Score[]> {
     if (result.verified) verified++;
     else note(testCase.id, "unverified citations: " + JSON.stringify(result.citations));
 
+    // Collected for the groundedness judge (spec 0008). The judge needs the
+    // context the answer was supposed to come from, so the chunks are read
+    // back by the ids the loop reported it retrieved.
+    if (result.retrievedChunkIds.length > 0) {
+      const { data: retrieved } = await supabase
+        .from("chunks")
+        .select("id, document_id, content")
+        .in("id", result.retrievedChunkIds);
+      if (retrieved && retrieved.length > 0) {
+        const docIds = [
+          ...new Set(retrieved.map((chunk) => chunk.document_id).filter((id): id is string => id !== null)),
+        ];
+        const { data: docs } = await supabase
+          .from("documents")
+          .select("id, title")
+          .in("id", docIds);
+        const titleById = new Map(
+          (docs ?? []).map((doc) => [doc.id, doc.title] as const),
+        );
+        judgeRecords.push({
+          id: testCase.id,
+          answer: result.answer,
+          retrieved: retrieved.map((chunk) => {
+            const documentId = chunk.document_id;
+            return {
+              chunk_id: chunk.id,
+              title: documentId === null ? null : (titleById.get(documentId) ?? null),
+              text: chunk.content,
+            };
+          }),
+          answerer: {
+            provider: model.provider,
+            model: model.model,
+          },
+        });
+      }
+    }
+
     if (VERBOSE) console.log("  " + testCase.id + " → " + result.answer.replace(/\n/g, " ").slice(0, 220));
   }
 
-  return [
-    { name: "tool choice", passed: correctTool, total: answered, threshold: 1, unscored },
-    {
-      name: "citation validity",
-      passed: verified,
-      total: answered,
-      threshold: thresholds.citation_validity,
-      unscored,
-    },
-    {
-      name: "injection",
-      passed: injectionSafe,
-      total: injectionAnswered,
-      threshold: thresholds.injection_safety,
-      unscored,
-    },
-  ];
+  return {
+    judge: { records: judgeRecords, model },
+    scores: [
+      { name: "tool choice", passed: correctTool, total: answered, threshold: 1, unscored },
+      {
+        name: "citation validity",
+        passed: verified,
+        total: answered,
+        threshold: thresholds.citation_validity,
+        unscored,
+      },
+      {
+        name: "injection",
+        passed: injectionSafe,
+        total: injectionAnswered,
+        threshold: thresholds.injection_safety,
+        unscored,
+      },
+    ],
+  };
+}
+
+async function scoreGroundedness(run: JudgeRun): Promise<Score> {
+  // The judge is a second signal (spec 0008), gated the same way the model
+  // tier is: with no judge key and no records there is nothing to measure,
+  // and "not measured" is a failure, never a pass (D-24).
+  const judgeConfigured =
+    process.env.JUDGE_API_KEY !== undefined &&
+    process.env.JUDGE_MODEL !== undefined;
+  if (run.records.length === 0 || !judgeConfigured) {
+    return {
+      name: "groundedness",
+      passed: 0,
+      total: run.records.length,
+      threshold: thresholds.groundedness,
+      skipped: judgeConfigured
+        ? "no model-scored answers carried retrieved context"
+        : "no judge provider/model configured",
+    };
+  }
+
+  const inputPath = join(HERE, "groundedness-input.jsonl");
+  writeFileSync(
+    inputPath,
+    run.records.map((record) => JSON.stringify(record)).join("\n") + "\n",
+  );
+  const reportPath = join(HERE, "groundedness.json");
+  try {
+    execFileSync(
+      "uv",
+      ["run", "ledgerlens-judge", "--input", inputPath, "--output", reportPath],
+      { cwd: join(HERE, "../py"), encoding: "utf8", stdio: "inherit" },
+    );
+  } catch (error) {
+    return {
+      name: "groundedness",
+      passed: 0,
+      total: run.records.length,
+      threshold: thresholds.groundedness,
+      skipped: "the judge process failed to score (see its output)",
+    };
+  }
+
+  const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  const summary = report.summary as {
+    groundedness: number | null;
+    incomplete: boolean;
+    claims_supported: number;
+    claims_scored: number;
+  };
+  const groundedness = summary.groundedness;
+  if (groundedness === null) {
+    return {
+      name: "groundedness",
+      passed: 0,
+      total: summary.claims_scored,
+      threshold: thresholds.groundedness,
+      skipped: "no claim could be scored",
+    };
+  }
+  return {
+    name: "groundedness",
+    passed: summary.claims_supported,
+    total: summary.claims_scored,
+    threshold: thresholds.groundedness,
+    unscored: summary.incomplete ? run.records.length - summary.claims_scored : 0,
+  };
 }
 
 async function main(): Promise<void> {
@@ -608,10 +733,13 @@ async function main(): Promise<void> {
 
   const startedAt = Date.now();
   const runStartedAt = new Date().toISOString();
+  const agent = await scoreAgent(runStartedAt);
+  const groundedness = await scoreGroundedness(agent.judge);
   const scores: Score[] = [
     await scoreRetrieval(),
     await scoreUnanswerable(),
-    ...(await scoreAgent(runStartedAt)),
+    ...agent.scores,
+    groundedness,
   ];
 
   console.log("\nLedgerLens evals — thresholds " + thresholds.version + ", " + cases.length + " cases\n");

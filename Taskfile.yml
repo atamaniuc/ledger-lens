@@ -81,13 +81,18 @@ tasks:
   # D-48: Bun used to load .env.local by itself; Node does not, so every script
   # entrypoint says so explicitly. --env-file-if-exists, because CI passes the
   # same variables as real environment variables and has no .env.local.
+  # OTEL_SDK_DISABLED keeps the eval output readable: the runner is a
+  # measurement tool whose answer is a score table, not the app's trace spans.
   evals:
     desc: "Score retrieval and agent safety against evals/dataset.jsonl (the CI gate)"
     deps: [stack-running]
+    env: { OTEL_SDK_DISABLED: "1" }
     cmds: ['pnpm exec tsx --env-file-if-exists=.env.local evals/run.ts {{.CLI_ARGS}}']
+  # Same reasoning as evals: a CLI's output is its own event log, not spans.
   index:
     desc: Rebuild the RAG index from documents and invoices (idempotent)
     deps: [stack-running]
+    env: { OTEL_SDK_DISABLED: "1" }
     cmds: ['pnpm exec tsx --env-file-if-exists=.env.local scripts/index-corpus.ts {{.CLI_ARGS}}']
   # The Python path over the same corpus: batched embeddings and COPY instead of
   # eight texts per Edge Function call (spec 0005). --dry-run prints the plan.
