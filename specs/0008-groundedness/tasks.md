@@ -4,10 +4,10 @@ Lane owner: **W3-G**. Debt: D-27, D-03. P0 gates the lane; P1/P2 follow. A batch
 
 ## P0
 
-- [ ] **T1** `py/judge/`: claim decomposition → check against retrieved chunks → score (D-27)
-- [ ] **T2** Judge output merged into `evals/thresholds.json` with a CI threshold (D-27, D-03)
-- [ ] **T3** Eval case: uncited claim must fail groundedness (D-27)
-- [ ] **T4** README judge claim reconciled via proof marker or removal (D-03)
+- [x] **T1** `py/judge/`: claim decomposition → check against retrieved chunks → score (D-27)
+- [x] **T2** Judge output merged into `evals/thresholds.json` with a CI threshold (D-27, D-03)
+- [x] **T3** Eval case: uncited claim must fail groundedness (D-27)
+- [x] **T4** README judge claim reconciled via proof marker or removal (D-03)
 
 ## P1
 

@@ -1,6 +1,6 @@
 # 0004 — Ingestion Hardening
 
-**Status:** proposed · **Lane:** W2-E · **Debt closed:** D-15, D-16, D-17, D-19
+**Status:** partly shipped (7 of 8 tasks) · **Lane:** W2-E · **Debt closed:** D-15, D-16, D-17, D-19
 
 ## Why
 

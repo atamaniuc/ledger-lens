@@ -1,6 +1,6 @@
 # 0008 — Groundedness
 
-**Status:** proposed · **Lane:** W3-G · **Debt closed:** D-27, D-03
+**Status:** partly shipped (4 of 7 tasks) · **Lane:** W3-G · **Debt closed:** D-27, D-03
 
 ## Why
 

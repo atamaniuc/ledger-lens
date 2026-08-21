@@ -1,6 +1,6 @@
 # 0011 — Observability
 
-**Status:** proposed · **Lane:** W4-K · **Debt closed:** D-45
+**Status:** partly shipped (4 of 7 tasks) · **Lane:** W4-K · **Debt closed:** D-45
 
 ## Why
 

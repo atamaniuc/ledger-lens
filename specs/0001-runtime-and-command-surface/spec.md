@@ -1,6 +1,6 @@
 # 0001 — Runtime and Command Surface
 
-**Status:** proposed · **Lane:** W1 (sequential) · **Debt closed:** D-36, D-37, D-38, D-29, D-21, D-22
+**Status:** shipped · **Lane:** W1 (sequential) · **Debt closed:** D-36, D-37, D-38, D-29, D-21, D-22
 
 ## Why
 

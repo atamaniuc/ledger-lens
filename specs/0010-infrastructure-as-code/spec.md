@@ -1,6 +1,6 @@
 # 0010 — Infrastructure as Code
 
-**Status:** proposed · **Lane:** W4-J · **Debt closed:** D-01
+**Status:** partly shipped (4 of 8 tasks) · **Lane:** W4-J · **Debt closed:** D-01
 
 ## Why
 

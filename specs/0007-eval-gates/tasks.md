@@ -4,11 +4,11 @@ Lane owner: **W3-F**. Debt: D-24, D-25, D-26, D-28, D-31. P0 gates the lane; P1/
 
 ## P0
 
-- [ ] **T1** skip = red: no-key runs exit non-zero; `--allow-skip` local-only flag (D-24)
-- [ ] **T2** Injection case scores the model's answer (tool choice + refusal), not just retrieval (D-26)
-- [ ] **T3** `expect_no_filter` asserted in the runner + a case that would trip it (D-28)
-- [ ] **T4** Grow dataset 20 → ≥60 cases, tenant-split like the current 20 (D-31)
-- [ ] **T5** Single `min_similarity` source; fold or remove the SQL default (D-31)
+- [x] **T1** skip = red: no-key runs exit non-zero; `--allow-skip` local-only flag (D-24)
+- [x] **T2** Injection case scores the model's answer (tool choice + refusal), not just retrieval (D-26)
+- [x] **T3** `expect_no_filter` asserted in the runner + a case that would trip it (D-28)
+- [x] **T4** Grow dataset 20 → ≥60 cases, tenant-split like the current 20 (D-31)
+- [x] **T5** Single `min_similarity` source; fold or remove the SQL default (D-31)
 - [ ] **T6** Drive citation validity ≥ 0.95 on the chosen model; keep the failing reading visible until true (D-25)
 
 ## P1

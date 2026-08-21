@@ -1,6 +1,6 @@
 # 0003 — Pipeline Scheduling and Locks
 
-**Status:** proposed · **Lane:** W2-B · **Debt closed:** D-11, D-12, D-13, D-14, D-10
+**Status:** partly shipped (6 of 8 tasks) · **Lane:** W2-B · **Debt closed:** D-11, D-12, D-13, D-14, D-10
 
 ## Why
 

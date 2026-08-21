@@ -4,13 +4,13 @@ Lane owner: **W5 (sequential)**. Debt: D-39, D-01..D-10 verification mechanism. 
 
 ## P0
 
-- [ ] **T1** `scripts/verify-docs.ts` + `<!-- proof: ... -->` markers wired into `task check` (D-39, D-01..D-10 guard)
-- [ ] **T2** Selling README ≤180 lines: positioning, badges, 15s gif, 3 killer features with proof links, failure table, one-command quickstart, links (D-39)
-- [ ] **T3** docs/ARCHITECTURE.md — diagrams only, ≤100-word captions (D-39)
-- [ ] **T4** docs/RUNBOOK.md ≤150 lines; LOCAL_DEV.md folded in (D-39)
-- [ ] **T5** docs/DECISIONS.md — one-line index of decisions/ (D-39)
-- [ ] **T6** Delete PROGRESS.md; status = badges + DEBT.md (D-40)
-- [ ] **T7** Proof markers on every D-01..D-10 claim; dead claims fixed or removed (D-01..D-10 mechanism)
+- [x] **T1** `scripts/verify-docs.ts` + `<!-- proof: ... -->` markers wired into `task check` (D-39, D-01..D-10 guard)
+- [x] **T2** Selling README ≤180 lines: positioning, badges, 15s gif, 3 killer features with proof links, failure table, one-command quickstart, links (D-39)
+- [x] **T3** docs/ARCHITECTURE.md — diagrams only, ≤100-word captions (D-39)
+- [x] **T4** docs/RUNBOOK.md ≤150 lines; LOCAL_DEV.md folded in (D-39)
+- [x] **T5** docs/DECISIONS.md — one-line index of decisions/ (D-39)
+- [x] **T6** Delete PROGRESS.md; status = badges + DEBT.md (D-40)
+- [x] **T7** Proof markers on every D-01..D-10 claim; dead claims fixed or removed (D-01..D-10 mechanism)
 
 ## P1
 

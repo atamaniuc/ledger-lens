@@ -1,6 +1,6 @@
 # 0002 — LLM Guardrails and Budget
 
-**Status:** proposed · **Lane:** W2-A · **Debt closed:** D-18, D-08, D-09
+**Status:** partly shipped (6 of 9 tasks) · **Lane:** W2-A · **Debt closed:** D-18, D-08, D-09
 
 ## Why
 

@@ -1,6 +1,6 @@
 # 0006 — Frontend and Storybook
 
-**Status:** proposed · **Lane:** W2-D · **Debt closed:** D-07, D-41
+**Status:** partly shipped (7 of 8 tasks) · **Lane:** W2-D · **Debt closed:** D-07, D-41
 
 ## Why
 

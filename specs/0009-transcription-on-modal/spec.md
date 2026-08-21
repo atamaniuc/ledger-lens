@@ -1,6 +1,6 @@
 # 0009 — Transcription on Modal
 
-**Status:** proposed · **Lane:** W3-H · **Debt closed:** D-42
+**Status:** partly shipped (5 of 7 tasks) · **Lane:** W3-H · **Debt closed:** D-42
 
 ## Why
 

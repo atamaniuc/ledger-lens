@@ -1,6 +1,6 @@
 # 0005 — Python Services
 
-**Status:** proposed · **Lane:** W2-C · **Debt closed:** D-42, D-43
+**Status:** partly shipped (5 of 7 tasks) · **Lane:** W2-C · **Debt closed:** D-42, D-43
 
 ## Why
 

@@ -1,6 +1,6 @@
 # 0012 — Human and Agent Docs
 
-**Status:** proposed · **Lane:** W5 (sequential) · **Debt closed:** D-39, D-01..D-10 verification mechanism
+**Status:** partly shipped (7 of 10 tasks) · **Lane:** W5 (sequential) · **Debt closed:** D-39, D-01..D-10 verification mechanism
 
 ## Why
 
