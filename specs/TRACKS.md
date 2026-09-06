@@ -5,4 +5,5 @@ Index of live tracks (handoff-driven development). One line per track: essence �
 `task check` verifies this file: every link must resolve and every line must carry a status (src/platform/docs-proof.ts → checkTracks).
 
 - **Hosted deploy** — none — blocked (on VERCEL_API_TOKEN), next: task infra-up → scripts/provision-hosted.sh → manual QA on hosted URL
+- **Vision & layout-aware ingestion (spec 0016)** — [handoff](specs/0016-vision-layout-ingestion/handoff.md) — paused (no provider decision), next: T1 ADR picking the vision/OCR provider and extraction output shape
 

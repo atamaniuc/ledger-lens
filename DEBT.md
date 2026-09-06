@@ -69,6 +69,7 @@ Status: `☐` open · `◐` partly closed, with the remainder named in the crite
 
 ## S3 — Hygiene.
 | ☐ | D-61 | S3 | handoffs exist as one ad-hoc file with no protocol: no index of live tracks, no lifecycle (create/update/close), no rule telling an agent to load one, nothing machine-checking it | a single ad-hoc handoff file (deleted on close; outcome distilled to specs/TRACKS-LOG.md) | open: specs/TRACKS.md indexes live tracks (every link resolves, every line carries a status), lanes keep handoff.md in the HDD template, AGENTS.md instructs loading/updating/closing, and `checkTracks` in src/platform/docs-proof.ts fails `task check` on a dead link or missing status (spec 0015 T1-T7) |
+| ☐ | D-62 | S3 | no vision/layout-aware ingestion path exists: a scanned invoice or table screenshot has no way into the corpus, and the citation checker has no format for visual provenance (artifact/page/bounding-box) even if one did | `citations.ts` accepts only `[chunk:id]`/`[invoice:external_id]`; `grep -ri "bounding_box\|artifact_id" src/` = 0 | open: `search_visual_documents` (or equivalent) returns artifact/page/bbox/confidence provenance, `verifyCitations` checks a `[visual:...]` citation against this turn's retrieved evidence with the same function text citations use, below-threshold confidence abstains via the existing `ABSTENTION_ANSWER` path, RLS proven on the new tables, and an eval case from a real low-confidence extraction gates CI (spec 0016 T1-T7) |
 | ☑ | D-53 | S1 | the copilot could embarrass a presentation with "try again later": the free tier is spent, and neither the guards nor the chain had a non-error answer | reproduced live: chain-exhausted 429 (and the daily token cap 402) end every question once Groq's daily budget is gone | closed: `copilot_settings` (singleton, RLS, SECURITY DEFINER) carries three runtime knobs — `guardsEnabled` (off = no 429/402), `demoMode` (on = the copilot ALWAYS answers deterministically from the tenant's real data, marked "Demo answer", even with zero providers), and runtime OpenAI-compatible providers (key referenced by env var name, never stored). Admin panel at `/admin` (admin role). e2e `tests/copilot-demo-mode.spec.ts` proves the answer arrives with no provider and a spent budget |
 
 | Status | id | severity | what | evidence | closure criterion |
@@ -104,5 +105,6 @@ Every open item belongs to exactly one spec. Items that had no owning spec were 
 | 0013 agent streaming and memory | D-44 |
 | 0014 dashboard ux and role model | D-56, D-57, D-58, D-59, D-60 |
 | 0015 handoff driven development | D-61 |
+| 0016 vision and layout-aware ingestion | D-62 |
 | closed in W0 hygiene | D-32, D-33, D-34, D-35, D-40 |
 
