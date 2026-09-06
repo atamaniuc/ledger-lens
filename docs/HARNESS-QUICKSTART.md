@@ -3,8 +3,9 @@
 The first thing to tell any agent (Claude Code / Codex / Cursor / anything):
 
 > Read `AGENTS.md` first. Start from a spec, not from chat. Every acceptance
-> criterion must name an executable check. Finish only when `task check` is
-> green and `specs/DoD.md` holds. Commit messages carry `D-XX` or the spec id.
+> criterion must name an executable check. Start only when `specs/DoR.md`
+> holds; finish only when `task check` is green and `specs/DoD.md` holds.
+> Commit messages carry `D-XX` or the spec id.
 
 ## Start a task
 

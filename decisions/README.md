@@ -9,3 +9,4 @@
 - 0009 — The agent executes under the user's JWT with four read-only tools and no send capability — Accepted
 - 0010 — Free-tier provider failover chain — Accepted
 - 0011 — The development harness is a document, not a dependency — Accepted
+- 0012 — Harness files stay where their parts belong — no `.harness/` directory — Accepted

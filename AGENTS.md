@@ -58,8 +58,10 @@ The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` 
   a track carries no status, or any doc points at a handoff file that no longer
   exists (`checkHandoffRefs`) — a handoff that would lie is a dead marker.
 
-## Definition of Done
-See `specs/DoD.md` — it is the single DoD for every lane.
+## Definition of Ready and Done
+A spec starts only when `specs/DoR.md` holds (criteria already executable,
+stories traced, boundary written, WIP=1 respected) and ships only when
+`specs/DoD.md` holds. Both are referenced, never copied into a `spec.md`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
