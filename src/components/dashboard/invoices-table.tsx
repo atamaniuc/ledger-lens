@@ -70,6 +70,7 @@ export function InvoicesTable({
   return (
     <Panel
       title="Invoices"
+      testId="invoices"
       action={
         <>
           {/* The filter form is a GET, so a filtered view is addressable and
