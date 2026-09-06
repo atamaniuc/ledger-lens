@@ -8,5 +8,19 @@
     "understand-anything@understand-anything": true,
     "agent-skills@addy-agent-skills": true,
     "ponytail@ponytail": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-hdd.sh",
+            "timeout": 10,
+            "statusMessage": "Loading HDD tracks..."
+          }
+        ]
+      }
+    ]
   }
 }
