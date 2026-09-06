@@ -78,7 +78,7 @@ export function checkTarget(target: string, resolver: Resolver): string | null {
  * `...`, `[optional]`, `<angle>` — is what separates an illustration from an
  * assertion, and no real path in this repository contains any of it.
  */
-function isSyntaxExample(target: string): boolean {
+export function isSyntaxExample(target: string): boolean {
   return /\.\.\.|[[\]<>|]/.test(target);
 }
 

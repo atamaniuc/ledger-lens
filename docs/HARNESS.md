@@ -15,6 +15,7 @@ second project needs it — see
 | file | what it is for | audience |
 |---|---|---|
 | `AGENTS.md` | the only rules file an agent must obey. `CLAUDE.md` is a symlink to it | agents |
+| `specs/DoR.md` | the single Definition of Ready — gates a spec starting, referenced never copied | agents |
 | `specs/DoD.md` | the single Definition of Done, referenced never copied | agents |
 | `specs/NNNN-<slug>/spec.md` | one deliverable: status, stories, Given/When/Then criteria, invariants, out of scope | agents + humans |
 | `specs/NNNN-<slug>/tasks.md` | the checklist with priorities, sub-tasks and `D-XX` links | agents |
@@ -29,6 +30,34 @@ The invariant that holds it all together: **agents and humans read different
 files, and the machine checks the bridge between them.** An agent edits code;
 a human reads `README.md`; `task check` fails when a `<!-- proof: ... -->`
 marker in the human docs points at code that no longer exists.
+
+## The five layers (a map for newcomers)
+
+If the file table above is still a wall of names, here is the same set read
+through the five-layer model from
+[Learn Harness Engineering](https://walkinglabs.github.io/learn-harness-engineering/)
+(lecture 02): every harness is instructions + tools + environment + state +
+feedback, and nothing here is a new file — it's the existing table,
+regrouped by what each piece is *for*.
+
+| layer | question it answers | where it lives here |
+|---|---|---|
+| **Instructions** | what am I allowed/expected to do | `AGENTS.md` (≤100 lines on purpose — lecture 04's "lost in the middle" is why it's short and links out instead of growing) |
+| **Tools** | what can I run | `Taskfile.yml` (the command surface), `scripts/verify-docs.ts` |
+| **Environment** | what does the project look like right now | the repo tree itself: `supabase/migrations`, `package.json`, `.env.example` — no separate "environment doc"; the environment is self-describing by design |
+| **State** | what happened before this session | `specs/TRACKS.md` + `NNNN-<slug>/handoff.md` (HDD — see below), git history, `DEBT.md` |
+| **Feedback** | how do I know I'm right | `task check` / `task verify` / `task evals`, `specs/DoR.md` (before) and `specs/DoD.md` (after) |
+
+This repo deliberately keeps these five in their natural homes (rules with
+rules, specs with specs, checks with the Taskfile) rather than moving
+everything into one `.harness/` directory — see
+[decisions/0012-harness-stays-where-its-parts-belong.md](../decisions/0012-harness-stays-where-its-parts-belong.md)
+for why, and use this table instead when you need the five-layer view.
+<!-- proof: AGENTS.md -->
+<!-- proof: specs/TRACKS.md -->
+<!-- proof: specs/DoR.md -->
+<!-- proof: specs/DoD.md -->
+<!-- proof: decisions/0012-harness-stays-where-its-parts-belong.md -->
 
 ## Where the ideas came from
 
@@ -95,6 +124,15 @@ status) — the same machine check that guards the proof markers.
 
 The branch and commit rules are in `AGENTS.md` (conventional commits,
 `lane/<letter>-<slug>`, no `--no-verify`, no force-push to main).
+
+## What "ready" means
+
+`specs/DoR.md` — the mirror of DoD, checked once, at the other end of the
+lane. A spec cannot move to `in-progress` until its acceptance criteria
+already name an executable check, its boundary (Invariants/Out of scope) is
+written, and WIP=1 holds (`AGENTS.md` §Spec and delegation rules — one lane's
+P0 tasks active at a time). Skipping Ready is how a lane grows scope mid-flight
+instead of catching it on paper first.
 
 ## What "done" means
 

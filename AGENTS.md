@@ -35,6 +35,10 @@ a lane.
 - Lanes never write prose into README/docs; docs are written once by the docs
   lane and verified by `<!-- proof: ... -->` markers in `task check`.
 - Machine feedback is the first reviewer: typecheck, tests, the page rendering.
+- WIP=1: one lane's P0 tasks active at a time. Don't open a second spec's
+  `tasks.md` while the current one has unchecked P0 boxes — finish it, or mark
+  the track `blocked` in `specs/TRACKS.md` with what it's blocked on, first.
+  A wide, half-finished diff across specs is worse than a narrow, done one.
 
 ## Work tracks and handoffs (HDD)
 The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` +
@@ -54,8 +58,10 @@ The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` 
   a track carries no status, or any doc points at a handoff file that no longer
   exists (`checkHandoffRefs`) — a handoff that would lie is a dead marker.
 
-## Definition of Done
-See `specs/DoD.md` — it is the single DoD for every lane.
+## Definition of Ready and Done
+A spec starts only when `specs/DoR.md` holds (criteria already executable,
+stories traced, boundary written, WIP=1 respected) and ships only when
+`specs/DoD.md` holds. Both are referenced, never copied into a `spec.md`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -55,8 +55,10 @@ tasks:
   # the evidence is gone. Pass --strict once README carries markers (spec 0012)
   # to also require that a claim-bearing document has evidence at all.
   docs-check:
-    desc: "Check that every proof marker resolves, and that README carries evidence"
-    cmds: ['pnpm exec tsx scripts/verify-docs.ts --strict {{.CLI_ARGS}}']
+    desc: "Check that every proof marker resolves, README carries evidence, and live tracks' checked tasks are proven (D-63)"
+    cmds:
+      - pnpm exec tsx scripts/verify-docs.ts --strict {{.CLI_ARGS}}
+      - pnpm exec tsx scripts/verify-tasks.ts
   typecheck:
     desc: TypeScript, app and tests
     cmds:
