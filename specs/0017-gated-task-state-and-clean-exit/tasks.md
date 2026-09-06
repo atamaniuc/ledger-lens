@@ -6,13 +6,19 @@ Ticked only against the DoD (`specs/DoD.md`).
 
 ## P0
 
-- [ ] **T1** `scripts/verify-tasks.ts`: parse every `specs/*/tasks.md`,
-      extract the check named on each checked line, re-run or look up its
-      latest pass; fail with file:line on an unverifiable or failing box
-      (AC-01)
-- [ ] **T2** Wire T1 into `task check` (alongside `verify-docs.ts`); unit
-      tests covering a valid checked box, a box naming no check, and a box
-      whose named check currently fails (AC-01)
+- [x] **T1** `scripts/verify-tasks.ts` + `src/platform/tasks-proof.ts`: parse
+      every `specs/*/tasks.md`, require a `<!-- proof: ... -->` marker on
+      each checked line, resolve it through `checkTarget` (the same checker
+      `docs-proof.ts` uses); fail with file:line on a box naming no check or
+      whose marker doesn't resolve. Scoped to live tracks only
+      (`liveTrackSpecDirs` from `specs/TRACKS.md`) — already-shipped lanes'
+      historical `tasks.md` files are grandfathered per Out of scope (AC-01)
+      <!-- proof: src/platform/tasks-proof.test.ts -->
+- [x] **T2** Wired into `task docs-check` (which `task check` calls),
+      alongside `verify-docs.ts`; unit tests cover a valid checked box, a box
+      naming no check, and a box whose named check doesn't resolve (AC-01)
+      <!-- proof: Taskfile.yml:verify-tasks.ts -->
+      <!-- proof: src/platform/tasks-proof.test.ts#flags a checked task that names no check at all -->
 - [ ] **T3** `scripts/verify-clean-exit.ts` (or extend `verify-docs.ts`):
       grep the diff/tree for stray `console.log`/`debugger` outside
       `*.test.*`/`tests/`, and `TODO`/`FIXME` without a `D-XX` id; wire into

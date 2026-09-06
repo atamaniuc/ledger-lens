@@ -12,8 +12,10 @@ runnable session-exit cleanliness check beyond build+tests (lecture 12).
 machine-verifiable") but nothing enforces it — this spec generalizes and
 enforces both.
 
-**Nothing has been built.** `spec.md`/`tasks.md` are a draft; no script
-exists yet.
+**T1/T2 shipped** (`src/platform/tasks-proof.ts` + `scripts/verify-tasks.ts`,
+wired into `task docs-check`, 16 unit tests, dogfooded on this file's own
+tasks.md). T3 (clean-exit grep) and T4 (Cold-Start Test protocol) are still
+draft only — no code for either yet.
 
 ## What to load
 
@@ -37,10 +39,11 @@ exists yet.
 
 ## State
 
-- Spec + tasks drafted, 0/7 tasks done.
+- 2/7 tasks done (T1, T2). T3, T4 (P0) and T5-T7 (P1) remain.
 - No lane owner assigned.
-- Depends on nothing else in flight; T1 and T3 are independent and could be
-  split across two sessions if picked up under WIP=1 (`AGENTS.md`).
+- T3 (clean-exit grep) is independent of T1/T2 and can start cold. T4
+  (Cold-Start Test) has no code dependency either — both are candidates for
+  the next WIP=1 slot on this track.
 
 ## Decisions
 
@@ -52,7 +55,14 @@ exists yet.
 
 ## First step
 
-T1 (`scripts/verify-tasks.ts`) — read `verify-docs.ts` first so the new
-script matches its shape (one `Problem[]`-returning checker function per
-convention, wired into the same CLI) instead of becoming a second, divergent
-doc-proof tool.
+T3 (`scripts/verify-clean-exit.ts` or an extension of `verify-docs.ts`) —
+grep-based, same `Problem[]` shape as `tasks-proof.ts`/`docs-proof.ts`, wire
+into `task docs-check` next to `verify-tasks.ts`.
+
+Note from T1/T2: a tasks.md list item commonly wraps across lines (this
+repo's own convention) — `tasks-proof.ts`'s `taskBlocks()` groups a `- [x]`
+line with its indented continuation before scanning for markers, and
+`isSyntaxExample` (exported from `docs-proof.ts`) filters out an
+illustrative `<!-- proof: ... -->` written as documentation rather than a
+real claim. Both were real bugs caught by dogfooding the gate on this
+spec's own tasks.md — worth the same care in T3's grep.
