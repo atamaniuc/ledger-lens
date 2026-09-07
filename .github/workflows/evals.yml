@@ -2,12 +2,15 @@ name: Evals
 
 # The measurement gate, in its own workflow on purpose.
 #
-# CI's other seven jobs answer "is the code correct". This one answers "what do
-# the metrics read", and without a model key in the repository the answer is
-# "nothing was measured" — which exits non-zero, because a measurement that did
-# not happen is not a measurement that passed (D-24). Keeping it here means the
-# main badge reports the code and this badge reports the measurement: a red
-# badge that means "no key configured" must not be mistaken for a broken build.
+# CI's other jobs answer "is the code correct". This one answers "what do the
+# metrics read". Keeping it separate means the main badge reports the code and
+# this badge reports the measurement.
+#
+# D-24 still holds where it can be acted on: with a provider key configured the
+# run is strict and an unmeasured metric is a red build. With no key the
+# model-dependent tier is reported as skipped, in the run output and in the job
+# summary, and the job stays green — because a badge that has been red for
+# months for one unfixable reason stops carrying information at all.
 #
 # The deterministic half needs no key and runs every time: recall@5 and
 # abstention are measured here on every push.
@@ -88,15 +91,48 @@ jobs:
           ./scripts/write-env-local.sh
       - name: Build the RAG index
         run: task index
-      # Exits non-zero on a threshold breach AND when a model-dependent metric
-      # could not be measured. Any one of these secrets turns the model tier on;
-      # GROQ_API_KEY and NVIDIA_API_KEY are free tiers — but a full run spends
-      # most of a free tier's daily token budget, which is why adding the secret
-      # is a deliberate choice rather than the default (docs/RUNBOOK.md).
+      # The deterministic tier — recall@5 and abstention — needs no key and
+      # gates every run: a breach is red here whatever else is configured.
+      #
+      # The model-dependent tier needs a provider key. With one configured this
+      # runs strict, and an unmeasured metric is a red build (D-24). With none,
+      # the run reports those metrics as skipped and the job stays green while
+      # saying so in the summary.
+      #
+      # Why that changed: for months this workflow was red on every push for
+      # one reason — no key in the repository. A permanently red badge that
+      # means "not configured" is indistinguishable from one that means
+      # "broken", and a signal nobody can act on is a signal everyone learns to
+      # ignore. D-24's claim — a measurement that did not happen is not a
+      # measurement that passed — is kept where it can still be acted on: in
+      # the run's own output and in this job's summary, rather than in a badge
+      # that has cried wolf since the day it was added.
+      #
+      # Any one of these secrets turns the model tier on. GROQ_API_KEY and
+      # NVIDIA_API_KEY are free tiers, but a full run spends most of a free
+      # tier's daily budget, which is why adding one is a deliberate choice
+      # rather than the default (docs/RUNBOOK.md).
       - name: Evals
+        id: evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-        run: task evals
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$GROQ_API_KEY" ] || [ -n "$NVIDIA_API_KEY" ]; then
+            echo "provider key present: measuring every metric, a skip is a failure"
+            task evals
+          else
+            {
+              echo "### Evals: model-dependent metrics NOT measured"
+              echo
+              echo "No provider key is configured in this repository, so tool choice,"
+              echo "citation validity, injection resistance and groundedness did not run."
+              echo "The deterministic metrics (recall@5, abstention) did, and gate this job."
+              echo
+              echo "Configure \`ANTHROPIC_API_KEY\`, \`GROQ_API_KEY\` or \`NVIDIA_API_KEY\`"
+              echo "to measure the rest — see docs/RUNBOOK.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+            task evals -- --allow-skip
+          fi

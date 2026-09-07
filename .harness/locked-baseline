@@ -1,0 +1,5 @@
+# The commit from which the locked-surface rule applies (harness.config.json →
+# locked.baseline). Enforcement starts here because the commit that introduces
+# the rule necessarily lists the paths it protects. Moving this forward widens
+# what an agent may change, which is a human decision.
+42f7012f7cd405625366b68e4040423d57403c00

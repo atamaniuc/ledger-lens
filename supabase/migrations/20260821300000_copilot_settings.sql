@@ -33,6 +33,16 @@ create table public.copilot_settings (
 alter table public.copilot_settings enable row level security;
 -- No policies on purpose: nothing here is reachable through the Data API.
 
+-- The comment above claimed this table carries no Data API grants without
+-- actually revoking anything — a claim, not a check. Postgres grants
+-- TRUNCATE/REFERENCES/TRIGGER on a new table to anon and authenticated by
+-- default (the stage2 explicit-grants migration only ever revoked SELECT/
+-- INSERT/UPDATE/DELETE, and did so on tables that existed then, not this
+-- one), and tests/rls-coverage.spec.ts caught it: anon and authenticated
+-- both showed up holding those three verbs. Revoking explicitly, the same
+-- pattern every other table in this schema follows, makes the comment true.
+revoke all on table public.copilot_settings from anon, authenticated, service_role;
+
 insert into public.copilot_settings (id) values (1);
 
 -- Read: any signed-in member of the org the settings belong to (the table is
