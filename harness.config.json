@@ -1,0 +1,31 @@
+{
+  "$comment": "Checks this repository asks @atamaniuc/harness to enforce. The proof-marker and track rules were written here first and moved into the package; locked surfaces and cold start are what this repository gains in return. src/platform/docs-proof.ts keeps the project-specific parts and delegates the rules.",
+
+  "docs": {
+    "roots": [".", "docs", "specs", "decisions"],
+    "skip": ["node_modules", ".git", ".next", "py", "infra", ".worktrees", "storybook-static", "interview-preps"],
+    "mustCarryProof": ["README.md", "docs/ARCHITECTURE.md"],
+    "commands": { "task": "Taskfile.yml", "pnpm run": "package.json" },
+    "migrations": "supabase/migrations"
+  },
+
+  "tracks": {
+    "file": "specs/TRACKS.md",
+    "log": "specs/TRACKS-LOG.md",
+    "specsDir": "specs",
+    "taskFile": "tasks.md",
+    "gateTasks": true
+  },
+
+  "locked": {
+    "paths": [".github/workflows/", "specs/DoD.md", "specs/DoR.md", "evals/thresholds.json"],
+    "baseline": ".harness/locked-baseline",
+    "agentTrailer": "Co-Authored-By: Claude"
+  },
+
+  "coldStart": {
+    "requiredFiles": ["AGENTS.md", "Taskfile.yml", "README.md", "specs/DoD.md", "specs/DoR.md", "specs/TRACKS.md", ".env.example"],
+    "entryDocs": ["AGENTS.md", "README.md"],
+    "commands": ["pnpm install --frozen-lockfile", "pnpm exec tsc --noEmit -p tsconfig.json"]
+  }
+}
