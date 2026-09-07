@@ -1,14 +1,32 @@
 {
   "$comment": "Checks this repository asks @atamaniuc/harness to enforce. The proof-marker and track rules were written here first and moved into the package; locked surfaces and cold start are what this repository gains in return. src/platform/docs-proof.ts keeps the project-specific parts and delegates the rules.",
-
   "docs": {
-    "roots": [".", "docs", "specs", "decisions"],
-    "skip": ["node_modules", ".git", ".next", "py", "infra", ".worktrees", "storybook-static", "interview-preps"],
-    "mustCarryProof": ["README.md", "docs/ARCHITECTURE.md"],
-    "commands": { "task": "Taskfile.yml", "pnpm run": "package.json" },
+    "roots": [
+      ".",
+      "docs",
+      "specs",
+      "decisions"
+    ],
+    "skip": [
+      "node_modules",
+      ".git",
+      ".next",
+      "py",
+      "infra",
+      ".worktrees",
+      "storybook-static",
+      "interview-preps"
+    ],
+    "mustCarryProof": [
+      "README.md",
+      "docs/ARCHITECTURE.md"
+    ],
+    "commands": {
+      "task": "Taskfile.yml",
+      "pnpm run": "package.json"
+    },
     "migrations": "supabase/migrations"
   },
-
   "tracks": {
     "file": "specs/TRACKS.md",
     "log": "specs/TRACKS-LOG.md",
@@ -16,16 +34,72 @@
     "taskFile": "tasks.md",
     "gateTasks": true
   },
-
   "locked": {
-    "paths": [".github/workflows/", "specs/DoD.md", "specs/DoR.md", "evals/thresholds.json"],
+    "paths": [
+      ".github/workflows/",
+      "specs/DoD.md",
+      "specs/DoR.md",
+      "evals/thresholds.json"
+    ],
     "baseline": ".harness/locked-baseline",
     "agentTrailer": "Co-Authored-By: Claude"
   },
-
   "coldStart": {
-    "requiredFiles": ["AGENTS.md", "Taskfile.yml", "README.md", "specs/DoD.md", "specs/DoR.md", "specs/TRACKS.md", ".env.example"],
-    "entryDocs": ["AGENTS.md", "README.md"],
-    "commands": ["pnpm install --frozen-lockfile", "pnpm exec tsc --noEmit -p tsconfig.json"]
+    "requiredFiles": [
+      "AGENTS.md",
+      "Taskfile.yml",
+      "README.md",
+      "specs/DoD.md",
+      "specs/DoR.md",
+      "specs/TRACKS.md",
+      ".env.example"
+    ],
+    "entryDocs": [
+      "AGENTS.md",
+      "README.md"
+    ],
+    "commands": [
+      "pnpm install --frozen-lockfile",
+      "pnpm exec tsc --noEmit -p tsconfig.json"
+    ]
+  },
+  "cleanExit": {
+    "$comment": "Lecture 12. Scoped to what a session changed. console.log is a marker here because this is an application and its logging goes through the structured logger with a correlation_id \u2014 but scripts/ is exempt, since those are command-line tools whose output is the product. The progress rule is off on purpose: in this repository 'where I stopped' lives in the handoff of whichever track was worked (HDD), and which handoff that should have been is not machine-decidable; specs/TRACKS.md is an index of live tracks, not a session log.",
+    "scan": [
+      "src",
+      "tests",
+      "scripts",
+      "evals"
+    ],
+    "markers": [
+      "TODO",
+      "FIXME",
+      "TBD",
+      "XXX",
+      "HACK",
+      "debugger",
+      "test.only",
+      "test.skip",
+      ".only(",
+      ".skip(",
+      "console.log("
+    ],
+    "progressFile": null,
+    "codePrefixes": [
+      "src/",
+      "tests/",
+      "scripts/",
+      "supabase/",
+      "py/"
+    ],
+    "allow": [
+      "scripts/"
+    ]
+  },
+  "instructions": {
+    "$comment": "AGENTS.md is the router every agent tool loads first; DEBT.md is a register, not an instruction file, and is deliberately not limited.",
+    "limits": {
+      "AGENTS.md": 150
+    }
   }
 }

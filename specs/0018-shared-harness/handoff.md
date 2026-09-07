@@ -24,8 +24,16 @@ it will spend the session's budget without changing anything here.
 
 ## State
 
-**Landed:** `harness.config.json` (every check translated, including the two this
+**Landed:** `harness.config.json` (every check translated, including the three this
 repository does not yet run) and `.harness/locked-baseline`.
+
+Two of the configured checks are new capabilities rather than translations, from lectures 12
+and 04 of Learn Harness Engineering: `clean-exit` (debris a build compiles happily) and
+`instructions` (the router that grew into a manual). Both were run against this repository's
+history before being configured, and both needed tuning that is recorded in the config's
+own `$comment`: `scripts/` is exempt from the `console.log` marker because those are
+command-line tools whose output is the product, and the progress-file rule is off because
+"where I stopped" lives in a track's handoff here, not in one file.
 
 **Verified, and worth knowing before touching anything:** the shared implementation
 produces byte-identical results to this repository's own gate on the current tree — 183
