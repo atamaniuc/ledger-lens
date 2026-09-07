@@ -50,7 +50,9 @@ The flow is two halves: **SDD** — a lane is a deliverable contract (`spec.md` 
   unfinished work crosses sessions via handoffs. This section is the HDD half;
   the why of both is `docs/HARNESS.md` §Where the ideas came from.
 - Live tracks are indexed in `specs/TRACKS.md` (essence, handoff link, status, next).
-  **Starting work on a track — load its handoff first.**
+  **Starting work on a track — load its handoff first.** A SessionStart hook hands you the
+  index, each handoff's head and the enforcement summary at startup (`harnessimo brief`), so
+  this does not depend on anyone remembering to look.
 - A lane whose work is unfinished at session end carries `handoff.md` next to its
   `spec.md`: context, what to load (and what NOT to load), state, decisions,
   first step. Ending a session on the lane means updating that handoff and its

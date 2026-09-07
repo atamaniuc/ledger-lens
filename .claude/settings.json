@@ -15,9 +15,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-hdd.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/harnessimo-brief.sh",
             "timeout": 10,
-            "statusMessage": "Loading HDD tracks..."
+            "statusMessage": "Loading harness state\u2026"
           }
         ]
       }
