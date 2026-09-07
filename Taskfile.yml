@@ -50,12 +50,23 @@ tasks:
       - node --inspect=127.0.0.1:${DEBUG_PORT:-9230} node_modules/next/dist/bin/next dev
   check:
     desc: "Pure-logic gate: typecheck, lint, unit tests, deno check, doc proofs"
-    cmds: ['task typecheck && task lint && task test && task deno-check && task docs-check']
+    cmds: ['task typecheck && task lint && task test && task deno-check && task harness']
   # Every claim in the human documentation names its evidence; this fails when
   # the evidence is gone. Pass --strict once README carries markers (spec 0012)
   # to also require that a claim-bearing document has evidence at all.
+  # Every gate this repository declares, in one report: proof markers, the work
+  # tracks, the task gate and the instruction-file limit. The rules are shared
+  # with the sibling repository through `harnessimo` (spec 0018); what is
+  # specific here — which documents must carry evidence, `task` as the command
+  # surface, Supabase migrations — is configuration, in harnessimo.config.json.
+  harness:
+    desc: "Every gate declared in harnessimo.config.json; `task harness -- --reverify` re-runs passing claims"
+    cmds: ['pnpm exec harnessimo check {{.CLI_ARGS}}']
+  harness-doctor:
+    desc: "What this repository actually enforces, and what it does not"
+    cmds: ['pnpm exec harnessimo doctor']
   docs-check:
-    desc: "Check that every proof marker resolves, README carries evidence, and live tracks' checked tasks are proven (D-63)"
+    desc: "The documentation gates alone, through this project's own CLIs (task harness runs these and more)"
     cmds:
       - pnpm exec tsx scripts/verify-docs.ts --strict {{.CLI_ARGS}}
       - pnpm exec tsx scripts/verify-tasks.ts

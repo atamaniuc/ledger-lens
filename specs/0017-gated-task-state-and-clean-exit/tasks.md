@@ -14,19 +14,25 @@ Ticked only against the DoD (`specs/DoD.md`).
       (`liveTrackSpecDirs` from `specs/TRACKS.md`) — already-shipped lanes'
       historical `tasks.md` files are grandfathered per Out of scope (AC-01)
       <!-- proof: src/platform/tasks-proof.test.ts -->
-- [x] **T2** Wired into `task docs-check` (which `task check` calls),
+- [x] **T2** Wired into `task harness` (which `task check` calls), and still
+      runnable alone through `task docs-check`,
       alongside `verify-docs.ts`; unit tests cover a valid checked box, a box
       naming no check, and a box whose named check doesn't resolve (AC-01)
       <!-- proof: Taskfile.yml:verify-tasks.ts -->
       <!-- proof: src/platform/tasks-proof.test.ts#flags a checked task that names no check at all -->
-- [ ] **T3** `scripts/verify-clean-exit.ts` (or extend `verify-docs.ts`):
-      grep the diff/tree for stray `console.log`/`debugger` outside
-      `*.test.*`/`tests/`, and `TODO`/`FIXME` without a `D-XX` id; wire into
-      `task check` (AC-02)
-- [ ] **T4** Cold-Start Test protocol: either a `task cold-start-test`
-      command or a documented checklist in `docs/HARNESS.md` (proof-marker
-      linked) answering the five questions from a fresh read of
-      `AGENTS.md`/`specs/` alone (AC-03)
+- [x] **T3** Clean-exit check, closed by `harnessimo clean-exit` rather than a
+      local script (spec 0018): the markers this repository cares about are
+      configuration, `scripts/` is exempt because a CLI's output is its
+      product, and the check reads what the session changed rather than the
+      whole tree. Wired into CI (AC-02)
+      <!-- proof: harnessimo.config.json:cleanExit -->
+      <!-- proof: .github/workflows/ci.yml#harnessimo clean-exit -->
+- [x] **T4** Cold-Start Test, closed by `harnessimo cold-start` rather than a
+      checklist: it clones HEAD into an empty directory and runs the documented
+      commands there, so the answer is a command's exit code rather than a
+      reader's judgement. Wired into CI (AC-03)
+      <!-- proof: harnessimo.config.json:coldStart -->
+      <!-- proof: .github/workflows/ci.yml#harnessimo cold-start -->
 
 ## P1
 

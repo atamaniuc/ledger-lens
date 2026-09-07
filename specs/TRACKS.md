@@ -6,5 +6,3 @@ Index of live tracks (handoff-driven development). One line per track: essence �
 
 - **Hosted deploy** — none — blocked (on VERCEL_API_TOKEN), next: task infra-up → scripts/provision-hosted.sh → manual QA on hosted URL
 - **Vision & layout-aware ingestion (spec 0016)** — [handoff](specs/0016-vision-layout-ingestion/handoff.md) — paused (no provider decision), next: T1 ADR picking the vision/OCR provider and extraction output shape
-- **Gated task state & clean exit (spec 0017)** — [handoff](specs/0017-gated-task-state-and-clean-exit/handoff.md) — paused (unowned), next: T3 scripts/verify-clean-exit.ts (T1/T2 shipped)
-- **Harnessimo adoption (spec 0018)** — [handoff](specs/0018-shared-harness/handoff.md) — active, next: install the package and make src/platform/docs-proof.ts delegate to it (its unit tests must pass untouched)

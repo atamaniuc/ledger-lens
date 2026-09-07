@@ -3,7 +3,8 @@ name: CI
 # Every job runs the same commands a developer runs — there is no CI-only
 # script, so there is no "works locally, fails in CI".
 #
-#   check    pure logic: typecheck, lint, unit tests, deno check, doc proofs
+#   check    pure logic: typecheck, lint, unit tests, deno check, harness gates
+#   harness  locked surfaces, clean state and cold start (they need history)
 #   e2e      the RLS proofs (D-23) against a real local Supabase stack
 #   gitleaks secret scan (D-22)
 #   knip     dead-code gate, zero tolerance (D-41)
@@ -154,6 +155,37 @@ jobs:
         run: task e2e
         env:
           CI: "true"
+
+  # The harness gates that read a commit range rather than a snapshot, plus the
+  # cold-start test. `task check` already runs the rest (task harness), so this
+  # job is the part that needs history and a fresh clone.
+  harness:
+    name: locked surfaces, clean state, cold start
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: An agent commit may not touch the files that define success
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          pnpm exec harnessimo locked "$BASE" HEAD
+      # Lecture 12: debris a build compiles happily, and a track index that went
+      # stale while the code around it changed.
+      - name: The session left a clean state
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          pnpm exec harnessimo clean-exit "$BASE" HEAD
+      # The honest test of the documentation: a fresh clone, nothing carried
+      # over, only what the repository says.
+      - name: A fresh clone installs and typechecks from the repository alone
+        run: pnpm exec harnessimo cold-start
 
   gitleaks:
     name: secret scan

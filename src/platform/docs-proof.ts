@@ -16,21 +16,35 @@
 //   <!-- proof: task check-infra -->                             the Taskfile defines that task
 //   <!-- proof: migration:20260821110000 -->                      a migration with that prefix exists
 //
-// This module is the pure half: no filesystem, so it is unit-testable. The CLI
-// that walks the repository is scripts/verify-docs.ts.
+// The rules themselves now live in `harnessimo`, shared with the other
+// repository that grew half of this idea (spec 0018). What stays here is what
+// is specific to this project: which documents must carry evidence at all, and
+// the fact that a bare command marker means a Taskfile task. Keeping this file
+// means `task check`, the CLI in scripts/verify-docs.ts and the unit tests in
+// docs-proof.test.ts all keep their entry point — the rule has one
+// implementation, not the wrapper.
 
-const MARKER = /<!--\s*proof:\s*(.+?)\s*-->/g;
+import {
+  checkHandoffRefs as coreCheckHandoffRefs,
+  checkTracks as coreCheckTracks,
+  checkTarget as coreCheckTarget,
+  findMarkers as coreFindMarkers,
+  isSyntaxExample as coreIsSyntaxExample,
+  verifyProofs,
+  type Problem as CoreProblem,
+  type Resolver as CoreResolver,
+} from "harnessimo";
 
 /** Documents whose claims must be evidenced once the gate runs in strict mode. */
 const MUST_CARRY_PROOF = ["README.md", "docs/ARCHITECTURE.md"];
 
-export interface Problem {
-  file: string;
-  line: number;
-  target: string;
-  reason: string;
-}
+export type Problem = CoreProblem;
 
+/**
+ * This project's resolver shape, kept as it was: a marker's command prefix here
+ * is always `task`, because the Taskfile is the only command surface (AGENTS.md
+ * §Command surface).
+ */
 export interface Resolver {
   fileExists(path: string): boolean;
   readFile(path: string): string;
@@ -38,138 +52,38 @@ export interface Resolver {
   migrationNames(): string[];
 }
 
-export function checkTarget(target: string, resolver: Resolver): string | null {
-  if (target.startsWith("task ")) {
-    const name = target.slice(5).trim();
-    return resolver.taskNames().includes(name) ? null : `Taskfile has no task "${name}"`;
-  }
-  if (target.startsWith("migration:")) {
-    const prefix = target.slice("migration:".length).trim();
-    return resolver.migrationNames().some((m) => m.startsWith(prefix))
-      ? null
-      : `no migration starts with "${prefix}"`;
-  }
-  const hash = target.indexOf("#");
-  if (hash !== -1) {
-    const path = target.slice(0, hash).trim();
-    const needle = target.slice(hash + 1).trim();
-    if (!resolver.fileExists(path)) return `file "${path}" does not exist`;
-    return resolver.readFile(path).includes(needle)
-      ? null
-      : `"${path}" does not contain "${needle}"`;
-  }
-  const colon = target.lastIndexOf(":");
-  if (colon > 1) {
-    const path = target.slice(0, colon).trim();
-    const symbol = target.slice(colon + 1).trim();
-    if (!resolver.fileExists(path)) return `file "${path}" does not exist`;
-    return resolver.readFile(path).includes(symbol)
-      ? null
-      : `"${path}" does not contain "${symbol}"`;
-  }
-  return resolver.fileExists(target) ? null : `file "${target}" does not exist`;
+/** Adapts this project's resolver to the shared one. */
+function core(resolver: Resolver): CoreResolver {
+  return {
+    fileExists: (path) => resolver.fileExists(path),
+    readFile: (path) => resolver.readFile(path),
+    commandNames: (kind) => (kind === "task" ? resolver.taskNames() : null),
+    migrationNames: () => resolver.migrationNames(),
+  };
 }
 
-/**
- * A marker that documents the syntax rather than making a claim.
- *
- * The rule has to exist because the specs and AGENTS.md explain how to write a
- * marker, and their examples are written as markers. Placeholder punctuation —
- * `...`, `[optional]`, `<angle>` — is what separates an illustration from an
- * assertion, and no real path in this repository contains any of it.
- */
+export function checkTarget(target: string, resolver: Resolver): string | null {
+  return coreCheckTarget(target, core(resolver));
+}
+
 export function isSyntaxExample(target: string): boolean {
-  return /\.\.\.|[[\]<>|]/.test(target);
+  return coreIsSyntaxExample(target);
 }
 
 export function findMarkers(text: string): { line: number; target: string }[] {
-  const found: { line: number; target: string }[] = [];
-  text.split("\n").forEach((lineText, index) => {
-    for (const match of lineText.matchAll(MARKER)) {
-      if (isSyntaxExample(match[1])) continue;
-      found.push({ line: index + 1, target: match[1] });
-    }
-  });
-  return found;
+  return coreFindMarkers(text);
 }
-
-
-// ---- Handoff (HDD) audit: specs/TRACKS.md must stay truthful ----
-//
-// Adopted from handoff-driven-development (github.com/yetanothervan/
-// handoff-driven-development): an index of live work tracks, each line
-// pointing at its handoff. A line that links a file that no longer exists,
-// or a track without a status, is a handoff that would lie to the next
-// session — the same defect class as a dead proof marker.
-
-const TRACK_STATUS = /(active|paused|blocked)/;
 
 export function checkTracks(text: string, resolver: Resolver): Problem[] {
-  const problems: Problem[] = [];
-  let inFence = false;
-  text.split("\n").forEach((lineText, index) => {
-    if (lineText.trimStart().startsWith("```")) { inFence = !inFence; return; }
-    if (inFence || !lineText.startsWith("- ")) return; // headers, fences, prose
-    const line = index + 1;
-    if (!TRACK_STATUS.test(lineText)) {
-      problems.push({
-        file: "specs/TRACKS.md",
-        line,
-        target: "(status)",
-        reason: "track line carries no status (active / paused / blocked)",
-      });
-    }
-    for (const m of lineText.matchAll(/\]\(([^)\s]+)\)/g)) {
-      const target = m[1];
-      if (!resolver.fileExists(target)) {
-        problems.push({
-          file: "specs/TRACKS.md",
-          line,
-          target,
-          reason: `file "${target}" does not exist`,
-        });
-      }
-    }
-  });
-  return problems;
+  return coreCheckTracks(text, core(resolver), "specs/TRACKS.md");
 }
-
-// ---- Handoff-reference audit: no doc may point at a handoff that closed ----
-//
-// A handoff is deleted the moment its track closes (see checkTracks above).
-// A reference to a specific handoff can outlive it in a spec, DEBT.md, or a
-// task list — a dead reference the proof gate would not otherwise see, because
-// it lives outside specs/TRACKS.md and is not a proof marker. Directory-
-// qualified paths (specs/NNNN-.../handoff.md, docs/HANDOFF.md) must resolve;
-// the bare word "handoff.md" and template paths (specs/NNNN-<slug>/handoff.md)
-// are protocol talk, not claims, and stay legal.
-
-const HANDOFF_REF = /[\w./-]+\/handoff\.md/gi;
 
 export function checkHandoffRefs(
   text: string,
   resolver: Resolver,
   filePath: string,
 ): Problem[] {
-  const problems: Problem[] = [];
-  let inFence = false;
-  text.split("\n").forEach((lineText, index) => {
-    if (lineText.trimStart().startsWith("```")) { inFence = !inFence; return; }
-    if (inFence) return;
-    for (const match of lineText.matchAll(HANDOFF_REF)) {
-      const target = match[0];
-      if (/[<>]|\.\.\./.test(target)) continue; // template or syntax example
-      if (!resolver.fileExists(target)) {
-        problems.push({
-          file: filePath,
-          line: index + 1,
-          target,
-          reason: `file "${target}" does not exist (a handoff is deleted when its track closes — point at specs/TRACKS-LOG.md instead)`,
-        });
-      }
-    }
-  });
-  return problems;
+  return coreCheckHandoffRefs(text, core(resolver), filePath, "specs/TRACKS-LOG.md");
 }
 
 export function verify(
@@ -177,27 +91,12 @@ export function verify(
   resolver: Resolver,
   strict: boolean,
 ): Problem[] {
-  const problems: Problem[] = [];
+  const shared = core(resolver);
+  const problems = verifyProofs(files, shared, { strict, mustCarryProof: MUST_CARRY_PROOF });
   for (const file of files) {
-    const markers = findMarkers(file.text);
-    if (strict && MUST_CARRY_PROOF.includes(file.path) && markers.length === 0) {
-      problems.push({
-        file: file.path,
-        line: 1,
-        target: "(none)",
-        reason:
-          "carries no proof marker; a claim with no evidence at all is the defect this gate exists for",
-      });
-    }
-    for (const marker of markers) {
-      const reason = checkTarget(marker.target, resolver);
-      if (reason) {
-        problems.push({ file: file.path, line: marker.line, target: marker.target, reason });
-      }
-    }
-    problems.push(...checkHandoffRefs(file.text, resolver, file.path));
+    problems.push(...coreCheckHandoffRefs(file.text, shared, file.path, "specs/TRACKS-LOG.md"));
     if (file.path === "specs/TRACKS.md") {
-      problems.push(...checkTracks(file.text, resolver));
+      problems.push(...coreCheckTracks(file.text, shared, file.path));
     }
   }
   return problems;

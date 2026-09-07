@@ -61,8 +61,10 @@
     ],
     "commands": [
       "pnpm install --frozen-lockfile",
+      "node_modules/next/dist/bin/next typegen",
       "pnpm exec tsc --noEmit -p tsconfig.json"
-    ]
+    ],
+    "$comment": "The commands `task typecheck` runs, spelled out rather than invoked through Task: a newcomer with a fresh clone has pnpm and Node, and requiring a separate binary before anything can be verified is exactly what the cold-start test exists to catch. Typegen comes first because Next.js generates route types into .next/types, so a bare tsc fails for a reason that has nothing to do with the code. The full `task check` additionally needs Deno and a Playwright browser; a cold start that fails for a missing runner measures the runner."
   },
   "cleanExit": {
     "$comment": "Lecture 12. Scoped to what a session changed. console.log is a marker here because this is an application and its logging goes through the structured logger with a correlation_id \u2014 but scripts/ is exempt, since those are command-line tools whose output is the product. The progress rule is off on purpose: in this repository 'where I stopped' lives in the handoff of whichever track was worked (HDD), and which handoff that should have been is not machine-decidable; specs/TRACKS.md is an index of live tracks, not a session log.",
