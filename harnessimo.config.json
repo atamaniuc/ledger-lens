@@ -1,5 +1,6 @@
 {
-  "$comment": "Checks this repository asks @atamaniuc/harness to enforce. The proof-marker and track rules were written here first and moved into the package; locked surfaces and cold start are what this repository gains in return. src/platform/docs-proof.ts keeps the project-specific parts and delegates the rules.",
+  "$schema": "https://raw.githubusercontent.com/atamaniuc/harnessimo/main/schema/harnessimo.config.schema.json",
+  "$comment": "Checks this repository asks harnessimo to enforce. The proof-marker and track rules were written here first and moved into the package; locked surfaces and cold start are what this repository gains in return. src/platform/docs-proof.ts keeps the project-specific parts and delegates the rules.",
   "docs": {
     "roots": [
       ".",

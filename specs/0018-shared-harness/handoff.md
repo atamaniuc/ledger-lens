@@ -7,13 +7,13 @@ The documentation proof gate, the work-track audit and the task gate were writte
 repository (`code-knowledge-base`) independently grew the other half: a queue that owns
 state transitions, a locked-surface rule, and a cold-start test.
 
-Both halves now live in [`atamaniuc/harness`](https://github.com/atamaniuc/harness), so
+Both halves now live in [Harnessimo](https://github.com/atamaniuc/harnessimo), so
 this repository can gain locked surfaces and cold start — neither of which it has ever had
 — without writing them, and stop being the only place its own proof rules exist.
 
 ## What to load
 
-- This file, then `harness.config.json` in the repository root.
+- This file, then `harnessimo.config.json` in the repository root.
 - `src/platform/docs-proof.ts`, `src/platform/tasks-proof.ts`, `scripts/verify-docs.ts`,
   `scripts/verify-tasks.ts` — the four files that become a thin wrapper over the package.
 - `Taskfile.yml`, specifically the `docs-check` target, and `.github/workflows/ci.yml`.
@@ -24,7 +24,7 @@ it will spend the session's budget without changing anything here.
 
 ## State
 
-**Landed:** `harness.config.json` (every check translated, including the three this
+**Landed:** `harnessimo.config.json` (every check translated, including the three this
 repository does not yet run) and `.harness/locked-baseline`.
 
 Two of the configured checks are new capabilities rather than translations, from lectures 12
@@ -60,8 +60,8 @@ still call the local implementation.
 
 ## First step
 
-`pnpm add -D github:atamaniuc/harness#v0.1.0`, then make `src/platform/docs-proof.ts`
+`pnpm add -D github:atamaniuc/harnessimo#v0.1.0`, then make `src/platform/docs-proof.ts`
 re-export the package's rules and keep only what is specific here (the Supabase migration
 resolver and this repository's `MUST_CARRY_PROOF` list — both already expressed in
-`harness.config.json`). Its unit tests must pass untouched; if one needs changing, the
+`harnessimo.config.json`). Its unit tests must pass untouched; if one needs changing, the
 delegation changed behaviour and that is the thing to look at.
