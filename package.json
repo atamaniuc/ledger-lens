@@ -58,7 +58,7 @@
     "axe-core": "^4.13.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
-    "harnessimo": "github:atamaniuc/Harnessimo#cf940e10fb9f680c293813ee2da8312e7ee07799",
+    "harnessimo": "github:atamaniuc/Harnessimo#529be5c153edf897d6ed1bc1e706de13c6ecc58c",
     "knip": "^6.32.2",
     "playwright": "1.62.1",
     "postgres": "^3.4.9",

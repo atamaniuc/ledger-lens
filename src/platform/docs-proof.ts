@@ -29,7 +29,6 @@ import {
   checkTracks as coreCheckTracks,
   checkTarget as coreCheckTarget,
   findMarkers as coreFindMarkers,
-  isSyntaxExample as coreIsSyntaxExample,
   verifyProofs,
   type Problem as CoreProblem,
   type Resolver as CoreResolver,
@@ -64,10 +63,6 @@ function core(resolver: Resolver): CoreResolver {
 
 export function checkTarget(target: string, resolver: Resolver): string | null {
   return coreCheckTarget(target, core(resolver));
-}
-
-export function isSyntaxExample(target: string): boolean {
-  return coreIsSyntaxExample(target);
 }
 
 export function findMarkers(text: string): { line: number; target: string }[] {
