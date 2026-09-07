@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# Fast gate only — the harness checks that take about a second.
+#
+# The rest (tests, re-verification, cold start) runs in CI, where waiting is
+# free. A hook that makes every commit slow gets bypassed with --no-verify,
+# and a bypassed hook enforces nothing.
+#
+# Written by `harnessimo hooks install`. Edit it freely — it is a normal file
+# in the repository, and nothing here rewrites it without --force.
+set -e
+
+# Find the CLI without assuming it is on PATH — a git hook does not inherit
+# a shell's node_modules/.bin, which is exactly how the first version of
+# this script failed on its first run.
+if [ -x node_modules/.bin/harnessimo ]; then
+  HARNESSIMO="node_modules/.bin/harnessimo"
+elif [ -f bin/harnessimo.mjs ]; then
+  HARNESSIMO="node bin/harnessimo.mjs"
+elif command -v harnessimo >/dev/null 2>&1; then
+  HARNESSIMO="harnessimo"
+else
+  echo "pre-commit: harnessimo not found (install it, or delete this hook)" >&2
+  exit 1
+fi
+
+$HARNESSIMO check
