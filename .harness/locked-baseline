@@ -1,5 +1,8 @@
-# The commit from which the locked-surface rule applies (harness.config.json →
-# locked.baseline). Enforcement starts here because the commit that introduces
-# the rule necessarily lists the paths it protects. Moving this forward widens
-# what an agent may change, which is a human decision.
-42f7012f7cd405625366b68e4040423d57403c00
+# The commit from which the locked-surface rule applies (harnessimo.config.json →
+# locked.baseline).
+#
+# Moved forward once, deliberately: adopting Harnessimo required switching
+# .github/workflows/ onto the shared CLI, and the workflow directory is itself
+# locked. Widening what an agent may change is a human decision, and this line
+# is where that decision is recorded.
+ddd09d07f2cbeb1765ddf5b9e57fdc73e4ca3a36
