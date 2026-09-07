@@ -66,6 +66,12 @@ roles are a light touch of BMAD, and the two halves of the lane lifecycle are
 SDD and HDD — all reduced to Markdown, because the harness is the files, not a
 tool.
 
+The table below is this repository's side of it: what its `specs/` layout and
+session protocol borrowed. The checks that enforce them moved to Harnessimo,
+and the same lineage from the tool's side — what it implements, what it
+deliberately leaves out — is in
+[Harnessimo → SDD, HDD, BMAD](https://atamaniuc.github.io/Harnessimo/METHODS/).
+
 | source | what we kept | what we deliberately dropped |
 |---|---|---|
 | OpenSpec | `specs/` as the current truth; one spec = one deliverable; archive after shipping | the CLI, the change/archive machinery as a binary |
