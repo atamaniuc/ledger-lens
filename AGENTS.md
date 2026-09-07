@@ -20,7 +20,7 @@ a lane.
 - `task check` — typecheck, lint, unit, deno-check, harness gates; green before hand-off.
 - `task harness` / `task harness-doctor` — the gates declared in
   `harnessimo.config.json`, and the honest list of what is and is not enforced.
-  The rules are [Harnessimo](https://github.com/atamaniuc/Harnessimo), shared with
+  The rules are [Harnessimo](https://atamaniuc.github.io/Harnessimo/), shared with
   the sibling repository; what is specific here is configuration, not code.
 - `task verify` — integration: migrations from empty, e2e, evals.
 - `task evals` — the identical command CI runs.
