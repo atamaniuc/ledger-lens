@@ -106,8 +106,8 @@ importers:
         specifier: 16.3.1
         version: 16.3.1(@typescript-eslint/parser@8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       harnessimo:
-        specifier: github:atamaniuc/Harnessimo#4a3b6741399ed0ba94505cf98177d0968918e732
-        version: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/4a3b6741399ed0ba94505cf98177d0968918e732
+        specifier: github:atamaniuc/Harnessimo#cf940e10fb9f680c293813ee2da8312e7ee07799
+        version: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/cf940e10fb9f680c293813ee2da8312e7ee07799
       knip:
         specifier: ^6.32.2
         version: 6.32.2
@@ -3580,8 +3580,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/4a3b6741399ed0ba94505cf98177d0968918e732:
-    resolution: {tarball: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/4a3b6741399ed0ba94505cf98177d0968918e732}
+  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/cf940e10fb9f680c293813ee2da8312e7ee07799:
+    resolution: {tarball: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/cf940e10fb9f680c293813ee2da8312e7ee07799}
     version: 0.1.0
     engines: {node: '>=22'}
     hasBin: true
@@ -8690,7 +8690,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/4a3b6741399ed0ba94505cf98177d0968918e732: {}
+  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/cf940e10fb9f680c293813ee2da8312e7ee07799: {}
 
   has-bigints@1.1.0: {}
 
