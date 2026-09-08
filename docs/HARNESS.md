@@ -70,7 +70,7 @@ The table below is this repository's side of it: what its `specs/` layout and
 session protocol borrowed. The checks that enforce them moved to Harnessimo,
 and the same lineage from the tool's side — what it implements, what it
 deliberately leaves out — is in
-[Harnessimo → SDD, HDD, BMAD](https://atamaniuc.github.io/Harnessimo/METHODS/).
+[Harnessimo → SDD](https://atamaniuc.github.io/Harnessimo/SDD/).
 
 | source | what we kept | what we deliberately dropped |
 |---|---|---|
