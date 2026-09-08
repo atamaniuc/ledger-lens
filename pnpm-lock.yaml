@@ -106,8 +106,8 @@ importers:
         specifier: 16.3.1
         version: 16.3.1(@typescript-eslint/parser@8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       harnessimo:
-        specifier: github:atamaniuc/Harnessimo#v0.4.0
-        version: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/00d457a76af117dc028ac74692a5e5cc21d74476
+        specifier: https://github.com/atamaniuc/Harnessimo/releases/download/v0.4.1/harnessimo-0.4.1.tgz
+        version: https://github.com/atamaniuc/Harnessimo/releases/download/v0.4.1/harnessimo-0.4.1.tgz
       knip:
         specifier: ^6.32.2
         version: 6.32.2
@@ -3580,9 +3580,9 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/00d457a76af117dc028ac74692a5e5cc21d74476:
-    resolution: {tarball: https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/00d457a76af117dc028ac74692a5e5cc21d74476}
-    version: 0.4.0
+  harnessimo@https://github.com/atamaniuc/Harnessimo/releases/download/v0.4.1/harnessimo-0.4.1.tgz:
+    resolution: {tarball: https://github.com/atamaniuc/Harnessimo/releases/download/v0.4.1/harnessimo-0.4.1.tgz}
+    version: 0.4.1
     engines: {node: '>=22'}
     hasBin: true
 
@@ -8690,7 +8690,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  harnessimo@https://codeload.github.com/atamaniuc/Harnessimo/tar.gz/00d457a76af117dc028ac74692a5e5cc21d74476: {}
+  harnessimo@https://github.com/atamaniuc/Harnessimo/releases/download/v0.4.1/harnessimo-0.4.1.tgz: {}
 
   has-bigints@1.1.0: {}
 
