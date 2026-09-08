@@ -106,8 +106,8 @@ importers:
         specifier: 16.3.1
         version: 16.3.1(@typescript-eslint/parser@8.67.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       harnessimo:
-        specifier: ^0.5.4
-        version: 0.5.4
+        specifier: ^0.6.0
+        version: 0.6.0
       knip:
         specifier: ^6.32.2
         version: 6.32.2
@@ -3580,8 +3580,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  harnessimo@0.5.4:
-    resolution: {integrity: sha512-JvR7pqnOT0Jwngfb65emWl6xodA30eXWFwRnj6UZAsY7Ru+0b5AfI6GqI6ifW/W7gFxlTzw9yhqUNpJO9iDYIA==}
+  harnessimo@0.6.0:
+    resolution: {integrity: sha512-jVVkvJIZmzUlaeINl/bGQZBeH0qhUhCYz2AtmH6tuM4gSwcOH8hc5nsNssYRk5KDJrlMa8jy8xD9ekkqG1iAYw==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -8697,7 +8697,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  harnessimo@0.5.4: {}
+  harnessimo@0.6.0: {}
 
   has-bigints@1.1.0: {}
 
